@@ -317,8 +317,17 @@ login, `permissions` all-true), the seeded sample project, cost-component catalo
 not a `CHANGE-ME`/`dev-only` placeholder) — no insecure localhost/dev-key fallback can leak into a real
 deployment. The integration tests run as `Production` with a valid injected key, so they exercise the
 guarded path (21/21 still green). Added `docs/DEPLOYMENT.md` (secrets, DB, TLS/CORS, CI, smoke test).
-Remaining hardening (not yet done): TLS/reverse-proxy config, rotate dev secrets, disable/replace the
-demo admin, prod CORS allowlist, branch protection on `main`.
+
+**Prod CORS allowlist:** ✅ Outside `Development`, `AllowedOrigins` is mandatory and `localhost`/`127.0.0.1`
+are rejected — the permissive dev CORS policy can no longer leak into a deployment.
+
+**No default admin in prod:** ✅ Seed credentials are configurable (`Seed:AdminEmail` / `Seed:AdminPassword`).
+Outside `Development` no admin is seeded unless a password is supplied, and the sample project only seeds when
+`Seed:DemoData=true` — `Admin@12345` stays out of real deployments. `ApiFixture` opts into both for the test
+baseline (21/21 green). Merged to `main` (7acab56).
+
+Remaining hardening (not yet done): TLS/reverse-proxy config (infra, not code), rotate dev secrets,
+branch protection on `main`.
 
 ---
 
