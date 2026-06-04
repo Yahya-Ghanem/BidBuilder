@@ -310,6 +310,16 @@ login, `permissions` all-true), the seeded sample project, cost-component catalo
 
 ---
 
+## 8i. Phase 15 — Activity catalog (built-in + user)
+
+**Activity dropdown:** ✅ Adding work under a unit now picks the activity from a tenant **catalog** instead of
+free typing. 28 common construction activities (Excavation, Block work, Plastering, Tiling, MEP first/second
+fix, …) are seeded as **built-ins** (undeletable); users add their own from the dropdown's "+ New" or in
+**Settings → Activities**. New `ActivityType` catalog (migration `AddActivityCatalog`, idempotent seed that
+backfills existing tenants); `/api/activities` — read for any user, add for anyone with the `boq` permission,
+edit/delete admin-only. Picking an activity fills the BOQ line description (no schema change to items). 3
+integration tests. (PR #11.)
+
 ## 8h. Phase 14 — Activities under units (quantity × rate)
 
 **Activities + qty × rate build-up:** ✅ Work activities can be added under each unit, each carrying
