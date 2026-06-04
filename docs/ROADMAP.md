@@ -310,6 +310,18 @@ login, `permissions` all-true), the seeded sample project, cost-component catalo
 
 ---
 
+## 8e. Phase 11 — User & team management
+
+**User & team administration:** ✅ Admin-only screen + API (`/api/admin`, PR #2) to manage who can sign in
+and what they can do — closes the gap where a second user could only be added via direct DB access. Backend
+`UserManagementEndpoints.cs`: users (list/create-with-password/update/reset-password/delete) and teams/groups
+(list/create/update/delete + a per-module permission grid) over `GET /api/admin/modules`. Guards: per-tenant
+unique email, password ≥ 8, role limited to TenantUser/TenantAdmin, built-in team undeletable, team-in-use
+blocked, and lockout protection (can't remove the last active admin or your own account). Every action is
+audited. Frontend `app/admin` (Users & Teams) with create/edit/reset/delete modals and a permission-grid
+modal; admin-only nav entry. 3 new integration tests (24/24 green). Note: `User` is not `IHasTenant`, so its
+`TenantId` is set explicitly on create.
+
 ## 8d. Phase 10 — Deployment hardening (in progress)
 
 **Fail-fast secret guards:** ✅ `Program.cs` now refuses to boot outside `Development` unless
