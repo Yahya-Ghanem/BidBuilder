@@ -1,0 +1,11 @@
+# Web build context (root) — keep it lean and backend-free.
+node_modules
+.next
+.git
+api
+api.Tests
+docs
+*.md
+.env
+.vs
+.vscode

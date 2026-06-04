@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+:root {
+  --brand: #0f766e;        /* teal-700 — BidBuilder accent */
+  --brand-fg: #ffffff;
+  --bg: #f8fafc;           /* slate-50 */
+  --card: #ffffff;
+  --border: #e2e8f0;       /* slate-200 */
+  --muted: #64748b;        /* slate-500 */
+}
+
+html, body {
+  background: var(--bg);
+  color: #0f172a;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}

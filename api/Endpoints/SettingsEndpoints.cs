@@ -1,0 +1,159 @@
+using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
+using BidBuilder.Api.Auth;
+using BidBuilder.Api.Data;
+using BidBuilder.Api.Models;
+using BidBuilder.Api.Tenancy;
+
+namespace BidBuilder.Api.Endpoints;
+
+public record SettingsDto(
+    string CompanyName, string? Website, string? ContactEmail, string? Phone,
+    string? Address, string? City, string? Country, string Timezone,
+    string BaseCurrency, decimal DefaultOverheadPct, decimal DefaultProfitPct, decimal DefaultContingencyPct,
+    bool HasLogo);
+
+public record SettingsInput(
+    string? Website, string? ContactEmail, string? Phone, string? Address, string? City, string? Country,
+    string? Timezone, string? BaseCurrency, decimal DefaultOverheadPct, decimal DefaultProfitPct, decimal DefaultContingencyPct);
+
+public record CurrencyRateDto(string Code, decimal RateToBase, DateTime UpdatedAt);
+public record CurrencyRatesDto(string BaseCurrency, List<CurrencyRateDto> Rates);
+public record CurrencyRateInput(decimal RateToBase);
+
+/// <summary>
+/// Tenant company profile + estimating defaults (1:1 TenantSettings). Any signed-in
+/// user may read; only a tenant admin may edit. The company profile also brands the
+/// exported bid documents.
+/// </summary>
+public static class SettingsEndpoints
+{
+    public static void MapSettingsEndpoints(this IEndpointRouteBuilder app)
+    {
+        var grp = app.MapGroup("/api/settings").RequireAuthorization();
+
+        grp.MapGet("/", async (AppDbContext db, ITenantContext tc) =>
+        {
+            var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tc.TenantId);
+            var s = await db.TenantSettings.FirstOrDefaultAsync();
+            return Results.Ok(ToDto(tenant?.Name ?? "BidBuilder", s));
+        });
+
+        grp.MapPut("/", async (SettingsInput i, ClaimsPrincipal me, AppDbContext db, ITenantContext tc) =>
+        {
+            if (!me.IsAdmin())
+                return Results.Json(new { error = "Only a tenant admin can edit settings" }, statusCode: 403);
+
+            var s = await db.TenantSettings.FirstOrDefaultAsync();
+            if (s is null) { s = new TenantSettings(); db.TenantSettings.Add(s); }   // TenantId auto-stamped on save
+
+            s.Website = Trim(i.Website); s.ContactEmail = Trim(i.ContactEmail); s.Phone = Trim(i.Phone);
+            s.Address = Trim(i.Address); s.City = Trim(i.City); s.Country = Trim(i.Country);
+            if (!string.IsNullOrWhiteSpace(i.Timezone)) s.Timezone = i.Timezone!.Trim();
+            if (!string.IsNullOrWhiteSpace(i.BaseCurrency)) s.BaseCurrency = i.BaseCurrency!.Trim();
+            s.DefaultOverheadPct = i.DefaultOverheadPct;
+            s.DefaultProfitPct = i.DefaultProfitPct;
+            s.DefaultContingencyPct = i.DefaultContingencyPct;
+            s.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+
+            var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tc.TenantId);
+            return Results.Ok(ToDto(tenant?.Name ?? "BidBuilder", s));
+        });
+
+        // ── Company logo ─────────────────────────────────────────────────────
+        // Stored as bytes on TenantSettings; branded onto exported bid documents.
+        grp.MapPost("/logo", async (IFormFile file, ClaimsPrincipal me, AppDbContext db) =>
+        {
+            if (!me.IsAdmin())
+                return Results.Json(new { error = "Only a tenant admin can change the logo" }, statusCode: 403);
+
+            var ct = file.ContentType?.ToLowerInvariant();
+            if (ct != "image/png" && ct != "image/jpeg")
+                return Results.Json(new { error = "Logo must be a PNG or JPEG image." }, statusCode: 400);
+            if (file.Length <= 0 || file.Length > 1_000_000)
+                return Results.Json(new { error = "Logo must be a non-empty file under 1 MB." }, statusCode: 400);
+
+            using var ms = new MemoryStream();
+            await file.CopyToAsync(ms);
+
+            var s = await db.TenantSettings.FirstOrDefaultAsync();
+            if (s is null) { s = new TenantSettings(); db.TenantSettings.Add(s); }
+            s.LogoBytes = ms.ToArray();
+            s.LogoContentType = ct;
+            s.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return Results.Ok(new { hasLogo = true });
+        }).DisableAntiforgery();
+
+        grp.MapGet("/logo", async (AppDbContext db) =>
+        {
+            var s = await db.TenantSettings.FirstOrDefaultAsync();
+            return s?.LogoBytes is { Length: > 0 } bytes
+                ? Results.File(bytes, s.LogoContentType ?? "image/png")
+                : Results.NotFound();
+        });
+
+        grp.MapDelete("/logo", async (ClaimsPrincipal me, AppDbContext db) =>
+        {
+            if (!me.IsAdmin())
+                return Results.Json(new { error = "Only a tenant admin can change the logo" }, statusCode: 403);
+
+            var s = await db.TenantSettings.FirstOrDefaultAsync();
+            if (s is not null)
+            {
+                s.LogoBytes = null; s.LogoContentType = null; s.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+            }
+            return Results.Ok(new { hasLogo = false });
+        });
+
+        // ── Currency rates (manual FX) ───────────────────────────────────────
+        // Any signed-in user may read (estimators pick a presentation currency);
+        // only a tenant admin may edit. Rates are units of Code per 1 base unit.
+        grp.MapGet("/currencies", async (AppDbContext db) =>
+        {
+            var baseC = await db.TenantSettings.Select(s => s.BaseCurrency).FirstOrDefaultAsync() ?? "AED";
+            var rates = await db.CurrencyRates.OrderBy(r => r.Code)
+                .Select(r => new CurrencyRateDto(r.Code, r.RateToBase, r.UpdatedAt)).ToListAsync();
+            return Results.Ok(new CurrencyRatesDto(baseC, rates));
+        });
+
+        grp.MapPut("/currencies/{code}", async (string code, CurrencyRateInput i, ClaimsPrincipal me, AppDbContext db) =>
+        {
+            if (!me.IsAdmin())
+                return Results.Json(new { error = "Only a tenant admin can edit currency rates" }, statusCode: 403);
+
+            code = (code ?? "").Trim().ToUpperInvariant();
+            if (code.Length != 3) return Results.Json(new { error = "Currency code must be 3 letters (ISO-4217)." }, statusCode: 400);
+            var baseC = await db.TenantSettings.Select(s => s.BaseCurrency).FirstOrDefaultAsync() ?? "AED";
+            if (string.Equals(code, baseC, StringComparison.OrdinalIgnoreCase))
+                return Results.Json(new { error = $"{code} is the base currency — its rate is always 1." }, statusCode: 400);
+            if (i.RateToBase <= 0) return Results.Json(new { error = "Rate must be greater than zero." }, statusCode: 400);
+
+            var r = await db.CurrencyRates.FirstOrDefaultAsync(x => x.Code == code);
+            if (r is null) { r = new CurrencyRate { Code = code }; db.CurrencyRates.Add(r); }
+            r.RateToBase = i.RateToBase; r.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return Results.Ok(new CurrencyRateDto(r.Code, r.RateToBase, r.UpdatedAt));
+        });
+
+        grp.MapDelete("/currencies/{code}", async (string code, ClaimsPrincipal me, AppDbContext db) =>
+        {
+            if (!me.IsAdmin())
+                return Results.Json(new { error = "Only a tenant admin can edit currency rates" }, statusCode: 403);
+            code = (code ?? "").Trim().ToUpperInvariant();
+            var r = await db.CurrencyRates.FirstOrDefaultAsync(x => x.Code == code);
+            if (r is not null) { db.CurrencyRates.Remove(r); await db.SaveChangesAsync(); }
+            return Results.NoContent();
+        });
+    }
+
+    private static string? Trim(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+
+    private static SettingsDto ToDto(string companyName, TenantSettings? s) => new(
+        companyName, s?.Website, s?.ContactEmail, s?.Phone, s?.Address, s?.City, s?.Country,
+        s?.Timezone ?? "UTC", s?.BaseCurrency ?? "AED",
+        s?.DefaultOverheadPct ?? 0, s?.DefaultProfitPct ?? 0, s?.DefaultContingencyPct ?? 0,
+        s?.LogoBytes is { Length: > 0 });
+}

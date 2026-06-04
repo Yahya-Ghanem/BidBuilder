@@ -1,0 +1,20 @@
+# Secrets
+.env
+
+# .NET build output
+bin/
+obj/
+*.user
+
+# EF design-time
+*.db
+
+# IDE
+.vs/
+.vscode/
+
+# Node (frontend, later)
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo

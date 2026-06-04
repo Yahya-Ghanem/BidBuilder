@@ -1,0 +1,83 @@
+# BidBuilder local stack.
+#
+#   db    Postgres 16, persists to a named volume so data survives `down`
+#   api   ASP.NET Core 8 minimal API; migrates + seeds on startup
+#   (web   Next.js — added in a later phase)
+#
+# Run:
+#   docker compose up --build        (foreground)
+#   docker compose up --build -d     (detached)
+#   docker compose logs -f api       (tail one service)
+#   docker compose down              (stop, keep volume)
+#   docker compose down -v           (stop AND wipe the database)
+#
+# Endpoints:
+#   http://localhost:8081/healthz    API health probe
+#   http://localhost:8081/swagger    Swagger UI (Development)
+#   http://localhost:8081/api/ping   smoke endpoint (X-Tenant-Id: default)
+#   localhost:5433                   Postgres (host 5433 → container 5432; avoids
+#                                    clashing with a native Postgres on 5432)
+#
+# .env (gitignored) — required key: POSTGRES_PASSWORD. See .env.example.
+
+name: bidbuilder
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: bidbuilder-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-bidbuilder}
+      POSTGRES_USER:     ${POSTGRES_USER:-bidbuilder}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+    ports:
+      - "5433:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test:     ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bidbuilder} -d ${POSTGRES_DB:-bidbuilder}"]
+      interval: 5s
+      timeout:  5s
+      retries:  10
+    networks: [bbnet]
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: bidbuilder-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS:        http://+:8080
+      # Double-underscore maps to ConnectionStrings:Postgres in .NET config.
+      ConnectionStrings__Postgres: Host=db;Port=5432;Database=${POSTGRES_DB:-bidbuilder};Username=${POSTGRES_USER:-bidbuilder};Password=${POSTGRES_PASSWORD};Maximum Pool Size=50;Timeout=15
+      Jwt__SigningKey: ${JWT_SECRET:?JWT_SECRET must be set in .env (>= 32 chars)}
+    ports:
+      - "8081:8080"
+    networks: [bbnet]
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Baked into the browser bundle — the host URL the browser uses for the API.
+        NEXT_PUBLIC_API_URL: http://localhost:8081
+    container_name: bidbuilder-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3100:3000"
+    networks: [bbnet]
+
+networks:
+  bbnet:
+
+volumes:
+  dbdata:

@@ -1,0 +1,132 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using BidBuilder.Api.Auth;
+using BidBuilder.Api.Data;
+using BidBuilder.Api.Endpoints;
+using BidBuilder.Api.Tenancy;
+
+// Keep JWT claim names exactly as issued ("sub", "role", "tenant_slug" …) — no
+// remap to long WS-* URIs. CurrentUser + TenantResolutionMiddleware rely on this.
+JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
+
+// QuestPDF Community licence (free for small businesses / open source).
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// ── Services ──────────────────────────────────────────────────────────────────
+var connString = builder.Configuration.GetConnectionString("Postgres")
+                 ?? "Host=localhost;Database=bidbuilder;Username=postgres;Password=postgres";
+
+builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(connString));
+builder.Services.AddScoped<ITenantContext, TenantContext>();
+builder.Services.AddScoped<JwtService>();
+builder.Services.AddScoped<PermissionService>();
+builder.Services.AddScoped<ProjectAccessService>();
+builder.Services.AddScoped<BidBuilder.Api.Services.RateEngine>();
+builder.Services.AddScoped<BidBuilder.Api.Services.EstimateCalculator>();
+builder.Services.AddScoped<BidBuilder.Api.Services.RateCascadeService>();
+builder.Services.AddScoped<BidBuilder.Api.Services.ExportService>();
+builder.Services.AddScoped<BidBuilder.Api.Services.ImportService>();
+builder.Services.AddScoped<BidBuilder.Api.Services.AuditService>();
+builder.Services.AddScoped<BidBuilder.Api.Services.AreaRollupService>();
+
+builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>();
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+var jwtKey      = builder.Configuration["Jwt:SigningKey"] ?? "dev-only-bidbuilder-signing-key-please-rotate-32b";
+var jwtIssuer   = builder.Configuration["Jwt:Issuer"]   ?? "bidbuilder";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "bidbuilder";
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(o =>
+    {
+        o.MapInboundClaims = false;
+        o.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer           = true,
+            ValidIssuer              = jwtIssuer,
+            ValidateAudience         = true,
+            ValidAudience            = jwtAudience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ValidateLifetime         = true,
+            RoleClaimType            = "role",
+            NameClaimType            = "name",
+        };
+    });
+builder.Services.AddAuthorization();
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header. Example: \"Bearer {token}\"",
+        Name = "Authorization", In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey, Scheme = "Bearer",
+    });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" },
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
+// Comma-separated allowlist; defaults cover the local dev web on 3000/3100.
+var allowedOrigins = (builder.Configuration["AllowedOrigins"]
+        ?? "http://localhost:3000,http://localhost:3100")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
+    p.WithOrigins(allowedOrigins)
+     .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
+
+var app = builder.Build();
+
+// ── Apply migrations + seed demo data on startup ──────────────────────────────
+await DbInitializer.RunAsync(app.Services);
+
+// ── Pipeline ──────────────────────────────────────────────────────────────────
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseCors();
+
+// Authentication populates ctx.User so the tenant middleware can read the
+// tenant_slug claim; tenant resolution then runs before any endpoint/DbContext.
+app.UseAuthentication();
+app.UseTenantResolution();
+app.UseAuthorization();
+
+app.MapHealthChecks("/healthz");
+
+app.MapGet("/api/ping", (ITenantContext t) =>
+    Results.Ok(new { ok = true, tenant = t.TenantSlug, at = DateTime.UtcNow }));
+
+app.MapAuthEndpoints();
+app.MapProjectEndpoints();
+app.MapResourceEndpoints();
+app.MapAssemblyEndpoints();
+app.MapEstimateEndpoints();
+app.MapExportEndpoints();
+app.MapSettingsEndpoints();
+app.MapAuditEndpoints();
+app.MapCostComponentEndpoints();
+app.MapAreaEndpoints();
+
+app.Run();
+
+// Exposed so the integration test host (WebApplicationFactory<Program>) can boot the API in-process.
+public partial class Program;

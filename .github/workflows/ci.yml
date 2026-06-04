@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (build + tests on Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: bidbuilder
+          POSTGRES_PASSWORD: bidbuilder_ci
+          POSTGRES_DB: bidbuilder
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bidbuilder"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Build API
+        run: dotnet build api/BidBuilder.Api.csproj -c Release --nologo
+      - name: Test (integration against the Postgres service)
+        run: dotnet test api.Tests/BidBuilder.Api.Tests.csproj -c Release --nologo
+        env:
+          # The test fixture builds its connection from these; the API under test
+          # creates/migrates/seeds a throwaway DB per run on the service container.
+          BIDBUILDER_TEST_PGHOST: localhost
+          BIDBUILDER_TEST_PGPORT: "5432"
+          POSTGRES_USER: bidbuilder
+          POSTGRES_PASSWORD: bidbuilder_ci
+          JWT_SECRET: ci-only-signing-key-at-least-32-characters-long-000
+
+  frontend:
+    name: Frontend (type-check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit

@@ -1,0 +1,162 @@
+using Microsoft.EntityFrameworkCore;
+using BidBuilder.Api.Models;
+using BidBuilder.Api.Tenancy;
+
+namespace BidBuilder.Api.Data;
+
+/// <summary>
+/// Applies pending migrations and seeds idempotent demo data on startup:
+/// a "default" tenant, a TenantAdmin, the eight RBAC modules, a built-in
+/// "Admins" team with full permissions, and one sample project assigned to it.
+///
+/// Runs OUTSIDE any HTTP request, so it resolves a tenant context manually
+/// before touching tenant-scoped entities.
+/// </summary>
+public static class DbInitializer
+{
+    // The RBAC module registry for BidBuilder (Code, Name, sort).
+    private static readonly (string Code, string Name)[] Modules =
+    [
+        ("projects",        "Projects"),
+        ("resource-library","Resource Library"),
+        ("assemblies",      "Assemblies"),
+        ("boq",             "Bill of Quantities"),
+        ("rate-analysis",   "Rate Analysis"),
+        ("prelims-markups", "Preliminaries & Markups"),
+        ("reports",         "Reports"),
+        ("estimate-admin",  "Estimate Admin"),
+    ];
+
+    // Default cost-component types seeded per tenant (built-in, undeletable).
+    private static readonly (string Code, string Name, CostCalcKind Kind)[] DefaultCostTypes =
+    [
+        ("MAT", "Material",  CostCalcKind.Amount),
+        ("LAB", "Labor",     CostCalcKind.Amount),
+        ("EQP", "Equipment", CostCalcKind.Amount),
+        ("WST", "Waste",     CostCalcKind.Percent),
+        ("OVH", "Overheads", CostCalcKind.Percent),
+    ];
+
+    public static async Task RunAsync(IServiceProvider services)
+    {
+        using var scope = services.CreateScope();
+        var db     = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+
+        await db.Database.MigrateAsync();
+
+        // ── Tenant (not IHasTenant — safe to write before tenant resolution) ──
+        const string slug = "default";
+        var t = await db.Tenants.FirstOrDefaultAsync(x => x.Slug == slug);
+        if (t is null)
+        {
+            t = new Tenant { Id = Guid.NewGuid(), Slug = slug, Name = "Demo Contractor", DefaultLocale = "en" };
+            db.Tenants.Add(t);
+            await db.SaveChangesAsync();
+        }
+
+        // Resolve the tenant for the rest of the seed so query filters + the
+        // auto-stamp in SaveChanges target this tenant.
+        if (!tenant.IsResolved) tenant.Set(t.Id, t.Slug);
+
+        // ── Tenant settings ──────────────────────────────────────────────────
+        if (!await db.TenantSettings.AnyAsync())
+        {
+            db.TenantSettings.Add(new TenantSettings
+            {
+                TenantId = t.Id, BaseCurrency = "AED", Timezone = "Asia/Dubai",
+                DefaultOverheadPct = 8m, DefaultProfitPct = 12m, DefaultContingencyPct = 5m,
+            });
+        }
+
+        // ── Modules ────────────────────────────────────────────────────────────
+        var existingCodes = await db.Modules.Select(m => m.Code).ToListAsync();
+        var moduleEntities = new List<Module>();
+        for (int i = 0; i < Modules.Length; i++)
+        {
+            var (code, name) = Modules[i];
+            if (existingCodes.Contains(code)) continue;
+            var m = new Module { TenantId = t.Id, Code = code, Name = name, SortOrder = i, IsActive = true };
+            db.Modules.Add(m);
+            moduleEntities.Add(m);
+        }
+        await db.SaveChangesAsync();
+
+        // ── Default cost-component types (idempotent — also backfills existing tenants) ──
+        var costCodes = await db.CostComponentTypes.Select(c => c.Code).ToListAsync();
+        for (int i = 0; i < DefaultCostTypes.Length; i++)
+        {
+            var (code, name, kind) = DefaultCostTypes[i];
+            if (costCodes.Contains(code)) continue;
+            db.CostComponentTypes.Add(new CostComponentType
+            {
+                TenantId = t.Id, Code = code, Name = name, CalcKind = kind,
+                SortOrder = i, IsActive = true, Builtin = true,
+            });
+        }
+        await db.SaveChangesAsync();
+
+        // ── Built-in "Admins" team with full permissions on every module ──────
+        var adminGroup = await db.Groups.FirstOrDefaultAsync(g => g.Code == "ADMINS");
+        if (adminGroup is null)
+        {
+            adminGroup = new Group
+            {
+                TenantId = t.Id, Code = "ADMINS", Name = "Administrators",
+                Description = "Full access", IsBuiltIn = true,
+            };
+            db.Groups.Add(adminGroup);
+            await db.SaveChangesAsync();
+
+            var allModules = await db.Modules.ToListAsync();
+            foreach (var m in allModules)
+            {
+                db.GroupModules.Add(new GroupModule
+                {
+                    TenantId = t.Id, GroupId = adminGroup.Id, ModuleId = m.Id,
+                    CanView = true, CanAdd = true, CanEdit = true, CanDelete = true,
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        // ── Admin user ─────────────────────────────────────────────────────────
+        if (!await db.Users.AnyAsync(u => u.Email == "admin@bidbuilder.local"))
+        {
+            var admin = new User
+            {
+                TenantId = t.Id, Email = "admin@bidbuilder.local",
+                Name = "Demo Admin", Role = UserRole.TenantAdmin, IsActive = true,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@12345"),
+            };
+            db.Users.Add(admin);
+            await db.SaveChangesAsync();
+            db.UserGroups.Add(new UserGroup { TenantId = t.Id, UserId = admin.Id, GroupId = adminGroup.Id });
+            await db.SaveChangesAsync();
+        }
+
+        // ── Sample project assigned to the Admins team ───────────────────────
+        if (!await db.Projects.AnyAsync())
+        {
+            var project = new Project
+            {
+                TenantId = t.Id, Code = "PRJ-2026-001", Name = "Sample Tender — Warehouse Block A",
+                ClientName = "ACME Industries", Location = "Abu Dhabi", Currency = "AED",
+                Status = ProjectStatus.Bidding, DurationMonths = 9,
+            };
+            db.Projects.Add(project);
+            await db.SaveChangesAsync();
+
+            db.ProjectTeams.Add(new ProjectTeam
+            {
+                TenantId = t.Id, ProjectId = project.Id, GroupId = adminGroup.Id, IsLead = true,
+            });
+            db.Estimates.Add(new Estimate
+            {
+                TenantId = t.Id, ProjectId = project.Id, Revision = 1,
+                Title = "Base Estimate", Status = EstimateStatus.Draft, Currency = "AED",
+            });
+            await db.SaveChangesAsync();
+        }
+    }
+}
