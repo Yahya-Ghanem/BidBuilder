@@ -1,0 +1,102 @@
+# BidBuilder PRODUCTION stack (self-contained — not an overlay).
+#
+# Differences from docker-compose.yml (local dev):
+#   • A Caddy reverse proxy terminates TLS and is the ONLY service with host ports.
+#     db / api / web publish no host ports — they're reachable only on the internal
+#     network, so Postgres and the API are never exposed to the internet directly.
+#   • The API runs as ASPNETCORE_ENVIRONMENT=Production, which activates the
+#     fail-fast guards (strong Jwt:SigningKey, real AllowedOrigins, no localhost).
+#   • No default admin / demo data is seeded unless you opt in (Seed__* below).
+#
+# Run:
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Required env (set in .env or your platform's secret store — see .env.example):
+#   POSTGRES_PASSWORD      strong Postgres password
+#   JWT_SECRET             >= 32 chars, not a CHANGE-ME/dev-only placeholder
+#   PUBLIC_DOMAIN          public hostname, e.g. bid.example.com
+#   PUBLIC_URL             public https URL, e.g. https://bid.example.com
+#   ACME_EMAIL             contact email for Let's Encrypt
+#   SEED_ADMIN_PASSWORD    password for the first admin (omit to skip seeding one)
+
+name: bidbuilder-prod
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: bidbuilder-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-bidbuilder}
+      POSTGRES_USER:     ${POSTGRES_USER:-bidbuilder}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test:     ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bidbuilder} -d ${POSTGRES_DB:-bidbuilder}"]
+      interval: 5s
+      timeout:  5s
+      retries:  10
+    networks: [bbnet]
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: bidbuilder-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS:        http://+:8080
+      ConnectionStrings__Postgres: Host=db;Port=5432;Database=${POSTGRES_DB:-bidbuilder};Username=${POSTGRES_USER:-bidbuilder};Password=${POSTGRES_PASSWORD};Maximum Pool Size=50;Timeout=15
+      Jwt__SigningKey:    ${JWT_SECRET:?JWT_SECRET must be set (>= 32 chars, non-default)}
+      # Same-origin in prod: the browser hits https://PUBLIC_DOMAIN and Caddy routes /api.
+      AllowedOrigins:     ${PUBLIC_URL:?PUBLIC_URL must be set, e.g. https://bid.example.com}
+      # First-run admin seed (no default credential ships to prod). Omit to skip.
+      Seed__AdminPassword: ${SEED_ADMIN_PASSWORD:-}
+      Seed__AdminEmail:    ${SEED_ADMIN_EMAIL:-admin@bidbuilder.local}
+    networks: [bbnet]
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Baked into the browser bundle; same public origin as the site.
+        NEXT_PUBLIC_API_URL: ${PUBLIC_URL:?PUBLIC_URL must be set, e.g. https://bid.example.com}
+    container_name: bidbuilder-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    networks: [bbnet]
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: bidbuilder-caddy
+    restart: unless-stopped
+    depends_on:
+      - web
+      - api
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?PUBLIC_DOMAIN must be set, e.g. bid.example.com}
+      ACME_EMAIL:    ${ACME_EMAIL:?ACME_EMAIL must be set for Let's Encrypt}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [bbnet]
+
+networks:
+  bbnet:
+
+volumes:
+  dbdata:
+  caddy_data:
+  caddy_config:

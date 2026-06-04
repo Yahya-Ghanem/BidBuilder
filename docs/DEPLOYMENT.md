@@ -34,9 +34,18 @@ non-default values (enforced in `Program.cs`):
 
 ## Network / TLS
 
-- Put the API and web behind a reverse proxy with TLS (e.g. Caddy/Nginx).
-- Restrict `AllowedOrigins` (CORS) to the real web origin — not `localhost`.
-- Don't expose Postgres publicly; keep it on the internal network.
+A ready-to-use production stack is provided in **`docker-compose.prod.yml`** + **`deploy/Caddyfile`**:
+
+- **Caddy** terminates TLS (auto Let's Encrypt for `PUBLIC_DOMAIN`) and is the only
+  service with host ports. It serves everything from one origin — `/api/*` and
+  `/healthz` proxy to the API, everything else to the Next.js web app.
+- **db / api / web publish no host ports** — Postgres and the API are never exposed
+  to the internet directly, only reachable on the internal `bbnet` network.
+- The API runs as `ASPNETCORE_ENVIRONMENT=Production` (guards active); `AllowedOrigins`
+  is set to `PUBLIC_URL` (the single public origin — not `localhost`).
+
+Run it: `docker compose -f docker-compose.prod.yml up -d --build`
+(set `PUBLIC_DOMAIN`, `PUBLIC_URL`, `ACME_EMAIL`, `SEED_ADMIN_PASSWORD` — see `.env.example`).
 
 ## CI
 

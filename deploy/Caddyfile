@@ -1,0 +1,40 @@
+# BidBuilder production reverse proxy.
+#
+# Caddy terminates TLS (auto Let's Encrypt for PUBLIC_DOMAIN) and serves the whole
+# app from a single public origin:
+#   • /api/* and /healthz  → the ASP.NET API (container `api`, port 8080)
+#   • everything else      → the Next.js web app (container `web`, port 3000)
+#
+# Because the browser talks to one origin, the API is never exposed directly and
+# CORS stays simple (AllowedOrigins = https://PUBLIC_DOMAIN). The api/web/db
+# containers publish no host ports in the prod compose — only Caddy is reachable.
+#
+# Env (provided by docker-compose.prod.yml):
+#   PUBLIC_DOMAIN  the public hostname, e.g. bid.example.com
+#   ACME_EMAIL     contact email for Let's Encrypt cert notices
+
+{$PUBLIC_DOMAIN} {
+	encode zstd gzip
+
+	# API + health probe share the public origin.
+	@api path /api/* /healthz
+	handle @api {
+		reverse_proxy api:8080
+	}
+
+	# Everything else is the Next.js frontend.
+	handle {
+		reverse_proxy web:3000
+	}
+
+	tls {$ACME_EMAIL}
+
+	# Sensible security headers; HSTS is safe behind always-on TLS.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
