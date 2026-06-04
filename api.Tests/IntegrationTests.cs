@@ -334,6 +334,50 @@ public class BenchmarkTests(ApiFixture fx)
 }
 
 [Collection("api")]
+public class ActivityCatalogTests(ApiFixture fx)
+{
+    [Fact]
+    public async Task Builtin_activities_are_seeded()
+    {
+        var c = await fx.AdminClientAsync();
+        var arr = await c.GetFromJsonAsync<JsonElement>("/api/activities");
+        var names = arr.EnumerateArray().Select(a => a.GetProperty("name").GetString()).ToList();
+        Assert.Contains("Block work", names);
+        Assert.Contains("Plastering", names);
+        Assert.All(arr.EnumerateArray().Where(a => a.GetProperty("name").GetString() == "Block work"),
+            a => Assert.True(a.GetProperty("builtin").GetBoolean()));
+    }
+
+    [Fact]
+    public async Task Add_user_activity_then_dup_and_builtin_delete_conflicts()
+    {
+        var c = await fx.AdminClientAsync();
+
+        var created = await (await c.PostAsJsonAsync("/api/activities", new { name = "Roofing", sortOrder = 0, isActive = true })).Json();
+        int id = created.GetProperty("id").GetInt32();
+        Assert.False(created.GetProperty("builtin").GetBoolean());
+
+        // duplicate name (case-insensitive) → 409
+        var dup = await c.PostAsJsonAsync("/api/activities", new { name = "roofing", sortOrder = 0, isActive = true });
+        Assert.Equal(HttpStatusCode.Conflict, dup.StatusCode);
+
+        // built-in cannot be deleted → 409
+        var arr = await c.GetFromJsonAsync<JsonElement>("/api/activities");
+        int builtinId = arr.EnumerateArray().First(a => a.GetProperty("builtin").GetBoolean()).GetProperty("id").GetInt32();
+        Assert.Equal(HttpStatusCode.Conflict, (await c.DeleteAsync($"/api/activities/{builtinId}")).StatusCode);
+
+        // the user activity deletes cleanly (restore baseline)
+        Assert.Equal(HttpStatusCode.NoContent, (await c.DeleteAsync($"/api/activities/{id}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Activities_require_authentication()
+    {
+        Assert.Equal(HttpStatusCode.Unauthorized, (await fx.Client().GetAsync("/api/activities")).StatusCode);
+    }
+}
+
+[Collection("api")]
 public class UserManagementTests(ApiFixture fx)
 {
     [Fact]

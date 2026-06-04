@@ -120,6 +120,9 @@ export interface AreaRollup { currency: string; areas: AreaRollupRow[]; assigned
 export interface CostComponentType {
   id: number; code: string; name: string; calcKind: string; sortOrder: number; isActive: boolean; builtin: boolean
 }
+export interface ActivityType {
+  id: number; name: string; sortOrder: number; isActive: boolean; builtin: boolean
+}
 export interface SectionBreakdown {
   id: number; code: string; title: string; sortOrder: number; sectionTotal: number; items: ItemBreakdown[]
 }

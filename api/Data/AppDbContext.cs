@@ -31,6 +31,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<Project>     Projects     => Set<Project>();
     public DbSet<ProjectTeam> ProjectTeams => Set<ProjectTeam>();
     public DbSet<Area>        Areas        => Set<Area>();
+    public DbSet<ActivityType> ActivityTypes => Set<ActivityType>();
 
     // ── Estimate aggregate ────────────────────────────────────────────────────
     public DbSet<Estimate>    Estimates     => Set<Estimate>();
@@ -346,6 +347,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.HasOne(c => c.Type).WithMany()
              .HasForeignKey(c => c.CostComponentTypeId).OnDelete(DeleteBehavior.Restrict);
             b.HasQueryFilter(c => c.TenantId == _tenant.TenantId);
+        });
+
+        mb.Entity<ActivityType>(b =>
+        {
+            b.HasIndex(a => new { a.TenantId, a.Name }).IsUnique();
+            b.HasIndex(a => a.TenantId);
+            b.Property(a => a.Name).HasMaxLength(120).IsRequired();
+            b.HasQueryFilter(a => a.TenantId == _tenant.TenantId);
         });
 
         mb.Entity<AssemblyComponent>(b =>

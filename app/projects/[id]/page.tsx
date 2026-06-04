@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { Plus, Trash2, SlidersHorizontal, RotateCcw, Copy, Upload, FileDown, FolderInput, Pencil } from "lucide-react"
 import { toast } from "sonner"
 import { fetchApi, downloadFile, uploadFile, ApiError } from "@/lib/api"
-import type { Project, EstimateSummary, EstimateBreakdown, SectionBreakdown, ItemBreakdown, AssemblyRow, ProjectTeam, GroupOption, MarkupBreakdown, WhatIfResult, ImportResult, CurrencyRates, CostComponentType, Area, AreaRollup, AreaRollupRow } from "@/lib/types"
+import type { Project, EstimateSummary, EstimateBreakdown, SectionBreakdown, ItemBreakdown, AssemblyRow, ProjectTeam, GroupOption, MarkupBreakdown, WhatIfResult, ImportResult, CurrencyRates, CostComponentType, ActivityType, Area, AreaRollup, AreaRollupRow } from "@/lib/types"
 import { AppShell } from "@/components/app-shell"
 import { useAuth } from "@/lib/auth"
 import { usePermissions } from "@/lib/permissions"
@@ -1068,24 +1068,68 @@ function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdi
   )
 }
 
-/** New-activity dialog: a description + the Material/Manpower build-up (qty × rate). */
+/** New-activity dialog: pick from the activity catalog (built-in + user-added, with
+ *  an inline "+ New") then define the Material/Manpower build-up (qty × rate). */
 function ActivityModal({ area, costTypes, currency, onClose, onSave }: {
   area: Area; costTypes: CostComponentType[]; currency: string
   onClose: () => void; onSave: (v: { description: string; unit: string; components: CompInput[] }) => void
 }) {
-  const [description, setDescription] = useState("")
+  const qc = useQueryClient()
+  const { can } = usePermissions()
+  const canAddActivity = can("boq", "add")
+  const { data: activities } = useQuery({ queryKey: ["activities"], queryFn: () => fetchApi<ActivityType[]>("/api/activities") })
+  const active = (activities ?? []).filter((a) => a.isActive)
+
+  const [name, setName] = useState("")
   const [unit, setUnit] = useState("")
   const [components, setComponents] = useState<CompInput[]>([])
   const [buildup, setBuildup] = useState(false)
+  const [showNew, setShowNew] = useState(false)
+  const [newName, setNewName] = useState("")
+  const [adding, setAdding] = useState(false)
+
+  async function addCatalogActivity() {
+    const nm = newName.trim()
+    if (!nm) { toast.error("Activity name required"); return }
+    setAdding(true)
+    try {
+      await fetchApi("/api/activities", { method: "POST", body: JSON.stringify({ name: nm, sortOrder: 0, isActive: true }) })
+      await qc.invalidateQueries({ queryKey: ["activities"] })
+      setName(nm); setNewName(""); setShowNew(false)
+      toast.success(`Added "${nm}"`)
+    } catch (e) { toast.error((e as Error).message) } finally { setAdding(false) }
+  }
+
   function submit(ev: React.FormEvent) {
     ev.preventDefault()
-    if (!description.trim()) { toast.error("Activity name is required"); return }
-    onSave({ description: description.trim(), unit, components })
+    if (!name.trim()) { toast.error("Choose an activity"); return }
+    onSave({ description: name.trim(), unit, components })
   }
+
   return (
     <Modal open onClose={onClose} title={`New activity — ${area.name}`}>
       <form id="activity-form" onSubmit={submit} className="space-y-3">
-        <Field label="Activity"><Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Block work, Plastering" /></Field>
+        <div>
+          <span className="mb-1 block text-xs font-medium text-slate-600">Activity</span>
+          <div className="flex gap-2">
+            <Select value={name} onChange={(e) => setName(e.target.value)} className="flex-1">
+              <option value="">— choose activity —</option>
+              {active.map((a) => <option key={a.id} value={a.name}>{a.name}</option>)}
+            </Select>
+            {canAddActivity && (
+              <Button type="button" variant="outline" className="h-9 whitespace-nowrap text-xs" onClick={() => setShowNew((s) => !s)}>
+                <Plus className="h-3.5 w-3.5" /> New
+              </Button>
+            )}
+          </div>
+          {showNew && (
+            <div className="mt-2 flex gap-2">
+              <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New activity name" autoFocus
+                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCatalogActivity() } }} />
+              <Button type="button" variant="outline" className="h-9 text-xs" disabled={adding} onClick={addCatalogActivity}>Add</Button>
+            </div>
+          )}
+        </div>
         <Field label="Unit (optional)"><Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="m², no, ls" /></Field>
         <div>
           <span className="mb-1 block text-xs font-medium text-slate-600">Material &amp; manpower</span>
