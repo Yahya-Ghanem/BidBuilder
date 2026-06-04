@@ -40,6 +40,7 @@ builder.Services.AddScoped<BidBuilder.Api.Services.ExportService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.ImportService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.AuditService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.AreaRollupService>();
+builder.Services.AddScoped<BidBuilder.Api.Services.BenchmarkService>();
 
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>();
 
@@ -152,6 +153,7 @@ app.MapAuditEndpoints();
 app.MapCostComponentEndpoints();
 app.MapAreaEndpoints();
 app.MapUserManagementEndpoints();
+app.MapBenchmarkEndpoints();
 
 app.Run();
 
