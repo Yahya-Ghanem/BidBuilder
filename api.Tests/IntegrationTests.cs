@@ -160,6 +160,39 @@ public class AreaRollupTests(ApiFixture fx)
         var del = await c.DeleteAsync($"/api/projects/{pid}/areas/{aid}");
         Assert.Equal(HttpStatusCode.Conflict, del.StatusCode);
     }
+
+    [Fact]
+    public async Task Area_measure_yields_cost_per_unit()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+
+        // an area with a 100 m² measure
+        var area = await (await c.PostAsJsonAsync($"/api/projects/{pid}/areas",
+            new { name = "Floor", code = "F", kind = "Area", parentAreaId = (int?)null, sortOrder = 0, quantity = 100m, unit = "m²" })).Json();
+        int aid = area.GetProperty("id").GetInt32();
+        Assert.Equal(100m, area.GetProperty("quantity").GetDecimal());
+        Assert.Equal("m²", area.GetProperty("unit").GetString());
+
+        // 5000 of cost assigned to it → 50 / m²
+        var eid = await Api.NewEstimateAsync(c, pid, "measure");
+        var sid = await Api.AddSectionAsync(c, eid, "M1");
+        await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items", new
+        {
+            description = "slab", unit = "m2", quantity = 1, assemblyId = (int?)null, unitRate = 5000, sortOrder = 0,
+            components = (object?)null, areaId = aid,
+        });
+
+        var roll = await c.GetFromJsonAsync<JsonElement>($"/api/estimates/{eid}/areas-rollup");
+        var node = roll.GetProperty("areas").EnumerateArray().First(x => x.GetProperty("id").GetInt32() == aid);
+        Assert.Equal(5000m, node.GetProperty("rollupTotal").GetDecimal());
+        Assert.Equal(50m, node.GetProperty("costPerUnit").GetDecimal());   // 5000 / 100
+
+        // negative quantity rejected
+        var bad = await c.PostAsJsonAsync($"/api/projects/{pid}/areas",
+            new { name = "x", kind = "Unit", parentAreaId = aid, sortOrder = 0, quantity = -1m, unit = (string?)null });
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+    }
 }
 
 [Collection("api")]

@@ -18,6 +18,12 @@ public class Area : IHasTenant
     public AreaKind Kind         { get; set; } = AreaKind.Area;
     public int      SortOrder    { get; set; }
 
+    // ── Measure (for cost-per-unit analysis) ─────────────────────────────────
+    // The area's physical quantity and its unit (e.g. 120 "m²", or 50 "units").
+    // Used only to report cost/measure on the roll-up — it never changes the bid.
+    public decimal  Quantity     { get; set; }          // 0 = no measure set
+    public string?  Unit         { get; set; }          // e.g. "m²", "unit", "key"
+
     // ── Navigation ─────────────────────────────────────────────────────────────
     public Project Project { get; set; } = null!;
 }

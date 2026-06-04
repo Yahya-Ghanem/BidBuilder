@@ -3,7 +3,9 @@ using BidBuilder.Api.Data;
 
 namespace BidBuilder.Api.Services;
 
-public record AreaRollupRow(int Id, int? ParentAreaId, string Name, string Kind, decimal DirectTotal, decimal RollupTotal, int ItemCount);
+public record AreaRollupRow(
+    int Id, int? ParentAreaId, string Name, string Kind, decimal DirectTotal, decimal RollupTotal, int ItemCount,
+    decimal Quantity, string? Unit, decimal? CostPerUnit);
 public record AreaRollupResult(string Currency, List<AreaRollupRow> Areas, decimal AssignedTotal, decimal UnassignedTotal);
 
 /// <summary>
@@ -45,9 +47,15 @@ public class AreaRollupService(AppDbContext db)
         }
         foreach (var a in areas) Roll(a.Id);
 
-        var rows = areas.Select(a => new AreaRollupRow(
-            a.Id, a.ParentAreaId, a.Name, a.Kind.ToString(),
-            EstimateMath.Round2(direct[a.Id]), EstimateMath.Round2(rollup[a.Id]), count[a.Id])).ToList();
+        var rows = areas.Select(a =>
+        {
+            var roll = EstimateMath.Round2(rollup[a.Id]);
+            decimal? perUnit = a.Quantity > 0 ? EstimateMath.Round2(rollup[a.Id] / a.Quantity) : null;
+            return new AreaRollupRow(
+                a.Id, a.ParentAreaId, a.Name, a.Kind.ToString(),
+                EstimateMath.Round2(direct[a.Id]), roll, count[a.Id],
+                a.Quantity, a.Unit, perUnit);
+        }).ToList();
         var assigned = areas.Where(a => a.ParentAreaId is null).Sum(a => rollup[a.Id]);
         return new AreaRollupResult(est.Currency, rows, EstimateMath.Round2(assigned), EstimateMath.Round2(unassigned));
     }
