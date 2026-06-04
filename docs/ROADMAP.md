@@ -326,8 +326,21 @@ Outside `Development` no admin is seeded unless a password is supplied, and the 
 `Seed:DemoData=true` — `Admin@12345` stays out of real deployments. `ApiFixture` opts into both for the test
 baseline (21/21 green). Merged to `main` (7acab56).
 
-Remaining hardening (not yet done): TLS/reverse-proxy config (infra, not code), rotate dev secrets,
-branch protection on `main`.
+**Dev DB reset:** ✅ Dropped + recreated the dev `bidbuilder` database; the API reseeded a clean baseline
+(estimate 1 bid back to 0.00 from the drifted ~92,525; 1 tenant/user/project, 8 modules, 5 cost types, 0 BOQ items).
+
+**Rotated dev secrets:** ✅ Generated strong `POSTGRES_PASSWORD` (openssl hex, 48 chars) + `JWT_SECRET`
+(base64, 64 chars), `ALTER ROLE`d the live Postgres role, rewrote the gitignored `.env`, recreated the
+containers — healthz/login/DB verified. Old `dev-only…` placeholders gone.
+
+**TLS reverse-proxy:** ✅ Added `docker-compose.prod.yml` + `deploy/Caddyfile` (commit 04591c0): Caddy
+terminates TLS (auto Let's Encrypt), single public origin routes `/api`+`/healthz` to the API and the rest
+to web; db/api/web publish no host ports; API runs Production with `AllowedOrigins=PUBLIC_URL`. `.env.example`
++ `docs/DEPLOYMENT.md` updated.
+
+**Branch protection on `main`:** ⛔ BLOCKED — both the classic branch-protection API and repository rulesets
+return 403 "Upgrade to GitHub Pro or make this repository public" (private repo on the free plan). Needs the
+repo made public or a Pro upgrade; awaiting user decision. Until then `main` is advanced by fast-forward.
 
 ---
 
