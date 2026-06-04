@@ -1041,7 +1041,7 @@ function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdi
             {area.name}<span className="ml-2 text-xs text-slate-400">{area.kind}</span>
           </span>
           <div className="flex items-center gap-1">
-            {canAdd && area.kind === "Unit" && <Button variant="ghost" className="h-6 px-2 text-xs" onClick={() => setCloning(area)}><Copy className="h-3.5 w-3.5" /> Clone</Button>}
+            {canAdd && <Button variant="ghost" className="h-6 px-2 text-xs" onClick={() => setCloning(area)}><Copy className="h-3.5 w-3.5" /> Clone</Button>}
             {canAdd && <Button variant="ghost" className="h-6 px-2 text-xs" onClick={() => setAdding(area)}><Plus className="h-3.5 w-3.5" /> Activity</Button>}
           </div>
         </div>
@@ -1085,19 +1085,24 @@ function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdi
   )
 }
 
-/** Clone a room: duplicates the unit and all its activities under a new name. */
+/** Clone an area: duplicates the node, its whole subtree (sub-areas + units) and all
+ *  their activities under a new name. */
 function CloneRoomModal({ area, onClose, onSave }: { area: Area; onClose: () => void; onSave: (name: string) => void }) {
   const [name, setName] = useState(`${area.name} (copy)`)
+  const hasChildren = area.kind !== "Unit"
   function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) { toast.error("Name is required"); return }
     onSave(name.trim())
   }
   return (
-    <Modal open onClose={onClose} title={`Clone room — ${area.name}`}>
+    <Modal open onClose={onClose} title={`Clone ${area.kind} — ${area.name}`}>
       <form id="clone-room-form" onSubmit={submit} className="space-y-3">
-        <p className="text-xs text-slate-500">Creates a new {area.kind} with the same activities (material &amp; manpower). You can edit the copy independently afterwards.</p>
-        <Field label="New room name"><Input value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
+        <p className="text-xs text-slate-500">
+          Creates a copy of this {area.kind}{hasChildren ? ", including its sub-areas, units" : ""} and all their
+          activities (material &amp; manpower). You can edit the copy independently afterwards.
+        </p>
+        <Field label="New name"><Input value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
       </form>
       <div className="mt-4 flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
