@@ -427,6 +427,23 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
     }
   }
 
+  // Add an activity under a unit: ensure the auto "Activities" section exists, then
+  // create a BOQ item tagged to that unit with the material/manpower build-up.
+  async function addActivity(areaId: number, v: { description: string; unit: string; components: CompInput[] }) {
+    try {
+      let sectionId = e.sections.find((s) => s.code === "ACT")?.id
+      if (sectionId == null) {
+        const bd = await addSection.mutateAsync({ code: "ACT", title: "Activities" })
+        sectionId = bd.sections.find((s) => s.code === "ACT")?.id
+      }
+      if (sectionId == null) return
+      await addItem.mutateAsync({
+        sectionId, description: v.description, unit: v.unit || "", quantity: 1,
+        assemblyId: null, unitRate: 0, components: v.components, areaId, sortOrder: 0,
+      })
+    } catch { /* useEstimateMut already toasts errors / handles 409 */ }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -508,6 +525,12 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
         ))}
         {!e.sections.length && <p className="px-4 py-3 text-sm text-slate-400">No sections yet — add one above.</p>}
       </Card>
+
+      {(areas.data?.length ?? 0) > 0 && (
+        <ActivitiesPanel breakdown={e} areas={areas.data ?? []} costTypes={costTypes.data ?? []} currency={c}
+          canAdd={editAdd} canEdit={editEdit} canDelete={editDelete}
+          onAddActivity={addActivity} onUpdItem={(v) => updItem.mutate(v)} onDelItem={(iid) => delItem.mutate(iid)} />
+      )}
 
       <AreaRollupPanel estimateId={estimateId} currency={c} />
 
@@ -975,6 +998,111 @@ function AreaRollupPanel({ estimateId, currency }: { estimateId: number; currenc
         <span className="font-semibold">{money(data.assignedTotal, currency)}</span>
       </div>
     </Card>
+  )
+}
+
+/** Unit-centric activities: the area tree with each unit's activities (BOQ items
+ *  tagged to it) showing Material (M) + Manpower (L) + total, with add/edit/delete.
+ *  Reuses BOQ items + the cost build-up, so everything flows into the bid. */
+function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdit, canDelete, onAddActivity, onUpdItem, onDelItem }: {
+  breakdown: EstimateBreakdown; areas: Area[]; costTypes: CostComponentType[]; currency: string
+  canAdd: boolean; canEdit: boolean; canDelete: boolean
+  onAddActivity: (areaId: number, v: { description: string; unit: string; components: CompInput[] }) => void
+  onUpdItem: (v: any) => void; onDelItem: (iid: number) => void
+}) {
+  const items = breakdown.sections.flatMap((s) => s.items)
+  const byArea = (aid: number) => items.filter((it) => it.areaId === aid)
+  const childrenOf = (id: number | null) => areas.filter((a) => a.parentAreaId === id)
+  const [adding, setAdding] = useState<Area | null>(null)
+  const [editing, setEditing] = useState<ItemBreakdown | null>(null)
+  const compAmount = (it: ItemBreakdown, code: string) => it.components.find((c) => c.code === code)?.amount ?? 0
+  const editBase = (it: ItemBreakdown) => ({
+    id: it.id, itemCode: it.itemCode, description: it.description, unit: it.unit, assemblyId: it.assemblyId,
+    unitRate: it.unitRate, sortOrder: it.sortOrder, areaId: it.areaId, quantity: it.quantity,
+  })
+
+  function Node({ area, depth }: { area: Area; depth: number }) {
+    const acts = byArea(area.id)
+    return (
+      <>
+        <div className="flex items-center justify-between border-t border-[var(--border)] py-1.5" style={{ paddingLeft: depth * 16 + 4 }}>
+          <span className="text-sm">
+            {area.code && <span className="mr-1 font-mono text-xs text-slate-400">{area.code}</span>}
+            {area.name}<span className="ml-2 text-xs text-slate-400">{area.kind}</span>
+          </span>
+          {canAdd && <Button variant="ghost" className="h-6 px-2 text-xs" onClick={() => setAdding(area)}><Plus className="h-3.5 w-3.5" /> Activity</Button>}
+        </div>
+        {acts.map((it) => (
+          <div key={it.id} className="grid grid-cols-[1fr_96px_96px_100px_auto] items-center gap-2 py-1 text-sm" style={{ paddingLeft: depth * 16 + 22 }}>
+            <span className="text-slate-700">{it.description}</span>
+            <span className="text-right text-xs text-slate-500" title="Material">M {money(compAmount(it, "MAT"), currency)}</span>
+            <span className="text-right text-xs text-slate-500" title="Manpower">L {money(compAmount(it, "LAB"), currency)}</span>
+            <span className="text-right font-medium">{money(it.lineTotal, currency)}</span>
+            <span className="flex justify-end gap-1">
+              {canEdit && <button onClick={() => setEditing(it)} className="rounded p-1 text-slate-400 hover:text-[var(--brand)]" title="Material & manpower"><Layers className="h-3.5 w-3.5" /></button>}
+              {canDelete && <button onClick={() => { if (confirm(`Delete activity "${it.description}"?`)) onDelItem(it.id) }} className="rounded p-1 text-slate-400 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
+            </span>
+          </div>
+        ))}
+        {childrenOf(area.id).map((k) => <Node key={k.id} area={k} depth={depth + 1} />)}
+      </>
+    )
+  }
+
+  return (
+    <Card className="p-4">
+      <h4 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-600"><FolderTree className="h-4 w-4" /> Activities by unit</h4>
+      <p className="mb-2 text-xs text-slate-400">Add work activities under each unit; each carries Material (qty × price) and Manpower (hours × rate). M = material, L = manpower; total includes any other components.</p>
+      {childrenOf(null).map((r) => <Node key={r.id} area={r} depth={0} />)}
+      {adding && (
+        <ActivityModal area={adding} costTypes={costTypes} currency={currency}
+          onClose={() => setAdding(null)}
+          onSave={(v) => { onAddActivity(adding.id, v); setAdding(null) }} />
+      )}
+      {editing && (
+        <BuildUpModal open onClose={() => setEditing(null)} costTypes={costTypes} currency={currency}
+          initial={editing.components.map((c) => ({ typeId: c.typeId, value: c.value, quantity: c.quantity ?? undefined, rate: c.rate ?? undefined }))}
+          onSave={(comps) => { onUpdItem({ ...editBase(editing), components: comps }); setEditing(null) }} />
+      )}
+    </Card>
+  )
+}
+
+/** New-activity dialog: a description + the Material/Manpower build-up (qty × rate). */
+function ActivityModal({ area, costTypes, currency, onClose, onSave }: {
+  area: Area; costTypes: CostComponentType[]; currency: string
+  onClose: () => void; onSave: (v: { description: string; unit: string; components: CompInput[] }) => void
+}) {
+  const [description, setDescription] = useState("")
+  const [unit, setUnit] = useState("")
+  const [components, setComponents] = useState<CompInput[]>([])
+  const [buildup, setBuildup] = useState(false)
+  function submit(ev: React.FormEvent) {
+    ev.preventDefault()
+    if (!description.trim()) { toast.error("Activity name is required"); return }
+    onSave({ description: description.trim(), unit, components })
+  }
+  return (
+    <Modal open onClose={onClose} title={`New activity — ${area.name}`}>
+      <form id="activity-form" onSubmit={submit} className="space-y-3">
+        <Field label="Activity"><Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Block work, Plastering" /></Field>
+        <Field label="Unit (optional)"><Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="m², no, ls" /></Field>
+        <div>
+          <span className="mb-1 block text-xs font-medium text-slate-600">Material &amp; manpower</span>
+          <Button type="button" variant="outline" className="w-full text-xs" onClick={() => setBuildup(true)}>
+            <Layers className="h-3.5 w-3.5" /> {components.length ? `${components.length} cost line(s) — edit` : "Add material & manpower"}
+          </Button>
+        </div>
+      </form>
+      <div className="mt-4 flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+        <Button type="submit" form="activity-form">Add activity</Button>
+      </div>
+      {buildup && (
+        <BuildUpModal open onClose={() => setBuildup(false)} costTypes={costTypes} currency={currency}
+          initial={components} onSave={(c) => setComponents(c)} />
+      )}
+    </Modal>
   )
 }
 
