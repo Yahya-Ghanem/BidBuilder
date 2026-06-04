@@ -310,6 +310,15 @@ login, `permissions` all-true), the seeded sample project, cost-component catalo
 
 ---
 
+## 8g. Phase 13 — Cross-project benchmarking
+
+**Benchmarking:** ✅ `GET /api/benchmarks` + a Benchmarks page compare **cost per unit/m²** across the projects
+a user can access. For each project it takes a representative estimate (latest published, else latest
+revision), rolls up the areas, and collects every measured area as a cost-per-unit data point; points are
+grouped by measure unit with **min/avg/max** (mixed currencies are flagged, aggregate hidden). Read-only —
+never changes a bid; scoped by project access and gated by the `reports` permission. 2 integration tests
+(cost/key 2000 ÷ 10 = 200; anonymous 401). 27/27 green. (PR #6.)
+
 ## 8f. Phase 12 — Area measures & cost-per-unit
 
 **Area measures:** ✅ Each project area can carry a **quantity + unit** (e.g. 120 m², 50 units). The
