@@ -12,6 +12,10 @@ non-default values (enforced in `Program.cs`):
 |---|---|---|
 | `ConnectionStrings:Postgres` | `ConnectionStrings__Postgres` | Full Npgsql connection string. Required (no fallback in prod). |
 | `Jwt:SigningKey` | `Jwt__SigningKey` | ≥ 32 chars, **not** a `CHANGE-ME`/`dev-only` placeholder. |
+| `AllowedOrigins` | `AllowedOrigins` | Comma-separated web origins. Required in prod; **must not** contain `localhost`/`127.0.0.1`. |
+| `Seed:AdminPassword` | `Seed__AdminPassword` | Initial admin password. **Required to seed the first admin in prod** — no default credential is created without it. |
+| `Seed:AdminEmail` | `Seed__AdminEmail` | Optional. Initial admin email (default `admin@bidbuilder.local`). |
+| `Seed:DemoData` | `Seed__DemoData` | Optional `true`/`false`. Seeds the sample project outside Development (default off in prod). |
 
 - Generate a signing key: `openssl rand -base64 48`.
 - Set a strong `POSTGRES_PASSWORD` (the committed dev value is for local only — **rotate it**).
@@ -21,8 +25,11 @@ non-default values (enforced in `Program.cs`):
 ## Database
 
 - Migrations apply automatically on API startup (`DbInitializer.RunAsync`).
-- The startup seed creates a demo tenant + admin (`admin@bidbuilder.local` / `Admin@12345`)
-  and the sample project. **Change/disable the demo admin** before going live.
+- In **Development** the seed creates a demo tenant + admin (`admin@bidbuilder.local` /
+  `Admin@12345`) and the sample project.
+- Outside Development **no default credential is seeded**: set `Seed__AdminPassword`
+  (and optionally `Seed__AdminEmail`) to create the first admin, or create it out-of-band.
+  The sample project is only seeded when `Seed__DemoData=true`.
 - Back up the Postgres volume; the bid data is the product.
 
 ## Network / TLS

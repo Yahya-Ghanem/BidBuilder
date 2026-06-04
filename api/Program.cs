@@ -97,10 +97,21 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// Comma-separated allowlist; defaults cover the local dev web on 3000/3100.
-var allowedOrigins = (builder.Configuration["AllowedOrigins"]
-        ?? "http://localhost:3000,http://localhost:3100")
+// Comma-separated allowlist. In Development the local web (3000/3100) is the
+// default; outside Development a real origin MUST be configured and localhost is
+// rejected, so a permissive dev CORS policy can never leak into a deployment.
+var originsCfg = builder.Configuration["AllowedOrigins"];
+if (string.IsNullOrWhiteSpace(originsCfg))
+    originsCfg = isDev
+        ? "http://localhost:3000,http://localhost:3100"
+        : throw new InvalidOperationException(
+            "AllowedOrigins must be configured outside Development (comma-separated web origins, e.g. https://app.example.com).");
+var allowedOrigins = originsCfg
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+if (!isDev && allowedOrigins.Any(o =>
+        o.Contains("localhost", StringComparison.OrdinalIgnoreCase) || o.Contains("127.0.0.1")))
+    throw new InvalidOperationException(
+        "AllowedOrigins must not include localhost/127.0.0.1 outside Development.");
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     p.WithOrigins(allowedOrigins)
      .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));

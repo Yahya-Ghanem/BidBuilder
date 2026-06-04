@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using BidBuilder.Api.Models;
 using BidBuilder.Api.Tenancy;
 
@@ -42,6 +45,10 @@ public static class DbInitializer
         using var scope = services.CreateScope();
         var db     = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        var cfg    = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        var env    = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
+        var log    = scope.ServiceProvider.GetService<ILoggerFactory>()?.CreateLogger("DbInitializer");
+        var isDev  = env.IsDevelopment();
 
         await db.Database.MigrateAsync();
 
@@ -121,22 +128,40 @@ public static class DbInitializer
         }
 
         // ── Admin user ─────────────────────────────────────────────────────────
-        if (!await db.Users.AnyAsync(u => u.Email == "admin@bidbuilder.local"))
+        // Credentials are configurable (Seed:AdminEmail / Seed:AdminPassword). In
+        // Development a well-known demo login is fine; outside Development we refuse
+        // to seed a default credential — a password MUST be supplied explicitly, or
+        // the initial admin is skipped (create it out-of-band). This keeps the famous
+        // "Admin@12345" out of any real deployment.
+        var adminEmail    = cfg["Seed:AdminEmail"]    ?? "admin@bidbuilder.local";
+        var adminPassword = cfg["Seed:AdminPassword"] ?? (isDev ? "Admin@12345" : null);
+        if (!await db.Users.AnyAsync(u => u.Email == adminEmail))
         {
-            var admin = new User
+            if (adminPassword is null)
             {
-                TenantId = t.Id, Email = "admin@bidbuilder.local",
-                Name = "Demo Admin", Role = UserRole.TenantAdmin, IsActive = true,
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@12345"),
-            };
-            db.Users.Add(admin);
-            await db.SaveChangesAsync();
-            db.UserGroups.Add(new UserGroup { TenantId = t.Id, UserId = admin.Id, GroupId = adminGroup.Id });
-            await db.SaveChangesAsync();
+                log?.LogWarning(
+                    "Skipping initial admin seed outside Development: set Seed__AdminPassword " +
+                    "(and optionally Seed__AdminEmail) to create the first admin.");
+            }
+            else
+            {
+                var admin = new User
+                {
+                    TenantId = t.Id, Email = adminEmail,
+                    Name = "Demo Admin", Role = UserRole.TenantAdmin, IsActive = true,
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
+                };
+                db.Users.Add(admin);
+                await db.SaveChangesAsync();
+                db.UserGroups.Add(new UserGroup { TenantId = t.Id, UserId = admin.Id, GroupId = adminGroup.Id });
+                await db.SaveChangesAsync();
+            }
         }
 
         // ── Sample project assigned to the Admins team ───────────────────────
-        if (!await db.Projects.AnyAsync())
+        // Demo content is seeded in Development, or anywhere Seed:DemoData=true.
+        var seedDemo = isDev || cfg.GetValue<bool>("Seed:DemoData");
+        if (seedDemo && !await db.Projects.AnyAsync())
         {
             var project = new Project
             {

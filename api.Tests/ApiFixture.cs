@@ -68,6 +68,12 @@ public sealed class ApiFixture : IAsyncLifetime
         // The host runs as Production (skips Swagger) → it now requires a strong, non-default
         // signing key, so supply one. This also exercises the production secret guards.
         Environment.SetEnvironmentVariable("Jwt__SigningKey", "test-signing-key-not-a-default-0123456789abcdef");
+        // Production CORS refuses to boot without a real (non-localhost) origin.
+        Environment.SetEnvironmentVariable("AllowedOrigins", "https://app.bidbuilder.test");
+        // Production no longer seeds a default admin or demo content implicitly; the tests
+        // need the known baseline, so opt in explicitly (mirrors a real first-boot config).
+        Environment.SetEnvironmentVariable("Seed__AdminPassword", "Admin@12345");
+        Environment.SetEnvironmentVariable("Seed__DemoData", "true");
         _factory = new Factory();
         _ = _factory.Services;   // force host build → runs DbInitializer (migrate + seed)
         return Task.CompletedTask;
