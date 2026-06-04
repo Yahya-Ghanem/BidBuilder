@@ -310,6 +310,21 @@ login, `permissions` all-true), the seeded sample project, cost-component catalo
 
 ---
 
+## 8h. Phase 14 — Activities under units (quantity × rate)
+
+**Activities + qty × rate build-up:** ✅ Work activities can be added under each unit, each carrying
+**Material (qty × unit-price)** and **Manpower (hours × rate)** — exactly the unit → activity → material +
+manpower workflow. Delivered in two parts:
+- *Cost build-up (PR #8):* each Amount-kind cost component (Material, Manpower/Labor, Equipment…) can now be
+  entered as **quantity × rate** instead of a flat amount; Percent components (Waste, Overheads) still apply to
+  the subtotal. `ItemCostComponent` gained `Quantity`/`Rate` (migration `AddCostComponentQtyRate`); the rate
+  engine is unchanged (Value stays canonical). The build-up modal and the Excel/PDF component lines show qty ×
+  rate. Test: MAT 100×50 + LAB 40×50 + WST 10% → unit rate 7,700.
+- *Unit-centric editor (PR #9):* an "Activities by unit" panel shows the area tree with each unit's activities
+  and their Material / Manpower / total, plus add / edit / delete. It reuses BOQ items + the build-up, so
+  activities flow straight into the bid, the area roll-up and benchmarking. Adding an activity auto-creates an
+  "Activities" section and tags the item to the unit.
+
 ## 8g. Phase 13 — Cross-project benchmarking
 
 **Benchmarking:** ✅ `GET /api/benchmarks` + a Benchmarks page compare **cost per unit/m²** across the projects
