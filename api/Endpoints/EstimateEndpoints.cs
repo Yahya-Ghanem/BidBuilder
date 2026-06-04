@@ -15,6 +15,7 @@ public record CopyEstimateRequest(int TargetProjectId, string? Title);
 public record SectionInput(string Code, string Title, int SortOrder, int? ParentSectionId);
 public record ItemInput(string? ItemCode, string Description, string Unit, decimal Quantity, int? AssemblyId, decimal UnitRate, int SortOrder, List<ItemCostComponentInput>? Components, int? AreaId);
 public record ItemCostComponentInput(int TypeId, decimal Value, decimal? Quantity = null, decimal? Rate = null);
+public record CloneRoomInput(string? Name);
 public record PrelimInput(string Description, string Kind, decimal Amount, int SortOrder);
 public record MarkupInput(string Type, string? Label, decimal Percentage, int ApplyOrder);
 public record WhatIfRequest(List<MarkupInput> Markups);
@@ -406,6 +407,43 @@ public static class EstimateEndpoints
             var g = await Guard(me, id, Boq, ModuleAction.Delete, access, perm); if (g is not null) return g;
             var item = await db.BoqItems.Include(x => x.Section).FirstOrDefaultAsync(x => x.Id == iid && x.Section.EstimateId == id); if (item is null) return NotFound();
             db.BoqItems.Remove(item); await db.SaveChangesAsync();
+            return Results.Ok(await calc.RecomputeAsync(id));
+        });
+
+        // ── Clone a room (unit area + its activities in this estimate) ────────
+        grp.MapPost("/{id:int}/areas/{areaId:int}/clone", async (int id, int areaId, CloneRoomInput i, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc) =>
+        {
+            var g = await Guard(me, id, Boq, ModuleAction.Add, access, perm); if (g is not null) return g;
+            var est = await db.Estimates.Where(e => e.Id == id).Select(e => new { e.ProjectId, e.Status }).FirstOrDefaultAsync();
+            if (est is null) return NotFound();
+            if (est.Status is EstimateStatus.Published or EstimateStatus.Superseded)
+                return Results.Json(new { error = "This revision is locked. Revert to Draft to edit." }, statusCode: 409);
+            var src = await db.Areas.FirstOrDefaultAsync(a => a.Id == areaId && a.ProjectId == est.ProjectId);
+            if (src is null) return NotFound();
+            var name = (i.Name ?? "").Trim();
+            if (name.Length == 0) return Bad("New room name is required.");
+
+            // New area mirrors the source (same parent/kind/measure), with the given name.
+            var newArea = new Area
+            {
+                ProjectId = src.ProjectId, ParentAreaId = src.ParentAreaId, Kind = src.Kind,
+                Name = name, Code = null, SortOrder = src.SortOrder + 1, Quantity = src.Quantity, Unit = src.Unit,
+            };
+            db.Areas.Add(newArea);
+            await db.SaveChangesAsync();   // TenantId auto-stamped; also commits the If-Match version guard
+
+            // Duplicate this estimate's activities tagged to the source unit onto the new one.
+            var items = await db.BoqItems.Include(x => x.CostComponents)
+                .Where(x => x.Section.EstimateId == id && x.AreaId == areaId).ToListAsync();
+            foreach (var it in items)
+                db.BoqItems.Add(new BoqItem
+                {
+                    SectionId = it.SectionId, ItemCode = it.ItemCode, Description = it.Description, Unit = it.Unit,
+                    Quantity = it.Quantity, AssemblyId = it.AssemblyId, UnitRate = it.UnitRate, AreaId = newArea.Id, SortOrder = it.SortOrder,
+                    CostComponents = it.CostComponents
+                        .Select(c => new ItemCostComponent { CostComponentTypeId = c.CostComponentTypeId, Value = c.Value, Quantity = c.Quantity, Rate = c.Rate }).ToList(),
+                });
+            await db.SaveChangesAsync();
             return Results.Ok(await calc.RecomputeAsync(id));
         });
 

@@ -334,6 +334,47 @@ public class BenchmarkTests(ApiFixture fx)
 }
 
 [Collection("api")]
+public class CloneRoomTests(ApiFixture fx)
+{
+    [Fact]
+    public async Task Clone_room_duplicates_unit_and_its_activities()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var unit = await (await c.PostAsJsonAsync($"/api/projects/{pid}/areas",
+            new { name = "CloneSrc", code = "CS", kind = "Unit", parentAreaId = (int?)null, sortOrder = 0, quantity = 0m, unit = (string?)null })).Json();
+        int aid = unit.GetProperty("id").GetInt32();
+
+        var eid = await Api.NewEstimateAsync(c, pid, "clone");
+        var sid = await Api.AddSectionAsync(c, eid, "ACT");
+        var mat = await Api.TypeIdAsync(c, "MAT");
+        await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items", new
+        {
+            description = "Plastering", unit = "m2", quantity = 1, assemblyId = (int?)null, unitRate = 0, sortOrder = 0,
+            components = new object[] { new { typeId = mat, value = 0, quantity = 10m, rate = 5m } }, areaId = aid,   // 10×5 = 50
+        });
+
+        var bd = await (await c.PostAsJsonAsync($"/api/estimates/{eid}/areas/{aid}/clone", new { name = "CloneSrc copy" })).Json();
+        var items = bd.GetProperty("sections").EnumerateArray()
+            .SelectMany(s => s.GetProperty("items").EnumerateArray()).ToList();
+        Assert.Equal(2, items.Count);   // original + clone
+
+        var areas = await c.GetFromJsonAsync<JsonElement>($"/api/projects/{pid}/areas");
+        var copy = areas.EnumerateArray().First(a => a.GetProperty("name").GetString() == "CloneSrc copy");
+        int copyId = copy.GetProperty("id").GetInt32();
+        Assert.Equal("Unit", copy.GetProperty("kind").GetString());
+        Assert.Contains(items, it => it.GetProperty("areaId").ValueKind == JsonValueKind.Number
+                                     && it.GetProperty("areaId").GetInt32() == copyId
+                                     && it.GetProperty("lineTotal").GetDecimal() == 50m);
+
+        // cleanup (estimate first so the areas are no longer referenced by items)
+        await c.DeleteAsync($"/api/projects/{pid}/estimates/{eid}");
+        await c.DeleteAsync($"/api/projects/{pid}/areas/{copyId}");
+        await c.DeleteAsync($"/api/projects/{pid}/areas/{aid}");
+    }
+}
+
+[Collection("api")]
 public class ActivityCatalogTests(ApiFixture fx)
 {
     [Fact]
