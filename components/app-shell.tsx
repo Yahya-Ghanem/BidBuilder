@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutGrid, FolderKanban, Library, Boxes, LogOut, Settings, ScrollText } from "lucide-react"
+import { LayoutGrid, FolderKanban, Library, Boxes, LogOut, Settings, ScrollText, Users } from "lucide-react"
 import { useAuth, useRequireAuth } from "@/lib/auth"
 import { usePermissions } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
@@ -29,6 +29,7 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
   // Settings is a tenant-admin area.
   const nav = NAV.filter((n) => can(n.module, "view"))
   if (isAdmin) {
+    nav.push({ href: "/admin", label: "Users & Teams", icon: Users, module: "admin" })
     nav.push({ href: "/audit", label: "Audit log", icon: ScrollText, module: "audit" })
     nav.push({ href: "/settings", label: "Settings", icon: Settings, module: "settings" })
   }
