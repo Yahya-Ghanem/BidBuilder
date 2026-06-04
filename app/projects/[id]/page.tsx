@@ -668,7 +668,7 @@ function ItemRow({ item, currency, costTypes, areas, canEdit, canDelete, onUpd, 
   const base = {
     id: item.id, itemCode: item.itemCode, description: item.description, unit: item.unit,
     assemblyId: item.assemblyId, unitRate: item.unitRate, sortOrder: item.sortOrder, areaId: item.areaId,
-    components: hasComps ? item.components.map((c) => ({ typeId: c.typeId, value: c.value })) : undefined,
+    components: hasComps ? item.components.map((c) => ({ typeId: c.typeId, value: c.value, quantity: c.quantity ?? undefined, rate: c.rate ?? undefined })) : undefined,
   }
   const areaName = areas.find((a) => a.id === item.areaId)?.name
   return (
@@ -677,7 +677,7 @@ function ItemRow({ item, currency, costTypes, areas, canEdit, canDelete, onUpd, 
         {item.description}
         {hasComps && (
           <div className="text-xs text-slate-400">
-            {item.components.map((c) => `${c.code} ${c.calcKind === "Percent" ? c.value + "%" : c.value}`).join(" + ")}
+            {item.components.map((c) => `${c.code} ${c.calcKind === "Percent" ? c.value + "%" : (c.quantity != null && c.rate != null ? `${c.quantity}×${c.rate}` : c.value)}`).join(" + ")}
           </div>
         )}
         {canEdit && areas.length > 0
@@ -715,7 +715,7 @@ function ItemRow({ item, currency, costTypes, areas, canEdit, canDelete, onUpd, 
       </td>
       {buildup && (
         <BuildUpModal open={buildup} onClose={() => setBuildup(false)} costTypes={costTypes} currency={currency}
-          initial={item.components.map((c) => ({ typeId: c.typeId, value: c.value }))}
+          initial={item.components.map((c) => ({ typeId: c.typeId, value: c.value, quantity: c.quantity ?? undefined, rate: c.rate ?? undefined }))}
           onSave={(comps) => onUpd({ ...base, quantity: item.quantity, components: comps })} />
       )}
     </tr>
@@ -725,7 +725,7 @@ function ItemRow({ item, currency, costTypes, areas, canEdit, canDelete, onUpd, 
 function AddItemForm({ assemblies, costTypes, areas, onAdd }: { assemblies: AssemblyRow[]; costTypes: CostComponentType[]; areas: Area[]; onAdd: (v: any) => void }) {
   const BUILDUP = "__buildup__"
   const [f, setF] = useState({ description: "", unit: "", quantity: "1", assemblyId: "", unitRate: "0", areaId: "" })
-  const [comps, setComps] = useState<{ typeId: number; value: number }[]>([])
+  const [comps, setComps] = useState<CompInput[]>([])
   const [modal, setModal] = useState(false)
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value })
   const mode = f.assemblyId   // "" ad-hoc | BUILDUP | assembly id
@@ -772,47 +772,87 @@ function AddItemForm({ assemblies, costTypes, areas, onAdd }: { assemblies: Asse
   )
 }
 
-/** Edit a BOQ item's unit-rate build-up: a value per active cost-component type,
- *  with a live rate (Amount subtotal + each Percent applied to that subtotal). */
+/** A cost-component line as sent to the API: Amount types as quantity × rate
+ *  (material qty×price, manpower hours×rate); Percent types as a value (%). */
+type CompInput = { typeId: number; value?: number; quantity?: number; rate?: number }
+
+/** Edit a BOQ item / activity's unit-rate build-up. Amount components are entered as
+ *  quantity × rate (e.g. Material 100 × 50, Manpower 40 × 50); Percent components (Waste,
+ *  Overheads) apply to the amount subtotal. Live rate = Σ(qty×rate) × (1 + Σ%). */
 function BuildUpModal({ open, onClose, costTypes, currency, initial, onSave }: {
   open: boolean; onClose: () => void; costTypes: CostComponentType[]; currency: string
-  initial: { typeId: number; value: number }[]; onSave: (comps: { typeId: number; value: number }[]) => void
+  initial: CompInput[]; onSave: (comps: CompInput[]) => void
 }) {
   const active = costTypes.filter((t) => t.isActive)
-  const [vals, setVals] = useState<Record<number, string>>(() => {
+  // For Amount types we keep qty + rate strings; for Percent types a single % string.
+  const seed = (pick: (c: CompInput) => number | undefined) => {
     const m: Record<number, string> = {}
-    initial.forEach((c) => { m[c.typeId] = String(c.value) })
+    initial.forEach((c) => { const v = pick(c); if (v != null) m[c.typeId] = String(v) })
+    return m
+  }
+  const [qty, setQty] = useState<Record<number, string>>(() => {
+    const m = seed((c) => c.quantity)
+    // Back-compat: an Amount line stored as a direct value shows as 1 × value.
+    initial.forEach((c) => { if (m[c.typeId] == null && c.quantity == null && c.value) m[c.typeId] = "1" })
     return m
   })
-  const num = (id: number) => Number(vals[id]) || 0
-  const amountSubtotal = active.filter((t) => t.calcKind === "Amount").reduce((s, t) => s + num(t.id), 0)
-  const percentSum = active.filter((t) => t.calcKind === "Percent").reduce((s, t) => s + num(t.id), 0)
-  const rate = amountSubtotal + amountSubtotal * percentSum / 100
+  const [rate, setRate] = useState<Record<number, string>>(() => {
+    const m = seed((c) => c.rate)
+    initial.forEach((c) => { if (m[c.typeId] == null && c.rate == null && c.value) m[c.typeId] = String(c.value) })
+    return m
+  })
+  const [pct, setPct] = useState<Record<number, string>>(() => seed((c) => c.value))
+
+  const n = (m: Record<number, string>, id: number) => Number(m[id]) || 0
+  const lineAmount = (id: number) => n(qty, id) * n(rate, id)
+  const amountSubtotal = active.filter((t) => t.calcKind === "Amount").reduce((s, t) => s + lineAmount(t.id), 0)
+  const percentSum = active.filter((t) => t.calcKind === "Percent").reduce((s, t) => s + n(pct, t.id), 0)
+  const unitRate = amountSubtotal + amountSubtotal * percentSum / 100
 
   function save() {
-    const comps = active
-      .filter((t) => (vals[t.id] ?? "") !== "" && num(t.id) !== 0)
-      .map((t) => ({ typeId: t.id, value: num(t.id) }))
+    const comps: CompInput[] = []
+    for (const t of active) {
+      if (t.calcKind === "Percent") {
+        if ((pct[t.id] ?? "") !== "" && n(pct, t.id) !== 0) comps.push({ typeId: t.id, value: n(pct, t.id) })
+      } else {
+        const q = n(qty, t.id), r = n(rate, t.id)
+        if (q !== 0 || r !== 0) comps.push({ typeId: t.id, quantity: q, rate: r })
+      }
+    }
     onSave(comps); onClose()
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Unit-rate build-up">
+    <Modal open={open} onClose={onClose} title="Cost build-up">
       <div className="space-y-2">
         {active.length === 0 && <p className="text-sm text-slate-400">No active cost-component types. Add some in Settings.</p>}
+        <div className="grid grid-cols-[1fr_84px_96px_96px] items-center gap-2 text-xs text-slate-400">
+          <span>Component</span><span className="text-right">Qty / %</span><span className="text-right">Rate</span><span className="text-right">Amount</span>
+        </div>
         {active.map((t) => (
-          <div key={t.id} className="grid grid-cols-[1fr_120px_110px] items-center gap-2">
-            <span className="text-sm">{t.name} <span className="text-xs text-slate-400">{t.calcKind === "Percent" ? "%" : "amount"}</span></span>
-            <Input type="number" step="0.0001" value={vals[t.id] ?? ""} placeholder="0"
-                   onChange={(e) => setVals({ ...vals, [t.id]: e.target.value })} />
-            <span className="text-right text-xs text-slate-500">
-              {t.calcKind === "Percent" ? money(amountSubtotal * num(t.id) / 100, currency) : money(num(t.id), currency)}
-            </span>
+          <div key={t.id} className="grid grid-cols-[1fr_84px_96px_96px] items-center gap-2">
+            <span className="text-sm">{t.name} <span className="text-xs text-slate-400">{t.calcKind === "Percent" ? "%" : "qty × rate"}</span></span>
+            {t.calcKind === "Percent" ? (
+              <>
+                <Input type="number" step="0.0001" value={pct[t.id] ?? ""} placeholder="0"
+                       onChange={(e) => setPct({ ...pct, [t.id]: e.target.value })} />
+                <span />
+                <span className="text-right text-xs text-slate-500">{money(amountSubtotal * n(pct, t.id) / 100, currency)}</span>
+              </>
+            ) : (
+              <>
+                <Input type="number" step="0.0001" value={qty[t.id] ?? ""} placeholder="0"
+                       onChange={(e) => setQty({ ...qty, [t.id]: e.target.value })} />
+                <Input type="number" step="0.0001" value={rate[t.id] ?? ""} placeholder="0"
+                       onChange={(e) => setRate({ ...rate, [t.id]: e.target.value })} />
+                <span className="text-right text-xs text-slate-500">{money(lineAmount(t.id), currency)}</span>
+              </>
+            )}
           </div>
         ))}
       </div>
       <div className="mt-4 flex items-center justify-between border-t border-[var(--border)] pt-3">
-        <span className="text-sm font-semibold">Unit rate: {money(rate, currency)}</span>
+        <span className="text-sm font-semibold">Unit rate: {money(unitRate, currency)}</span>
         <div className="flex gap-2">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={save}>Apply</Button>

@@ -101,7 +101,10 @@ public class ExportService
                 // Unit-rate build-up detail (Material/Labor/… + Waste%/Overheads%).
                 foreach (var comp in i.Components)
                 {
-                    boq.Cell(row, 2).Value = $"    • {comp.Name}{(comp.CalcKind == "Percent" ? $" ({comp.Value:#,##0.##}%)" : "")}";
+                    var detail = comp.CalcKind == "Percent" ? $" ({comp.Value:#,##0.##}%)"
+                        : comp.Quantity is not null && comp.Rate is not null ? $" ({comp.Quantity:#,##0.####} × {comp.Rate:#,##0.##})"
+                        : "";
+                    boq.Cell(row, 2).Value = $"    • {comp.Name}{detail}";
                     boq.Cell(row, 5).Value = comp.Amount; boq.Cell(row, 5).Style.NumberFormat.Format = "#,##0.00";
                     boq.Row(row).Style.Font.SetItalic().Font.FontColor = XLColor.Gray;
                     row++;
@@ -249,7 +252,9 @@ public class ExportService
                                     dc.Item().Text(i.Description);
                                     if (i.Components.Count > 0)
                                         dc.Item().Text(string.Join("   +   ", i.Components.Select(comp =>
-                                            $"{comp.Name} {(comp.CalcKind == "Percent" ? comp.Value.ToString("#,##0.##") + "%" : comp.Amount.ToString("#,##0.00"))}")))
+                                            comp.CalcKind == "Percent" ? $"{comp.Name} {comp.Value:#,##0.##}%"
+                                            : comp.Quantity is not null && comp.Rate is not null ? $"{comp.Name} {comp.Quantity:#,##0.####}×{comp.Rate:#,##0.##}={comp.Amount:#,##0.00}"
+                                            : $"{comp.Name} {comp.Amount:#,##0.00}")))
                                             .FontSize(7).FontColor(Colors.Grey.Darken1);
                                 });
                                 table.Cell().Padding(3).Text(i.Unit);

@@ -339,6 +339,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.HasIndex(c => new { c.BoqItemId, c.CostComponentTypeId }).IsUnique();
             b.HasIndex(c => c.TenantId);
             b.Property(c => c.Value).HasColumnType("numeric(18,4)");
+            b.Property(c => c.Quantity).HasColumnType("numeric(18,4)");
+            b.Property(c => c.Rate).HasColumnType("numeric(18,4)");
             b.HasOne(c => c.BoqItem).WithMany(i => i.CostComponents)
              .HasForeignKey(c => c.BoqItemId).OnDelete(DeleteBehavior.Cascade);
             b.HasOne(c => c.Type).WithMany()

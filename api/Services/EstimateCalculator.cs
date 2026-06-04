@@ -21,7 +21,7 @@ public record ItemBreakdown(int Id, string ItemCode, string Description, string 
 /// <summary>One cost-component line of an item's unit-rate build-up.
 /// <c>Value</c> is the entered figure (money for Amount, % for Percent);
 /// <c>Amount</c> is its money contribution to the unit rate.</summary>
-public record ItemCostComponentBreakdown(int TypeId, string Code, string Name, string CalcKind, decimal Value, decimal Amount);
+public record ItemCostComponentBreakdown(int TypeId, string Code, string Name, string CalcKind, decimal Value, decimal Amount, decimal? Quantity, decimal? Rate);
 public record PrelimBreakdown(int Id, string Description, string Kind, decimal Amount, decimal ComputedTotal, int SortOrder);
 public record MarkupBreakdown(int Id, string Type, string? Label, decimal Percentage, int ApplyOrder, decimal ComputedAmount);
 
@@ -123,7 +123,7 @@ public class EstimateCalculator(AppDbContext db)
                 ? c.Value
                 : EstimateMath.Round2(amountSubtotal * c.Value / 100m);
             if (t.CalcKind == CostCalcKind.Percent) percentSum += c.Value;
-            lines.Add(new ItemCostComponentBreakdown(t.Id, t.Code, t.Name, t.CalcKind.ToString(), c.Value, money));
+            lines.Add(new ItemCostComponentBreakdown(t.Id, t.Code, t.Name, t.CalcKind.ToString(), c.Value, money, c.Quantity, c.Rate));
         }
         var rate = amountSubtotal + amountSubtotal * percentSum / 100m;
         return (rate, lines.OrderBy(l => typeMap[l.TypeId].SortOrder).ToList());
