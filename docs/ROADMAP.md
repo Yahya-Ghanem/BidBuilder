@@ -310,6 +310,15 @@ login, `permissions` all-true), the seeded sample project, cost-component catalo
 
 ---
 
+## 8f. Phase 12 — Area measures & cost-per-unit
+
+**Area measures:** ✅ Each project area can carry a **quantity + unit** (e.g. 120 m², 50 units). The
+per-estimate area roll-up now reports **cost per unit/m²** (`rollupTotal ÷ quantity`) — the core construction
+benchmark — and the exported "Cost by Area" sheet/section shows the measure and per-unit cost (Excel + PDF).
+Purely analytical: the measure never changes the bid. Migration `AddAreaMeasure`; 1 new integration test
+(5000 / 100 m² → 50/unit; negative quantity → 400). 25/25 green. (PR #4.) Lays the groundwork for
+cross-project benchmarking.
+
 ## 8e. Phase 11 — User & team management
 
 **User & team administration:** ✅ Admin-only screen + API (`/api/admin`, PR #2) to manage who can sign in
