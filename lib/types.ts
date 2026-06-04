@@ -112,8 +112,8 @@ export interface ItemBreakdown {
   areaId: number | null
 }
 
-export interface Area { id: number; parentAreaId: number | null; name: string; code: string | null; kind: string; sortOrder: number }
-export interface AreaRollupRow { id: number; parentAreaId: number | null; name: string; kind: string; directTotal: number; rollupTotal: number; itemCount: number }
+export interface Area { id: number; parentAreaId: number | null; name: string; code: string | null; kind: string; sortOrder: number; quantity: number; unit: string | null }
+export interface AreaRollupRow { id: number; parentAreaId: number | null; name: string; kind: string; directTotal: number; rollupTotal: number; itemCount: number; quantity: number; unit: string | null; costPerUnit: number | null }
 export interface AreaRollup { currency: string; areas: AreaRollupRow[]; assignedTotal: number; unassignedTotal: number }
 
 export interface CostComponentType {

@@ -225,6 +225,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.Property(a => a.Name).HasMaxLength(160).IsRequired();
             b.Property(a => a.Code).HasMaxLength(40);
             b.Property(a => a.Kind).HasConversion<string>().HasMaxLength(16);
+            b.Property(a => a.Quantity).HasColumnType("numeric(18,4)");
+            b.Property(a => a.Unit).HasMaxLength(16);
             b.HasOne(a => a.Project).WithMany().HasForeignKey(a => a.ProjectId).OnDelete(DeleteBehavior.Cascade);
             b.HasOne<Area>().WithMany().HasForeignKey(a => a.ParentAreaId).OnDelete(DeleteBehavior.Restrict);
             b.HasQueryFilter(a => a.TenantId == _tenant.TenantId);

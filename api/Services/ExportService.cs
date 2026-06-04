@@ -114,7 +114,8 @@ public class ExportService
         if (m.AreaRollup is { Areas.Count: > 0 })
         {
             var ar = wb.AddWorksheet("Cost by Area");
-            ar.Cell(1, 1).Value = "Area"; ar.Cell(1, 2).Value = "Level"; ar.Cell(1, 3).Value = "Items"; ar.Cell(1, 4).Value = "Total";
+            ar.Cell(1, 1).Value = "Area"; ar.Cell(1, 2).Value = "Level"; ar.Cell(1, 3).Value = "Items";
+            ar.Cell(1, 4).Value = "Total"; ar.Cell(1, 5).Value = "Measure"; ar.Cell(1, 6).Value = "Cost / unit";
             ar.Row(1).Style.Font.SetBold().Fill.SetBackgroundColor(XLColor.LightGray);
             int ai = 2;
             foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas))
@@ -123,6 +124,11 @@ public class ExportService
                 ar.Cell(ai, 2).Value = node.Kind;
                 ar.Cell(ai, 3).Value = node.ItemCount;
                 ar.Cell(ai, 4).Value = node.RollupTotal; ar.Cell(ai, 4).Style.NumberFormat.Format = "#,##0.00";
+                if (node.Quantity > 0)
+                {
+                    ar.Cell(ai, 5).Value = $"{node.Quantity:0.####} {node.Unit}".Trim();
+                    if (node.CostPerUnit is decimal cpu) { ar.Cell(ai, 6).Value = cpu; ar.Cell(ai, 6).Style.NumberFormat.Format = "#,##0.00"; }
+                }
                 ai++;
             }
             ar.Cell(ai, 1).Value = "Assigned to areas"; ar.Cell(ai, 1).Style.Font.SetBold();
@@ -274,9 +280,13 @@ public class ExportService
                         foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas))
                             col.Item().Row(rr =>
                             {
+                                var measure = node.Quantity > 0 ? $", {node.Quantity:0.####} {node.Unit}".TrimEnd() : "";
                                 rr.RelativeItem().PaddingLeft(depth * 12)
-                                  .Text($"{node.Name}  ({node.Kind}{(node.ItemCount > 0 ? $", {node.ItemCount} item(s)" : "")})").FontSize(8);
-                                rr.ConstantItem(90).AlignRight().Text(Money(node.RollupTotal)).FontSize(8);
+                                  .Text($"{node.Name}  ({node.Kind}{(node.ItemCount > 0 ? $", {node.ItemCount} item(s)" : "")}{measure})").FontSize(8);
+                                rr.ConstantItem(120).AlignRight().Text(
+                                    node.CostPerUnit is decimal cpu
+                                        ? $"{Money(node.RollupTotal)}  ({Money(cpu)}/{node.Unit ?? "unit"})"
+                                        : Money(node.RollupTotal)).FontSize(8);
                             });
                         if (m.AreaRollup.UnassignedTotal > 0)
                             col.Item().Row(rr =>

@@ -842,7 +842,7 @@ function AreasPanel({ projectId }: { projectId: number }) {
         <div className="flex items-center justify-between rounded py-1 pr-2 hover:bg-slate-50" style={{ paddingLeft: depth * 18 + 4 }}>
           <span className="text-sm">
             {area.code && <span className="mr-1 font-mono text-xs text-slate-400">{area.code}</span>}
-            {area.name}<span className="ml-2 text-xs text-slate-400">{area.kind}</span>
+            {area.name}<span className="ml-2 text-xs text-slate-400">{area.kind}{area.quantity > 0 ? ` · ${area.quantity}${area.unit ? ` ${area.unit}` : ""}` : ""}</span>
           </span>
           <div className="flex gap-1">
             {canAdd && <button onClick={() => setModal({ parentAreaId: area.id })} className="rounded p-1 text-slate-400 hover:text-[var(--brand)]" title="Add sub-area"><Plus className="h-3.5 w-3.5" /></button>}
@@ -873,12 +873,16 @@ function AreaModal({ projectId, parentAreaId, area, onClose, onSaved }: { projec
   const [name, setName] = useState(area?.name ?? "")
   const [code, setCode] = useState(area?.code ?? "")
   const [kind, setKind] = useState(area?.kind ?? (parentAreaId == null ? "Area" : "SubArea"))
+  const [quantity, setQuantity] = useState(String(area?.quantity ?? ""))
+  const [unit, setUnit] = useState(area?.unit ?? "")
   const [busy, setBusy] = useState(false)
   async function save() {
     if (!name.trim()) { toast.error("Name is required"); return }
+    const qty = Number(quantity || 0)
+    if (qty < 0 || Number.isNaN(qty)) { toast.error("Quantity must be zero or more"); return }
     setBusy(true)
     try {
-      const body = JSON.stringify({ name: name.trim(), code: code.trim() || null, kind, parentAreaId: area ? area.parentAreaId : parentAreaId, sortOrder: area?.sortOrder ?? 0 })
+      const body = JSON.stringify({ name: name.trim(), code: code.trim() || null, kind, parentAreaId: area ? area.parentAreaId : parentAreaId, sortOrder: area?.sortOrder ?? 0, quantity: qty, unit: unit.trim() || null })
       if (area) await fetchApi(`/api/projects/${projectId}/areas/${area.id}`, { method: "PUT", body })
       else await fetchApi(`/api/projects/${projectId}/areas`, { method: "POST", body })
       toast.success(area ? "Area saved" : "Area added"); onSaved()
@@ -892,6 +896,11 @@ function AreaModal({ projectId, parentAreaId, area, onClose, onSaved }: { projec
           <Field label="Code"><Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="BLK-A" /></Field>
           <Field label="Level"><Select value={kind} onChange={(e) => setKind(e.target.value)}><option value="Area">Area</option><option value="SubArea">Sub-area</option><option value="Unit">Unit</option></Select></Field>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Quantity"><Input type="number" step="0.0001" min={0} value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="e.g. 120" /></Field>
+          <Field label="Measure unit"><Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="m², unit, key…" maxLength={16} /></Field>
+        </div>
+        <p className="text-xs text-slate-400">Optional. Used to report cost per unit/m² on the area roll-up — it never changes the bid.</p>
       </div>
       <div className="mt-4 flex justify-end gap-2"><Button variant="outline" onClick={onClose}>Cancel</Button><Button disabled={busy} onClick={save}>{busy ? "Saving…" : "Save"}</Button></div>
     </Modal>
@@ -907,8 +916,11 @@ function AreaRollupPanel({ estimateId, currency }: { estimateId: number; currenc
     return (
       <>
         <div className="flex items-center justify-between py-1 text-sm" style={{ paddingLeft: depth * 18 }}>
-          <span>{a.name} <span className="text-xs text-slate-400">{a.kind}{a.itemCount ? ` · ${a.itemCount} item${a.itemCount > 1 ? "s" : ""}` : ""}</span></span>
-          <span className="font-medium">{money(a.rollupTotal, currency)}</span>
+          <span>{a.name} <span className="text-xs text-slate-400">{a.kind}{a.itemCount ? ` · ${a.itemCount} item${a.itemCount > 1 ? "s" : ""}` : ""}{a.quantity > 0 ? ` · ${a.quantity}${a.unit ? ` ${a.unit}` : ""}` : ""}</span></span>
+          <span className="text-right">
+            <span className="font-medium">{money(a.rollupTotal, currency)}</span>
+            {a.costPerUnit != null && <span className="ml-2 text-xs text-slate-400">{money(a.costPerUnit, currency)}/{a.unit || "unit"}</span>}
+          </span>
         </div>
         {childrenOf(a.id).map((k) => <Row key={k.id} a={k} depth={depth + 1} />)}
       </>

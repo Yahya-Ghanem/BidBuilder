@@ -7,8 +7,8 @@ using BidBuilder.Api.Services;
 
 namespace BidBuilder.Api.Endpoints;
 
-public record AreaDto(int Id, int? ParentAreaId, string Name, string? Code, string Kind, int SortOrder);
-public record AreaInput(string Name, string? Code, string Kind, int? ParentAreaId, int SortOrder);
+public record AreaDto(int Id, int? ParentAreaId, string Name, string? Code, string Kind, int SortOrder, decimal Quantity, string? Unit);
+public record AreaInput(string Name, string? Code, string Kind, int? ParentAreaId, int SortOrder, decimal? Quantity, string? Unit);
 
 /// <summary>
 /// Project area breakdown (Area → Sub-area → Unit, nesting via ParentAreaId) plus
@@ -30,7 +30,7 @@ public static class AreaEndpoints
             if (!await perm.CanAsync(me, Mod, ModuleAction.View)) return Forbid(Mod, "View");
             var areas = await db.Areas.Where(a => a.ProjectId == pid)
                 .OrderBy(a => a.SortOrder).ThenBy(a => a.Id)
-                .Select(a => new AreaDto(a.Id, a.ParentAreaId, a.Name, a.Code, a.Kind.ToString(), a.SortOrder))
+                .Select(a => new AreaDto(a.Id, a.ParentAreaId, a.Name, a.Code, a.Kind.ToString(), a.SortOrder, a.Quantity, a.Unit))
                 .ToListAsync();
             return Results.Ok(areas);
         });
@@ -43,12 +43,16 @@ public static class AreaEndpoints
             if (string.IsNullOrWhiteSpace(i.Name)) return Bad("Name is required.");
             if (i.ParentAreaId is int p && !await db.Areas.AnyAsync(a => a.Id == p && a.ProjectId == pid))
                 return Bad("Parent area not found in this project.");
+            if ((i.Quantity ?? 0) < 0) return Bad("Quantity cannot be negative.");
 
-            var area = new Area { ProjectId = pid, ParentAreaId = i.ParentAreaId, Name = i.Name.Trim(), Code = Trim(i.Code), Kind = kind, SortOrder = i.SortOrder };
+            var area = new Area
+            {
+                ProjectId = pid, ParentAreaId = i.ParentAreaId, Name = i.Name.Trim(), Code = Trim(i.Code),
+                Kind = kind, SortOrder = i.SortOrder, Quantity = i.Quantity ?? 0, Unit = Trim(i.Unit),
+            };
             db.Areas.Add(area);
             await db.SaveChangesAsync();
-            return Results.Created($"/api/projects/{pid}/areas/{area.Id}",
-                new AreaDto(area.Id, area.ParentAreaId, area.Name, area.Code, area.Kind.ToString(), area.SortOrder));
+            return Results.Created($"/api/projects/{pid}/areas/{area.Id}", ToDto(area));
         });
 
         grp.MapPut("/{aid:int}", async (int pid, int aid, AreaInput i, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db) =>
@@ -64,9 +68,11 @@ public static class AreaEndpoints
                 if (p == aid) return Bad("An area cannot be its own parent.");
                 if (!await db.Areas.AnyAsync(a => a.Id == p && a.ProjectId == pid)) return Bad("Parent area not found in this project.");
             }
+            if ((i.Quantity ?? 0) < 0) return Bad("Quantity cannot be negative.");
             area.Name = i.Name.Trim(); area.Code = Trim(i.Code); area.Kind = kind; area.ParentAreaId = i.ParentAreaId; area.SortOrder = i.SortOrder;
+            area.Quantity = i.Quantity ?? 0; area.Unit = Trim(i.Unit);
             await db.SaveChangesAsync();
-            return Results.Ok(new AreaDto(area.Id, area.ParentAreaId, area.Name, area.Code, area.Kind.ToString(), area.SortOrder));
+            return Results.Ok(ToDto(area));
         });
 
         grp.MapDelete("/{aid:int}", async (int pid, int aid, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db) =>
@@ -91,6 +97,9 @@ public static class AreaEndpoints
             return result is null ? NotFound() : Results.Ok(result);
         }).RequireAuthorization();
     }
+
+    private static AreaDto ToDto(Area a) =>
+        new(a.Id, a.ParentAreaId, a.Name, a.Code, a.Kind.ToString(), a.SortOrder, a.Quantity, a.Unit);
 
     private static (AreaKind kind, IResult? err) ParseKind(string? raw) =>
         Enum.TryParse<AreaKind>((raw ?? "Area").Trim(), true, out var k) ? (k, null)
