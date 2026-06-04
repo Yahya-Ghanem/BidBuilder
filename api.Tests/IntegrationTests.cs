@@ -117,6 +117,46 @@ public class CostBuildupTests(ApiFixture fx)
     }
 
     [Fact]
+    public async Task Quantity_times_rate_components_compute_amounts()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.NewEstimateAsync(c, pid, "qtyrate");
+        var sid = await Api.AddSectionAsync(c, eid, "QR");
+        var mat = await Api.TypeIdAsync(c, "MAT");
+        var lab = await Api.TypeIdAsync(c, "LAB");
+        var wst = await Api.TypeIdAsync(c, "WST");
+
+        var bd = await (await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items", new
+        {
+            description = "Fitout", unit = "no", quantity = 1, assemblyId = (int?)null, unitRate = 0, sortOrder = 0,
+            components = new object[]
+            {
+                new { typeId = mat, value = 0, quantity = 100m, rate = 50m },   // material 100 × 50 = 5000
+                new { typeId = lab, value = 0, quantity = 40m, rate = 50m },    // manpower 40 h × 50 = 2000
+                new { typeId = wst, value = 10m },                              // 10% of 7000 = 700
+            },
+            areaId = (int?)null,
+        })).Json();
+
+        var item = bd.GetProperty("sections")[0].GetProperty("items")[0];
+        Assert.Equal(7700m, item.GetProperty("unitRate").GetDecimal());    // 5000 + 2000 + 700
+        Assert.Equal(7700m, item.GetProperty("lineTotal").GetDecimal());   // × qty 1
+        var matLine = item.GetProperty("components").EnumerateArray().First(x => x.GetProperty("code").GetString() == "MAT");
+        Assert.Equal(100m, matLine.GetProperty("quantity").GetDecimal());
+        Assert.Equal(50m, matLine.GetProperty("rate").GetDecimal());
+        Assert.Equal(5000m, matLine.GetProperty("amount").GetDecimal());
+
+        // negative rate rejected
+        var bad = await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items", new
+        {
+            description = "x", unit = "no", quantity = 1, assemblyId = (int?)null, unitRate = 0, sortOrder = 1,
+            components = new object[] { new { typeId = mat, value = 0, quantity = 1m, rate = -5m } }, areaId = (int?)null,
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+    }
+
+    [Fact]
     public async Task Duplicate_code_and_builtin_delete_are_conflicts()
     {
         var c = await fx.AdminClientAsync();

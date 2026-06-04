@@ -104,6 +104,7 @@ export interface EstimateSummary {
 
 export interface ItemCostComponentBreakdown {
   typeId: number; code: string; name: string; calcKind: string; value: number; amount: number
+  quantity: number | null; rate: number | null
 }
 export interface ItemBreakdown {
   id: number; itemCode: string; description: string; unit: string

@@ -14,7 +14,7 @@ public record UpdateEstimateRequest(string? Title, string? Status, string? Secon
 public record CopyEstimateRequest(int TargetProjectId, string? Title);
 public record SectionInput(string Code, string Title, int SortOrder, int? ParentSectionId);
 public record ItemInput(string? ItemCode, string Description, string Unit, decimal Quantity, int? AssemblyId, decimal UnitRate, int SortOrder, List<ItemCostComponentInput>? Components, int? AreaId);
-public record ItemCostComponentInput(int TypeId, decimal Value);
+public record ItemCostComponentInput(int TypeId, decimal Value, decimal? Quantity = null, decimal? Rate = null);
 public record PrelimInput(string Description, string Kind, decimal Amount, int SortOrder);
 public record MarkupInput(string Type, string? Label, decimal Percentage, int ApplyOrder);
 public record WhatIfRequest(List<MarkupInput> Markups);
@@ -372,7 +372,7 @@ public static class EstimateEndpoints
                 UnitRate = hasComps || i.AssemblyId is not null ? 0m : i.UnitRate, SortOrder = i.SortOrder,
             };
             if (hasComps)
-                foreach (var c in i.Components!) item.CostComponents.Add(new ItemCostComponent { CostComponentTypeId = c.TypeId, Value = c.Value });
+                foreach (var c in await BuildComponentsAsync(db, i.Components!)) item.CostComponents.Add(c);
             db.BoqItems.Add(item);
             await db.SaveChangesAsync();
             return Results.Ok(await calc.RecomputeAsync(id));
@@ -394,7 +394,7 @@ public static class EstimateEndpoints
             db.ItemCostComponents.RemoveRange(existing);
             var hasComps = i.Components is { Count: > 0 };
             if (hasComps)
-                foreach (var c in i.Components!) db.ItemCostComponents.Add(new ItemCostComponent { BoqItemId = iid, CostComponentTypeId = c.TypeId, Value = c.Value });
+                foreach (var c in await BuildComponentsAsync(db, i.Components!)) { c.BoqItemId = iid; db.ItemCostComponents.Add(c); }
             // Rate is engine-derived when components or an assembly drive it; else ad-hoc.
             if (!hasComps && i.AssemblyId is null) item.UnitRate = i.UnitRate;
             await db.SaveChangesAsync();
@@ -514,7 +514,7 @@ public static class EstimateEndpoints
                     // Areas are project-scoped: keep the tag for a same-project duplicate, drop it on cross-project copy.
                     AreaId = targetProjectId == src.ProjectId ? it.AreaId : null,
                     CostComponents = it.CostComponents
-                        .Select(c => new ItemCostComponent { CostComponentTypeId = c.CostComponentTypeId, Value = c.Value }).ToList(),
+                        .Select(c => new ItemCostComponent { CostComponentTypeId = c.CostComponentTypeId, Value = c.Value, Quantity = c.Quantity, Rate = c.Rate }).ToList(),
                 });
         }
         foreach (var s in src.Sections.Where(x => x.ParentSectionId != null))
@@ -549,6 +549,33 @@ public static class EstimateEndpoints
         if (ids.Distinct().Count() != ids.Count) return Bad("Duplicate cost-component type on the item.");
         var known = await db.CostComponentTypes.Where(t => ids.Contains(t.Id)).Select(t => t.Id).ToListAsync();
         if (known.Count != ids.Count) return Bad("Unknown cost-component type.");
+        if (comps.Any(c => c.Quantity is < 0 || c.Rate is < 0)) return Bad("Quantity and rate cannot be negative.");
         return null;
+    }
+
+    /// <summary>Materialise cost-component inputs into entities, resolving each line's
+    /// canonical <c>Value</c>. For an Amount-kind type with a quantity × rate breakdown,
+    /// Value = Quantity × Rate (and both are stored); otherwise the supplied Value is used
+    /// (a directly typed amount, or a Percent-kind percentage). Assumes the inputs already
+    /// passed <see cref="ValidateComponents"/>.</summary>
+    private static async Task<List<ItemCostComponent>> BuildComponentsAsync(AppDbContext db, List<ItemCostComponentInput> comps)
+    {
+        var ids = comps.Select(c => c.TypeId).ToList();
+        var kinds = await db.CostComponentTypes.Where(t => ids.Contains(t.Id))
+            .ToDictionaryAsync(t => t.Id, t => t.CalcKind);
+        var result = new List<ItemCostComponent>(comps.Count);
+        foreach (var c in comps)
+        {
+            var isAmount = kinds.TryGetValue(c.TypeId, out var k) && k == CostCalcKind.Amount;
+            var useQtyRate = isAmount && (c.Quantity is not null || c.Rate is not null);
+            result.Add(new ItemCostComponent
+            {
+                CostComponentTypeId = c.TypeId,
+                Quantity = useQtyRate ? c.Quantity ?? 0m : null,
+                Rate     = useQtyRate ? c.Rate ?? 0m : null,
+                Value    = useQtyRate ? (c.Quantity ?? 0m) * (c.Rate ?? 0m) : c.Value,
+            });
+        }
+        return result;
     }
 }
