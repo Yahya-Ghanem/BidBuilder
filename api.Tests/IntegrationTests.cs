@@ -372,6 +372,53 @@ public class CloneRoomTests(ApiFixture fx)
         await c.DeleteAsync($"/api/projects/{pid}/areas/{copyId}");
         await c.DeleteAsync($"/api/projects/{pid}/areas/{aid}");
     }
+
+    [Fact]
+    public async Task Clone_subarea_duplicates_the_whole_subtree()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        // Apartment (sub-area) → Room (unit) with an activity
+        var apt = await (await c.PostAsJsonAsync($"/api/projects/{pid}/areas",
+            new { name = "Apt-Z", code = "AZ", kind = "SubArea", parentAreaId = (int?)null, sortOrder = 0, quantity = 0m, unit = (string?)null })).Json();
+        int aptId = apt.GetProperty("id").GetInt32();
+        var room = await (await c.PostAsJsonAsync($"/api/projects/{pid}/areas",
+            new { name = "Room-Z", code = "RZ", kind = "Unit", parentAreaId = aptId, sortOrder = 0, quantity = 0m, unit = (string?)null })).Json();
+        int roomId = room.GetProperty("id").GetInt32();
+
+        var eid = await Api.NewEstimateAsync(c, pid, "clonesub");
+        var sid = await Api.AddSectionAsync(c, eid, "ACT");
+        var mat = await Api.TypeIdAsync(c, "MAT");
+        await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items", new
+        {
+            description = "Tiling", unit = "m2", quantity = 1, assemblyId = (int?)null, unitRate = 0, sortOrder = 0,
+            components = new object[] { new { typeId = mat, value = 0, quantity = 4m, rate = 25m } }, areaId = roomId,   // 100
+        });
+
+        // clone the apartment (subtree)
+        var bd = await (await c.PostAsJsonAsync($"/api/estimates/{eid}/areas/{aptId}/clone", new { name = "Apt-Z copy" })).Json();
+        var items = bd.GetProperty("sections").EnumerateArray().SelectMany(s => s.GetProperty("items").EnumerateArray()).ToList();
+        Assert.Equal(2, items.Count);   // tiling original + cloned
+
+        var areas = (await c.GetFromJsonAsync<JsonElement>($"/api/projects/{pid}/areas")).EnumerateArray().ToList();
+        var aptCopy = areas.First(a => a.GetProperty("name").GetString() == "Apt-Z copy");
+        int aptCopyId = aptCopy.GetProperty("id").GetInt32();
+        // a cloned child unit "Room-Z" now hangs under the apartment copy
+        var roomCopy = areas.First(a => a.GetProperty("name").GetString() == "Room-Z"
+                                        && a.GetProperty("parentAreaId").ValueKind == JsonValueKind.Number
+                                        && a.GetProperty("parentAreaId").GetInt32() == aptCopyId);
+        int roomCopyId = roomCopy.GetProperty("id").GetInt32();
+        Assert.Contains(items, it => it.GetProperty("areaId").ValueKind == JsonValueKind.Number
+                                     && it.GetProperty("areaId").GetInt32() == roomCopyId
+                                     && it.GetProperty("lineTotal").GetDecimal() == 100m);
+
+        // cleanup: estimate, then children before parents
+        await c.DeleteAsync($"/api/projects/{pid}/estimates/{eid}");
+        await c.DeleteAsync($"/api/projects/{pid}/areas/{roomCopyId}");
+        await c.DeleteAsync($"/api/projects/{pid}/areas/{aptCopyId}");
+        await c.DeleteAsync($"/api/projects/{pid}/areas/{roomId}");
+        await c.DeleteAsync($"/api/projects/{pid}/areas/{aptId}");
+    }
 }
 
 [Collection("api")]

@@ -421,25 +421,58 @@ public static class EstimateEndpoints
             var src = await db.Areas.FirstOrDefaultAsync(a => a.Id == areaId && a.ProjectId == est.ProjectId);
             if (src is null) return NotFound();
             var name = (i.Name ?? "").Trim();
-            if (name.Length == 0) return Bad("New room name is required.");
+            if (name.Length == 0) return Bad("New name is required.");
 
-            // New area mirrors the source (same parent/kind/measure), with the given name.
-            var newArea = new Area
+            // Clone the whole subtree rooted at the source area (the source renamed, then
+            // every descendant — sub-areas and units — preserving the hierarchy). The root
+            // takes the given name; descendants keep theirs. old→new area-id map.
+            var all = await db.Areas.Where(a => a.ProjectId == est.ProjectId).ToListAsync();
+            var childrenByParent = all.Where(a => a.ParentAreaId != null)
+                .GroupBy(a => a.ParentAreaId!.Value).ToDictionary(grp2 => grp2.Key, grp2 => grp2.ToList());
+
+            var map = new Dictionary<int, int>();
+            var root = new Area
             {
                 ProjectId = src.ProjectId, ParentAreaId = src.ParentAreaId, Kind = src.Kind,
                 Name = name, Code = null, SortOrder = src.SortOrder + 1, Quantity = src.Quantity, Unit = src.Unit,
             };
-            db.Areas.Add(newArea);
-            await db.SaveChangesAsync();   // TenantId auto-stamped; also commits the If-Match version guard
+            db.Areas.Add(root);
+            await db.SaveChangesAsync();   // assigns root id; also commits the If-Match version guard
+            map[src.Id] = root.Id;
 
-            // Duplicate this estimate's activities tagged to the source unit onto the new one.
+            // Level-by-level so each parent's new id is known before its children are added.
+            var frontier = new List<int> { src.Id };
+            while (frontier.Count > 0)
+            {
+                var made = new List<(int OldId, Area Clone)>();
+                foreach (var oldParent in frontier)
+                    if (childrenByParent.TryGetValue(oldParent, out var kids))
+                        foreach (var kid in kids.OrderBy(k => k.SortOrder))
+                        {
+                            var clone = new Area
+                            {
+                                ProjectId = kid.ProjectId, ParentAreaId = map[oldParent], Kind = kid.Kind,
+                                Name = kid.Name, Code = kid.Code, SortOrder = kid.SortOrder, Quantity = kid.Quantity, Unit = kid.Unit,
+                            };
+                            db.Areas.Add(clone);
+                            made.Add((kid.Id, clone));
+                        }
+                if (made.Count == 0) break;
+                await db.SaveChangesAsync();
+                foreach (var (oldId, clone) in made) map[oldId] = clone.Id;
+                frontier = made.Select(m => m.OldId).ToList();
+            }
+
+            // Duplicate this estimate's activities tagged to any area in the cloned subtree.
+            var oldIds = map.Keys.Select(k => (int?)k).ToList();
             var items = await db.BoqItems.Include(x => x.CostComponents)
-                .Where(x => x.Section.EstimateId == id && x.AreaId == areaId).ToListAsync();
+                .Where(x => x.Section.EstimateId == id && oldIds.Contains(x.AreaId)).ToListAsync();
             foreach (var it in items)
                 db.BoqItems.Add(new BoqItem
                 {
                     SectionId = it.SectionId, ItemCode = it.ItemCode, Description = it.Description, Unit = it.Unit,
-                    Quantity = it.Quantity, AssemblyId = it.AssemblyId, UnitRate = it.UnitRate, AreaId = newArea.Id, SortOrder = it.SortOrder,
+                    Quantity = it.Quantity, AssemblyId = it.AssemblyId, UnitRate = it.UnitRate,
+                    AreaId = map[it.AreaId!.Value], SortOrder = it.SortOrder,
                     CostComponents = it.CostComponents
                         .Select(c => new ItemCostComponent { CostComponentTypeId = c.CostComponentTypeId, Value = c.Value, Quantity = c.Quantity, Rate = c.Rate }).ToList(),
                 });
