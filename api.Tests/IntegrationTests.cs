@@ -249,6 +249,51 @@ public class ExportTests(ApiFixture fx)
 }
 
 [Collection("api")]
+public class BenchmarkTests(ApiFixture fx)
+{
+    [Fact]
+    public async Task Benchmarks_group_area_cost_per_unit_across_projects()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+
+        // an area measured in "key" (e.g. hotel keys), 10 keys
+        var area = await (await c.PostAsJsonAsync($"/api/projects/{pid}/areas",
+            new { name = "Tower", code = "T", kind = "Area", parentAreaId = (int?)null, sortOrder = 0, quantity = 10m, unit = "key" })).Json();
+        int aid = area.GetProperty("id").GetInt32();
+
+        var eid = await Api.NewEstimateAsync(c, pid, "bench");
+        var sid = await Api.AddSectionAsync(c, eid, "BM1");
+        await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items", new
+        {
+            description = "fitout", unit = "no", quantity = 1, assemblyId = (int?)null, unitRate = 2000, sortOrder = 0,
+            components = (object?)null, areaId = aid,
+        });
+        // publish so this revision is the representative one for the project
+        var bd = await c.GetFromJsonAsync<JsonElement>($"/api/estimates/{eid}");
+        var rv = bd.GetProperty("rowVersion").GetString();
+        var put = new HttpRequestMessage(HttpMethod.Put, $"/api/estimates/{eid}")
+        { Content = JsonContent.Create(new { title = "bench", status = "Published", secondaryCurrency = (string?)null }) };
+        put.Headers.TryAddWithoutValidation("If-Match", rv);
+        (await c.SendAsync(put)).EnsureSuccessStatusCode();
+
+        var res = await c.GetFromJsonAsync<JsonElement>("/api/benchmarks");
+        var group = res.GetProperty("units").EnumerateArray().First(u => u.GetProperty("unit").GetString() == "key");
+        // 2000 / 10 keys = 200 per key
+        Assert.Contains(group.GetProperty("points").EnumerateArray(),
+            p => p.GetProperty("costPerUnit").GetDecimal() == 200m);
+        Assert.True(group.GetProperty("max").GetDecimal() >= 200m);
+    }
+
+    [Fact]
+    public async Task Benchmarks_require_authentication()
+    {
+        var r = await fx.Client().GetAsync("/api/benchmarks");
+        Assert.Equal(HttpStatusCode.Unauthorized, r.StatusCode);
+    }
+}
+
+[Collection("api")]
 public class UserManagementTests(ApiFixture fx)
 {
     [Fact]

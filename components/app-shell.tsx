@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutGrid, FolderKanban, Library, Boxes, LogOut, Settings, ScrollText, Users } from "lucide-react"
+import { LayoutGrid, FolderKanban, Library, Boxes, LogOut, Settings, ScrollText, Users, BarChart3 } from "lucide-react"
 import { useAuth, useRequireAuth } from "@/lib/auth"
 import { usePermissions } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
@@ -12,6 +12,7 @@ const NAV = [
   { href: "/projects", label: "Projects", icon: FolderKanban, module: "projects" },
   { href: "/resources", label: "Resource Library", icon: Library, module: "resource-library" },
   { href: "/assemblies", label: "Assemblies", icon: Boxes, module: "assemblies" },
+  { href: "/benchmarks", label: "Benchmarks", icon: BarChart3, module: "reports" },
 ]
 
 /** Authenticated layout: sidebar + topbar. Redirects to /login if signed out. */
