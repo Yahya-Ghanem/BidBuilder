@@ -152,6 +152,7 @@ app.MapSettingsEndpoints();
 app.MapAuditEndpoints();
 app.MapCostComponentEndpoints();
 app.MapAreaEndpoints();
+app.MapActivityEndpoints();
 app.MapUserManagementEndpoints();
 app.MapBenchmarkEndpoints();
 

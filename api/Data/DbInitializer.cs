@@ -40,6 +40,19 @@ public static class DbInitializer
         ("OVH", "Overheads", CostCalcKind.Percent),
     ];
 
+    // Common construction activities seeded per tenant (built-in, undeletable);
+    // offered in the "add activity under a unit" dropdown. Tenants add their own.
+    private static readonly string[] DefaultActivities =
+    [
+        "Site clearance", "Excavation", "Backfilling", "Anti-termite treatment",
+        "Blinding (PCC)", "Reinforcement", "Formwork", "Concrete works",
+        "Block work", "Plastering", "Screeding", "Waterproofing",
+        "Floor tiling", "Wall tiling", "Painting", "False ceiling",
+        "Gypsum partition", "Doors installation", "Aluminium & glazing", "Joinery & carpentry",
+        "Electrical first fix", "Electrical second fix", "Plumbing first fix", "Plumbing second fix",
+        "HVAC works", "Fire fighting", "Sanitary fixtures", "Cleaning & handover",
+    ];
+
     public static async Task RunAsync(IServiceProvider services)
     {
         using var scope = services.CreateScope();
@@ -100,6 +113,16 @@ public static class DbInitializer
                 TenantId = t.Id, Code = code, Name = name, CalcKind = kind,
                 SortOrder = i, IsActive = true, Builtin = true,
             });
+        }
+        await db.SaveChangesAsync();
+
+        // ── Default activities (idempotent — also backfills existing tenants) ──
+        var activityNames = await db.ActivityTypes.Select(a => a.Name).ToListAsync();
+        for (int i = 0; i < DefaultActivities.Length; i++)
+        {
+            var name = DefaultActivities[i];
+            if (activityNames.Contains(name)) continue;
+            db.ActivityTypes.Add(new ActivityType { TenantId = t.Id, Name = name, SortOrder = i, IsActive = true, Builtin = true });
         }
         await db.SaveChangesAsync();
 

@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { ImageIcon, Trash2, Upload, Plus, Check } from "lucide-react"
 import { fetchApi, uploadFile, fetchObjectUrl } from "@/lib/api"
-import type { TenantSettings, CurrencyRate, CurrencyRates, CostComponentType } from "@/lib/types"
+import type { TenantSettings, CurrencyRate, CurrencyRates, CostComponentType, ActivityType } from "@/lib/types"
 import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input } from "@/components/ui"
@@ -80,7 +80,93 @@ function SettingsForm() {
 
       <CurrencyRatesCard isAdmin={isAdmin} />
       <CostTypesCard isAdmin={isAdmin} />
+      <ActivitiesCard isAdmin={isAdmin} />
     </div>
+  )
+}
+
+/** Catalog of construction activities offered in the unit "add activity" dropdown. */
+function ActivitiesCard({ isAdmin }: { isAdmin: boolean }) {
+  const qc = useQueryClient()
+  const { data } = useQuery({ queryKey: ["activities"], queryFn: () => fetchApi<ActivityType[]>("/api/activities") })
+  const [name, setName] = useState("")
+  const [busy, setBusy] = useState(false)
+
+  async function add() {
+    if (!name.trim()) { toast.error("Name is required."); return }
+    setBusy(true)
+    try {
+      await fetchApi("/api/activities", { method: "POST", body: JSON.stringify({ name: name.trim(), sortOrder: data?.length ?? 0, isActive: true }) })
+      await qc.invalidateQueries({ queryKey: ["activities"] })
+      setName(""); toast.success("Activity added")
+    } catch (e) { toast.error((e as Error).message) } finally { setBusy(false) }
+  }
+
+  return (
+    <Card className="space-y-4 p-5">
+      <div>
+        <h3 className="text-sm font-semibold text-slate-600">Activities</h3>
+        <p className="text-xs text-slate-400">
+          The dropdown of construction activities shown when adding work under a unit. Built-in activities
+          can be deactivated but not deleted; add your own below.
+        </p>
+      </div>
+
+      {data && (
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs text-slate-500"><tr><th className="py-1">Name</th><th className="py-1">Active</th><th /></tr></thead>
+          <tbody>{data.map((a) => <ActivityRow key={a.id} activity={a} isAdmin={isAdmin} busy={busy} setBusy={setBusy} />)}</tbody>
+        </table>
+      )}
+
+      {isAdmin && (
+        <div className="flex items-end gap-2 border-t border-[var(--border)] pt-3">
+          <Field label="New activity"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Roofing" className="w-48" /></Field>
+          <Button variant="outline" className="h-9" disabled={busy} onClick={add}><Plus className="h-4 w-4" /> Add</Button>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function ActivityRow({ activity, isAdmin, busy, setBusy }: { activity: ActivityType; isAdmin: boolean; busy: boolean; setBusy: (b: boolean) => void }) {
+  const qc = useQueryClient()
+  const [name, setName] = useState(activity.name)
+  const [active, setActive] = useState(activity.isActive)
+  useEffect(() => { setName(activity.name); setActive(activity.isActive) }, [activity.name, activity.isActive])
+  const dirty = name !== activity.name || active !== activity.isActive
+
+  async function save() {
+    setBusy(true)
+    try {
+      await fetchApi(`/api/activities/${activity.id}`, { method: "PUT", body: JSON.stringify({ name, sortOrder: activity.sortOrder, isActive: active }) })
+      await qc.invalidateQueries({ queryKey: ["activities"] }); toast.success(`${activity.name} saved`)
+    } catch (e) { toast.error((e as Error).message) } finally { setBusy(false) }
+  }
+  async function remove() {
+    setBusy(true)
+    try {
+      await fetchApi(`/api/activities/${activity.id}`, { method: "DELETE" })
+      await qc.invalidateQueries({ queryKey: ["activities"] }); toast.success(`${activity.name} removed`)
+    } catch (e) { toast.error((e as Error).message) } finally { setBusy(false) }
+  }
+
+  return (
+    <tr className="border-t border-[var(--border)]">
+      <td className="py-2">
+        {isAdmin && !activity.builtin ? <Input value={name} onChange={(e) => setName(e.target.value)} className="w-48" /> : name}
+        {activity.builtin && <span className="ml-1 text-xs text-slate-400">built-in</span>}
+      </td>
+      <td className="py-2"><input type="checkbox" checked={active} disabled={!isAdmin} onChange={(e) => setActive(e.target.checked)} /></td>
+      <td className="py-2 text-right">
+        {isAdmin && (
+          <div className="flex justify-end gap-1">
+            <Button variant="outline" className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={save}><Check className="h-3.5 w-3.5" /></Button>
+            {!activity.builtin && <Button variant="outline" className="h-7 px-2 text-xs text-rose-600" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
+          </div>
+        )}
+      </td>
+    </tr>
   )
 }
 
