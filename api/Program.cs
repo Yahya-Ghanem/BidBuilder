@@ -18,9 +18,15 @@ QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var isDev = builder.Environment.IsDevelopment();
+
 // ── Services ──────────────────────────────────────────────────────────────────
+// Outside Development the connection string MUST be supplied (no insecure
+// localhost/postgres fallback leaking into a real deployment).
 var connString = builder.Configuration.GetConnectionString("Postgres")
-                 ?? "Host=localhost;Database=bidbuilder;Username=postgres;Password=postgres";
+                 ?? (isDev ? "Host=localhost;Database=bidbuilder;Username=postgres;Password=postgres" : null)
+                 ?? throw new InvalidOperationException(
+                     "ConnectionStrings:Postgres must be configured outside Development (e.g. ConnectionStrings__Postgres).");
 
 builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(connString));
 builder.Services.AddScoped<ITenantContext, TenantContext>();
@@ -38,7 +44,16 @@ builder.Services.AddScoped<BidBuilder.Api.Services.AreaRollupService>();
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>();
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-var jwtKey      = builder.Configuration["Jwt:SigningKey"] ?? "dev-only-bidbuilder-signing-key-please-rotate-32b";
+// A strong, non-default signing key is mandatory outside Development; refuse to
+// boot otherwise so a dev/placeholder key can never sign production tokens.
+var jwtKey = builder.Configuration["Jwt:SigningKey"]
+             ?? (isDev ? "dev-only-bidbuilder-signing-key-please-rotate-32b" : null)
+             ?? throw new InvalidOperationException("Jwt:SigningKey must be configured outside Development (e.g. Jwt__SigningKey).");
+if (!isDev && (jwtKey.Length < 32
+               || jwtKey.StartsWith("CHANGE-ME", StringComparison.OrdinalIgnoreCase)
+               || jwtKey.StartsWith("dev-only", StringComparison.OrdinalIgnoreCase)))
+    throw new InvalidOperationException(
+        "Jwt:SigningKey must be a strong, non-default secret of at least 32 characters in non-Development environments.");
 var jwtIssuer   = builder.Configuration["Jwt:Issuer"]   ?? "bidbuilder";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "bidbuilder";
 

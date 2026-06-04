@@ -310,6 +310,18 @@ login, `permissions` all-true), the seeded sample project, cost-component catalo
 
 ---
 
+## 8d. Phase 10 — Deployment hardening (in progress)
+
+**Fail-fast secret guards:** ✅ `Program.cs` now refuses to boot outside `Development` unless
+`ConnectionStrings:Postgres` is supplied and `Jwt:SigningKey` is a strong, non-default value (≥32 chars,
+not a `CHANGE-ME`/`dev-only` placeholder) — no insecure localhost/dev-key fallback can leak into a real
+deployment. The integration tests run as `Production` with a valid injected key, so they exercise the
+guarded path (21/21 still green). Added `docs/DEPLOYMENT.md` (secrets, DB, TLS/CORS, CI, smoke test).
+Remaining hardening (not yet done): TLS/reverse-proxy config, rotate dev secrets, disable/replace the
+demo admin, prod CORS allowlist, branch protection on `main`.
+
+---
+
 ## 9. Build order within Phase 0
 
 1. `BidBuilder.sln` + `api/BidBuilder.Api.csproj` (net8.0, EF Core + Npgsql + JWT + bcrypt).

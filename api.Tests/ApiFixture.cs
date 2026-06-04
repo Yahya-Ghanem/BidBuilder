@@ -65,6 +65,9 @@ public sealed class ApiFixture : IAsyncLifetime
         // during CreateBuilder, before any WebApplicationFactory config callback runs.
         // The double-underscore form maps to ConnectionStrings:Postgres in .NET config.
         Environment.SetEnvironmentVariable("ConnectionStrings__Postgres", ConnString);
+        // The host runs as Production (skips Swagger) → it now requires a strong, non-default
+        // signing key, so supply one. This also exercises the production secret guards.
+        Environment.SetEnvironmentVariable("Jwt__SigningKey", "test-signing-key-not-a-default-0123456789abcdef");
         _factory = new Factory();
         _ = _factory.Services;   // force host build → runs DbInitializer (migrate + seed)
         return Task.CompletedTask;
