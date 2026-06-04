@@ -319,6 +319,11 @@ estimate (description, unit, quantity and the Material/Manpower qty × rate buil
 on locked (Published/Superseded) revisions, and recomputes the bid. The copy is independent — edit it without
 affecting the original. 1 integration test (clone a unit with a 10 × 5 = 50 activity → two activities). (PR #13.)
 
+**Clone at any level (PR #15):** ✅ Clone now works on any area — Building, Apartment (sub-area) or Unit. It
+duplicates the **whole subtree** (sub-areas + units, hierarchy preserved) and every activity tagged anywhere in
+it, so you can build one apartment and clone it (with all its rooms and their material/manpower) in one click.
+2nd integration test (clone a sub-area → its child unit + activity duplicated).
+
 ## 8i. Phase 15 — Activity catalog (built-in + user)
 
 **Activity dropdown:** ✅ Adding work under a unit now picks the activity from a tenant **catalog** instead of
