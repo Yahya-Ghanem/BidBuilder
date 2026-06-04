@@ -146,6 +146,21 @@ export interface EstimateBreakdown {
 export interface CurrencyRate { code: string; rateToBase: number; updatedAt: string }
 export interface CurrencyRates { baseCurrency: string; rates: CurrencyRate[] }
 
+// ── User & team administration ─────────────────────────────────────────────
+export interface GroupRef { id: number; code: string; name: string }
+export interface AdminUser {
+  id: number; name: string; email: string; role: string; isActive: boolean
+  createdAt: string; lastLoginAt: string | null; groups: GroupRef[]
+}
+export interface ModuleRef { id: number; code: string; name: string }
+export interface GroupPerm {
+  moduleId: number; canView: boolean; canAdd: boolean; canEdit: boolean; canDelete: boolean
+}
+export interface AdminGroup {
+  id: number; code: string; name: string; description: string | null
+  isBuiltIn: boolean; memberCount: number; permissions: GroupPerm[]
+}
+
 export interface WhatIfMarkupLine {
   type: string
   label: string | null

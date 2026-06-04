@@ -214,3 +214,78 @@ public class ExportTests(ApiFixture fx)
         Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", r.Content.Headers.ContentType?.MediaType);
     }
 }
+
+[Collection("api")]
+public class UserManagementTests(ApiFixture fx)
+{
+    [Fact]
+    public async Task Admin_endpoints_reject_anonymous()
+    {
+        var r = await fx.Client().GetAsync("/api/admin/users");
+        Assert.Equal(HttpStatusCode.Unauthorized, r.StatusCode);
+    }
+
+    [Fact]
+    public async Task Create_team_grant_permission_create_user_and_login()
+    {
+        var c = await fx.AdminClientAsync();
+
+        // 1. create a team
+        var grp = await (await c.PostAsJsonAsync("/api/admin/groups",
+            new { code = "QA-TEAM", name = "QA Team", description = (string?)null })).Json();
+        int gid = grp.GetProperty("id").GetInt32();
+
+        // 2. grant it boq view+add via the permission grid
+        var mods = await c.GetFromJsonAsync<JsonElement>("/api/admin/modules");
+        int boq = mods.EnumerateArray().First(m => m.GetProperty("code").GetString() == "boq").GetProperty("id").GetInt32();
+        var perm = await (await c.PutAsJsonAsync($"/api/admin/groups/{gid}/permissions",
+            new { permissions = new[] { new { moduleId = boq, canView = true, canAdd = true, canEdit = false, canDelete = false } } })).Json();
+        Assert.Equal(1, perm.GetProperty("permissions").GetArrayLength());
+
+        // 3. create a user in that team
+        const string email = "qa.user@bidbuilder.local";
+        var u = await (await c.PostAsJsonAsync("/api/admin/users",
+            new { name = "QA User", email, password = "Qa@123456", role = "TenantUser", groupIds = new[] { gid } })).Json();
+        int uid = u.GetProperty("id").GetInt32();
+        Assert.Single(u.GetProperty("groups").EnumerateArray());
+
+        // 4. the new account can log in
+        var login = await fx.Client().PostAsJsonAsync("/api/auth/login", new { email, password = "Qa@123456" });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+
+        // 5. duplicate email is a 409
+        var dup = await c.PostAsJsonAsync("/api/admin/users",
+            new { name = "Dup", email, password = "Qa@123456", role = "TenantUser", groupIds = Array.Empty<int>() });
+        Assert.Equal(HttpStatusCode.Conflict, dup.StatusCode);
+
+        // 6. reset password, then log in with the new one
+        var reset = await c.PostAsJsonAsync($"/api/admin/users/{uid}/reset-password", new { password = "NewPw@123" });
+        Assert.Equal(HttpStatusCode.NoContent, reset.StatusCode);
+        var relogin = await fx.Client().PostAsJsonAsync("/api/auth/login", new { email, password = "NewPw@123" });
+        Assert.Equal(HttpStatusCode.OK, relogin.StatusCode);
+
+        // cleanup so reruns / other tests stay clean
+        Assert.Equal(HttpStatusCode.NoContent, (await c.DeleteAsync($"/api/admin/users/{uid}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await c.DeleteAsync($"/api/admin/groups/{gid}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Builtin_team_and_last_admin_are_protected()
+    {
+        var c = await fx.AdminClientAsync();
+
+        // built-in ADMINS team cannot be deleted
+        var groups = await c.GetFromJsonAsync<JsonElement>("/api/admin/groups");
+        int builtin = groups.EnumerateArray().First(g => g.GetProperty("isBuiltIn").GetBoolean()).GetProperty("id").GetInt32();
+        Assert.Equal(HttpStatusCode.Conflict, (await c.DeleteAsync($"/api/admin/groups/{builtin}")).StatusCode);
+
+        // seeded admin is the only admin → cannot be deleted nor self-deactivated
+        var users = await c.GetFromJsonAsync<JsonElement>("/api/admin/users");
+        int adminId = users.EnumerateArray().First(u => u.GetProperty("email").GetString() == "admin@bidbuilder.local").GetProperty("id").GetInt32();
+        Assert.Equal(HttpStatusCode.Conflict, (await c.DeleteAsync($"/api/admin/users/{adminId}")).StatusCode);
+
+        var deact = await c.PutAsJsonAsync($"/api/admin/users/{adminId}",
+            new { name = "Demo Admin", email = "admin@bidbuilder.local", role = "TenantAdmin", isActive = false, groupIds = new[] { builtin } });
+        Assert.Equal(HttpStatusCode.Conflict, deact.StatusCode);
+    }
+}
