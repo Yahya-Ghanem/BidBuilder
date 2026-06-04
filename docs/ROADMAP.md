@@ -310,6 +310,15 @@ login, `permissions` all-true), the seeded sample project, cost-component catalo
 
 ---
 
+## 8j. Phase 16 — Clone room
+
+**Clone a unit:** ✅ A **Clone** button on each unit duplicates the room — it creates a new unit (same
+parent / kind / measure) under a name you choose and copies all of that unit's activities in the current
+estimate (description, unit, quantity and the Material/Manpower qty × rate build-up). `POST
+/api/estimates/{id}/areas/{areaId}/clone` runs under the estimate's optimistic-concurrency guard, is blocked
+on locked (Published/Superseded) revisions, and recomputes the bid. The copy is independent — edit it without
+affecting the original. 1 integration test (clone a unit with a 10 × 5 = 50 activity → two activities). (PR #13.)
+
 ## 8i. Phase 15 — Activity catalog (built-in + user)
 
 **Activity dropdown:** ✅ Adding work under a unit now picks the activity from a tenant **catalog** instead of
