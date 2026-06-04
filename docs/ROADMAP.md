@@ -338,9 +338,10 @@ terminates TLS (auto Let's Encrypt), single public origin routes `/api`+`/health
 to web; db/api/web publish no host ports; API runs Production with `AllowedOrigins=PUBLIC_URL`. `.env.example`
 + `docs/DEPLOYMENT.md` updated.
 
-**Branch protection on `main`:** ⛔ BLOCKED — both the classic branch-protection API and repository rulesets
-return 403 "Upgrade to GitHub Pro or make this repository public" (private repo on the free plan). Needs the
-repo made public or a Pro upgrade; awaiting user decision. Until then `main` is advanced by fast-forward.
+**Branch protection on `main`:** ✅ Repo made **public** (free plan allows rulesets on public repos), then a
+**"Protect main" ruleset** (active) was created: requires a pull request (0 approvals → owner can self-merge)
++ both CI checks green ("Backend (build + tests on Postgres)", "Frontend (type-check)", strict), with
+no force-push and no branch deletion. Direct pushes to `main` are now blocked — all changes go via PR.
 
 ---
 
