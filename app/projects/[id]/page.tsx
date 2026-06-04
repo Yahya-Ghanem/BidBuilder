@@ -392,6 +392,13 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
   const addMarkup = useEstimateMut((v: any) => fetchApi(`/api/estimates/${estimateId}/markups`, { method: "POST", headers: ifMatch(), body: JSON.stringify(v) }))
   const delMarkup = useEstimateMut((mid: number) => fetchApi(`/api/estimates/${estimateId}/markups/${mid}`, { method: "DELETE", headers: ifMatch() }))
   const updateMeta = useEstimateMut((v: { title: string; status?: string; secondaryCurrency?: string }) => fetchApi(`/api/estimates/${estimateId}`, { method: "PUT", headers: ifMatch(), body: JSON.stringify(v) }))
+  // Clone a room: new unit + its activities. Also refreshes the project areas list.
+  const cloneRoom = useMutation({
+    mutationFn: (v: { areaId: number; name: string }) =>
+      fetchApi<EstimateBreakdown>(`/api/estimates/${estimateId}/areas/${v.areaId}/clone`, { method: "POST", headers: ifMatch(), body: JSON.stringify({ name: v.name }) }),
+    onSuccess: (d) => { apply(d); qc.invalidateQueries({ queryKey: ["areas", d.projectId] }); qc.invalidateQueries({ queryKey: ["areas-rollup", estimateId] }); toast.success("Room cloned") },
+    onError: (e) => { if (e instanceof ApiError && e.status === 409) { toast.error("This estimate was changed or is locked — reloading."); qc.invalidateQueries({ queryKey: key }) } else toast.error((e as Error).message) },
+  })
   const { data: fxRates } = useQuery({ queryKey: ["currencies"], queryFn: () => fetchApi<CurrencyRates>("/api/settings/currencies") })
 
   // Excel BOQ import (multipart upload → returns counts + recomputed breakdown).
@@ -529,7 +536,8 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
       {(areas.data?.length ?? 0) > 0 && (
         <ActivitiesPanel breakdown={e} areas={areas.data ?? []} costTypes={costTypes.data ?? []} currency={c}
           canAdd={editAdd} canEdit={editEdit} canDelete={editDelete}
-          onAddActivity={addActivity} onUpdItem={(v) => updItem.mutate(v)} onDelItem={(iid) => delItem.mutate(iid)} />
+          onAddActivity={addActivity} onUpdItem={(v) => updItem.mutate(v)} onDelItem={(iid) => delItem.mutate(iid)}
+          onCloneRoom={(areaId, name) => cloneRoom.mutate({ areaId, name })} />
       )}
 
       <AreaRollupPanel estimateId={estimateId} currency={c} />
@@ -1004,17 +1012,19 @@ function AreaRollupPanel({ estimateId, currency }: { estimateId: number; currenc
 /** Unit-centric activities: the area tree with each unit's activities (BOQ items
  *  tagged to it) showing Material (M) + Manpower (L) + total, with add/edit/delete.
  *  Reuses BOQ items + the cost build-up, so everything flows into the bid. */
-function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdit, canDelete, onAddActivity, onUpdItem, onDelItem }: {
+function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdit, canDelete, onAddActivity, onUpdItem, onDelItem, onCloneRoom }: {
   breakdown: EstimateBreakdown; areas: Area[]; costTypes: CostComponentType[]; currency: string
   canAdd: boolean; canEdit: boolean; canDelete: boolean
   onAddActivity: (areaId: number, v: { description: string; unit: string; components: CompInput[] }) => void
   onUpdItem: (v: any) => void; onDelItem: (iid: number) => void
+  onCloneRoom: (areaId: number, name: string) => void
 }) {
   const items = breakdown.sections.flatMap((s) => s.items)
   const byArea = (aid: number) => items.filter((it) => it.areaId === aid)
   const childrenOf = (id: number | null) => areas.filter((a) => a.parentAreaId === id)
   const [adding, setAdding] = useState<Area | null>(null)
   const [editing, setEditing] = useState<ItemBreakdown | null>(null)
+  const [cloning, setCloning] = useState<Area | null>(null)
   const compAmount = (it: ItemBreakdown, code: string) => it.components.find((c) => c.code === code)?.amount ?? 0
   const editBase = (it: ItemBreakdown) => ({
     id: it.id, itemCode: it.itemCode, description: it.description, unit: it.unit, assemblyId: it.assemblyId,
@@ -1030,7 +1040,10 @@ function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdi
             {area.code && <span className="mr-1 font-mono text-xs text-slate-400">{area.code}</span>}
             {area.name}<span className="ml-2 text-xs text-slate-400">{area.kind}</span>
           </span>
-          {canAdd && <Button variant="ghost" className="h-6 px-2 text-xs" onClick={() => setAdding(area)}><Plus className="h-3.5 w-3.5" /> Activity</Button>}
+          <div className="flex items-center gap-1">
+            {canAdd && area.kind === "Unit" && <Button variant="ghost" className="h-6 px-2 text-xs" onClick={() => setCloning(area)}><Copy className="h-3.5 w-3.5" /> Clone</Button>}
+            {canAdd && <Button variant="ghost" className="h-6 px-2 text-xs" onClick={() => setAdding(area)}><Plus className="h-3.5 w-3.5" /> Activity</Button>}
+          </div>
         </div>
         {acts.map((it) => (
           <div key={it.id} className="grid grid-cols-[1fr_96px_96px_100px_auto] items-center gap-2 py-1 text-sm" style={{ paddingLeft: depth * 16 + 22 }}>
@@ -1064,7 +1077,33 @@ function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdi
           initial={editing.components.map((c) => ({ typeId: c.typeId, value: c.value, quantity: c.quantity ?? undefined, rate: c.rate ?? undefined }))}
           onSave={(comps) => { onUpdItem({ ...editBase(editing), components: comps }); setEditing(null) }} />
       )}
+      {cloning && (
+        <CloneRoomModal area={cloning} onClose={() => setCloning(null)}
+          onSave={(name) => { onCloneRoom(cloning.id, name); setCloning(null) }} />
+      )}
     </Card>
+  )
+}
+
+/** Clone a room: duplicates the unit and all its activities under a new name. */
+function CloneRoomModal({ area, onClose, onSave }: { area: Area; onClose: () => void; onSave: (name: string) => void }) {
+  const [name, setName] = useState(`${area.name} (copy)`)
+  function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) { toast.error("Name is required"); return }
+    onSave(name.trim())
+  }
+  return (
+    <Modal open onClose={onClose} title={`Clone room — ${area.name}`}>
+      <form id="clone-room-form" onSubmit={submit} className="space-y-3">
+        <p className="text-xs text-slate-500">Creates a new {area.kind} with the same activities (material &amp; manpower). You can edit the copy independently afterwards.</p>
+        <Field label="New room name"><Input value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
+      </form>
+      <div className="mt-4 flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+        <Button type="submit" form="clone-room-form">Clone</Button>
+      </div>
+    </Modal>
   )
 }
 
