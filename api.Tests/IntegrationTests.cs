@@ -378,6 +378,45 @@ public class ExportTests(ApiFixture fx)
         Assert.Equal(500m, groupRow.Cell(3).GetValue<decimal>());    // Manpower:   300 + 200
         Assert.Equal(2000m, groupRow.Cell(4).GetValue<decimal>());   // Total:     1300 + 700
     }
+
+    // Cost-by-Area sub-area rows must be bold with a distinct (non-white) fill, like the
+    // Area rows — styled by Level, not left plain.
+    [Fact]
+    public async Task Cost_by_area_subarea_rows_are_bold_and_filled()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.NewEstimateAsync(c, pid, "subareastyle");
+        var sid = await Api.AddSectionAsync(c, eid, "SA");
+
+        async Task<int> Area(string name, string kind, int? parent) =>
+            (await (await c.PostAsJsonAsync($"/api/projects/{pid}/areas", new
+            {
+                name, code = name[..System.Math.Min(8, name.Length)], kind, parentAreaId = parent,
+                sortOrder = 0, quantity = 0m, unit = (string?)null,
+            })).Json()).GetProperty("id").GetInt32();
+
+        var subName = "Floor-" + System.Guid.NewGuid().ToString("N")[..6];
+        var top  = await Area("Bldg-" + System.Guid.NewGuid().ToString("N")[..6], "Area", null);
+        var sub  = await Area(subName, "SubArea", top);
+        var unit = await Area("Unit-" + System.Guid.NewGuid().ToString("N")[..6], "Unit", sub);
+
+        // An item under the unit so the sub-area rolls up a non-zero total.
+        await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items", new
+        {
+            description = "x", unit = "no", quantity = 1, assemblyId = (int?)null, unitRate = 500, sortOrder = 0,
+            components = (object?)null, areaId = unit,
+        });
+
+        var bytes = await (await c.GetAsync($"/api/estimates/{eid}/cost-by-area.xlsx")).Content.ReadAsByteArrayAsync();
+        using var wb = new XLWorkbook(new MemoryStream(bytes));
+        var ws = wb.Worksheets.First(w => w.CellsUsed().Any(x => x.GetString() == "Area"));
+        var subRow = ws.RowsUsed().First(row => row.Cell(1).GetString().Contains(subName));
+
+        Assert.True(subRow.Cell(1).Style.Font.Bold);
+        Assert.NotEqual(XLColor.White, subRow.Cell(1).Style.Fill.BackgroundColor);
+        Assert.NotEqual(XLColor.NoColor, subRow.Cell(1).Style.Fill.BackgroundColor);
+    }
 }
 
 [Collection("api")]
