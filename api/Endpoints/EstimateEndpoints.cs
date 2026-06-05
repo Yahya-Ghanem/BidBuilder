@@ -172,19 +172,18 @@ public static class EstimateEndpoints
             }
         });
 
-        // Status lock: a Published/Superseded revision is frozen — its BOQ content,
-        // preliminaries, markups and imports can't be edited (so a finalised bid can't
-        // silently change). Only the status itself (PUT /{id}), recompute, what-if and
-        // reads stay available; revert to Draft to edit again.
+        // Status lock: a Published/Superseded revision is frozen — its content can't be
+        // edited so a finalised bid can't silently change. FAIL-CLOSED: every write
+        // (POST/PUT/DELETE) under /api/estimates is locked when the revision is finalised
+        // UNLESS the route opts out with .AllowWhenFinalised() (the read-equivalent writes:
+        // status/title PUT — the unlock path itself — plus recompute and what-if). So a
+        // newly added mutating route is locked by default rather than slipping past a
+        // hand-maintained path allowlist.
         grp.AddEndpointFilter(async (ctx, next) =>
         {
-            var path = ctx.HttpContext.Request.Path.Value ?? "";
-            var method = ctx.HttpContext.Request.Method;
-            var isContentEdit = (method is "POST" or "PUT" or "DELETE")
-                && (path.Contains("/sections") || path.Contains("/items")
-                    || path.Contains("/preliminaries") || path.Contains("/markups")
-                    || path.EndsWith("/import"));
-            if (isContentEdit
+            var isWrite = ctx.HttpContext.Request.Method is "POST" or "PUT" or "DELETE";
+            var allowed = ctx.HttpContext.GetEndpoint()?.Metadata.GetMetadata<AllowWhenFinalisedMarker>() is not null;
+            if (isWrite && !allowed
                 && ctx.HttpContext.Request.RouteValues.TryGetValue("id", out var raw)
                 && int.TryParse(raw?.ToString(), out var estId))
             {
@@ -210,7 +209,7 @@ public static class EstimateEndpoints
             var g = await Guard(me, id, Boq, ModuleAction.View, access, perm); if (g is not null) return g;
             var bd = await calc.RecomputeAsync(id);
             return bd is null ? NotFound() : Results.Ok(bd);
-        });
+        }).AllowWhenFinalised();
 
         // PUT estimate meta (title / lifecycle status). Gated estimate-admin Edit.
         grp.MapPut("/{id:int}", async (int id, UpdateEstimateRequest req, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AuditService audit) =>
@@ -258,7 +257,7 @@ public static class EstimateEndpoints
             await audit.LogAsync(me, oldStatus != e.Status ? "estimate.status" : "estimate.update", "Estimate", id.ToString(),
                 oldStatus != e.Status ? $"{oldStatus} → {e.Status}" : $"edited (status {e.Status})");
             return Results.Ok(await calc.GetAsync(id));
-        });
+        }).AllowWhenFinalised();   // status/title change is the unlock path — must stay available when finalised
 
         // POST what-if — preview the bid price under a proposed markup set, no save.
         // Gated by prelims-markups View (it exposes margin figures).
@@ -274,7 +273,7 @@ public static class EstimateEndpoints
             var result = await calc.WhatIfAsync(id, markups
                 .Select(m => new WhatIfMarkupInput(m.Type, m.Label, m.Percentage, m.ApplyOrder)).ToList());
             return result is null ? NotFound() : Results.Ok(result);
-        });
+        }).AllowWhenFinalised();   // non-persisting preview — safe on a finalised revision
 
         // GET a ready-to-fill .xlsx import template (boq View).
         grp.MapGet("/import-template.xlsx", async (ClaimsPrincipal me, PermissionService perm, ImportService import) =>
@@ -414,10 +413,10 @@ public static class EstimateEndpoints
         grp.MapPost("/{id:int}/areas/{areaId:int}/clone", async (int id, int areaId, CloneRoomInput i, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc) =>
         {
             var g = await Guard(me, id, Boq, ModuleAction.Add, access, perm); if (g is not null) return g;
+            // The status lock is enforced by the group's fail-closed endpoint filter
+            // (this route is a write and is NOT marked .AllowWhenFinalised()).
             var est = await db.Estimates.Where(e => e.Id == id).Select(e => new { e.ProjectId, e.Status }).FirstOrDefaultAsync();
             if (est is null) return NotFound();
-            if (est.Status is EstimateStatus.Published or EstimateStatus.Superseded)
-                return Results.Json(new { error = "This revision is locked. Revert to Draft to edit." }, statusCode: 409);
             var src = await db.Areas.FirstOrDefaultAsync(a => a.Id == areaId && a.ProjectId == est.ProjectId);
             if (src is null) return NotFound();
             var name = (i.Name ?? "").Trim();
@@ -610,6 +609,14 @@ public static class EstimateEndpoints
 
     private static IResult Bad(string msg) => Results.BadRequest(new { error = msg });
     private static IResult NotFound() => Results.NotFound(new { error = "Not found" });
+
+    /// <summary>Endpoint metadata marker: this estimate write stays available even when the
+    /// revision is Published/Superseded. The status-lock filter is fail-closed, so only routes
+    /// tagged with <see cref="AllowWhenFinalised"/> escape the lock (status/title PUT, recompute,
+    /// what-if). Everything else under /api/estimates is locked by default.</summary>
+    private sealed class AllowWhenFinalisedMarker { }
+    private static readonly AllowWhenFinalisedMarker AllowFinalised = new();
+    private static RouteHandlerBuilder AllowWhenFinalised(this RouteHandlerBuilder b) => b.WithMetadata(AllowFinalised);
 
     /// <summary>Validate a BOQ item's cost-component lines: no duplicate types and
     /// every referenced type exists in this tenant's catalog. Returns null when OK.</summary>

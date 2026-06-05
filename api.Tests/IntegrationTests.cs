@@ -822,6 +822,42 @@ public class SecurityTests(ApiFixture fx)
         Assert.Contains(users.EnumerateArray(), us => us.GetProperty("email").GetString() == "admin@tenant2.local");
     }
 
+    // ── Status lock is fail-closed: every content write on a Published revision is 409,
+    //    while the read-equivalent writes (recompute, what-if) and the revert PUT stay open ──
+    [Fact]
+    public async Task Published_revision_locks_writes_but_allows_reads_and_revert()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.NewEstimateAsync(c, pid, "statuslock");
+        var sid = await Api.AddSectionAsync(c, eid, "SL");
+        var area = await (await c.PostAsJsonAsync($"/api/projects/{pid}/areas",
+            new { name = "LockZone", code = "LZ", kind = "Area", parentAreaId = (int?)null, sortOrder = 0, quantity = 0m, unit = (string?)null })).Json();
+        int aid = area.GetProperty("id").GetInt32();
+
+        // Freeze it.
+        (await Api.PutMetaAsync(c, eid, new { title = (string?)null, status = "Published", secondaryCurrency = (string?)null })).EnsureSuccessStatusCode();
+
+        // Every content-mutation route is 409 — including clone (which used to self-check)
+        // and any route the old substring allowlist would have had to enumerate.
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync($"/api/estimates/{eid}/sections", new { code = "X", title = "X", sortOrder = 1 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PutAsJsonAsync($"/api/estimates/{eid}/sections/{sid}", new { code = "Y", title = "Y", sortOrder = 0 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await c.DeleteAsync($"/api/estimates/{eid}/sections/{sid}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items",
+            new { description = "i", unit = "no", quantity = 1, assemblyId = (int?)null, unitRate = 1, sortOrder = 0, components = (object?)null, areaId = (int?)null })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync($"/api/estimates/{eid}/preliminaries", new { description = "p", kind = "Fixed", amount = 1, sortOrder = 0 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync($"/api/estimates/{eid}/markups", new { type = "Profit", label = (string?)null, percentage = 1, applyOrder = 0 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync($"/api/estimates/{eid}/areas/{aid}/clone", new { name = "x" })).StatusCode);
+
+        // Read-equivalent writes stay available (marked .AllowWhenFinalised()).
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsync($"/api/estimates/{eid}/recompute", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync($"/api/estimates/{eid}/whatif", new { markups = Array.Empty<object>() })).StatusCode);
+
+        // The revert PUT is allowed; afterwards content edits work again.
+        (await Api.PutMetaAsync(c, eid, new { title = (string?)null, status = "Draft", secondaryCurrency = (string?)null })).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync($"/api/estimates/{eid}/sections", new { code = "Z", title = "Z", sortOrder = 2 })).StatusCode);
+    }
+
     // ── Auth: a deactivated user cannot log in (and the active one can) ──
     [Fact]
     public async Task Deactivated_user_cannot_log_in()
