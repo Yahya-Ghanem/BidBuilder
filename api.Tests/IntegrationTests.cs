@@ -1,6 +1,8 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ClosedXML.Excel;
 using Xunit;
 
 namespace BidBuilder.Api.Tests;
@@ -42,6 +44,36 @@ internal static class Api
     {
         var arr = await c.GetFromJsonAsync<JsonElement>("/api/cost-components");
         return arr.EnumerateArray().First(t => t.GetProperty("code").GetString() == code).GetProperty("id").GetInt32();
+    }
+
+    /// <summary>PUT estimate meta with a fresh If-Match (read the current rowVersion first).</summary>
+    public static async Task<HttpResponseMessage> PutMetaAsync(HttpClient c, int eid, object body)
+    {
+        var bd = await c.GetFromJsonAsync<JsonElement>($"/api/estimates/{eid}");
+        var rv = bd.GetProperty("rowVersion").GetString();
+        var req = new HttpRequestMessage(HttpMethod.Put, $"/api/estimates/{eid}") { Content = JsonContent.Create(body) };
+        req.Headers.TryAddWithoutValidation("If-Match", rv);
+        return await c.SendAsync(req);
+    }
+
+    /// <summary>An in-memory .xlsx whose first worksheet is filled by <paramref name="fill"/>.</summary>
+    public static byte[] Xlsx(Action<IXLWorksheet> fill)
+    {
+        using var wb = new XLWorkbook();
+        fill(wb.AddWorksheet("BOQ"));
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        return ms.ToArray();
+    }
+
+    /// <summary>Wrap workbook bytes as a multipart upload under the "file" field.</summary>
+    public static MultipartFormDataContent FileForm(byte[] bytes)
+    {
+        var form = new MultipartFormDataContent();
+        var content = new ByteArrayContent(bytes);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        form.Add(content, "file", "boq.xlsx");
+        return form;
     }
 }
 
@@ -660,5 +692,276 @@ public class UserManagementTests(ApiFixture fx)
         var deact = await c.PutAsJsonAsync($"/api/admin/users/{adminId}",
             new { name = "Demo Admin", email = "admin@bidbuilder.local", role = "TenantAdmin", isActive = false, groupIds = new[] { builtin } });
         Assert.Equal(HttpStatusCode.Conflict, deact.StatusCode);
+    }
+}
+
+[Collection("api")]
+public class ImportTests(ApiFixture fx)
+{
+    static readonly string[] FullHeader = { "Section Code", "Section Title", "Item Code", "Description", "Unit", "Quantity", "Unit Rate", "Assembly Code" };
+
+    static void Header(IXLWorksheet ws, params string[] cols)
+    {
+        for (int i = 0; i < cols.Length; i++) ws.Cell(1, i + 1).Value = cols[i];
+    }
+
+    [Fact]
+    public async Task Import_template_downloads_as_xlsx()
+    {
+        var c = await fx.AdminClientAsync();
+        var r = await c.GetAsync("/api/estimates/import-template.xlsx");
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", r.Content.Headers.ContentType?.MediaType);
+        var bytes = await r.Content.ReadAsByteArrayAsync();
+        Assert.True(bytes.Length > 2 && bytes[0] == 0x50 && bytes[1] == 0x4B); // "PK" zip/xlsx magic
+    }
+
+    [Fact]
+    public async Task Import_appends_sections_and_items_and_reprices()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.NewEstimateAsync(c, pid, "import");
+
+        // Two ad-hoc rows grouped into one section: 2×100 + 3×50 = 350 direct.
+        var xlsx = Api.Xlsx(ws =>
+        {
+            Header(ws, FullHeader);
+            ws.Cell(2, 1).Value = "S1"; ws.Cell(2, 2).Value = "Earthworks"; ws.Cell(2, 4).Value = "Excavation"; ws.Cell(2, 5).Value = "m3"; ws.Cell(2, 6).Value = 2; ws.Cell(2, 7).Value = 100;
+            ws.Cell(3, 1).Value = "S1"; ws.Cell(3, 2).Value = "Earthworks"; ws.Cell(3, 4).Value = "Backfill";   ws.Cell(3, 5).Value = "m3"; ws.Cell(3, 6).Value = 3; ws.Cell(3, 7).Value = 50;
+        });
+        var res = await (await c.PostAsync($"/api/estimates/{eid}/import", Api.FileForm(xlsx))).Json();
+        Assert.Equal(1, res.GetProperty("sectionsAdded").GetInt32());
+        Assert.Equal(2, res.GetProperty("itemsAdded").GetInt32());
+        Assert.Equal(350m, res.GetProperty("estimate").GetProperty("directCost").GetDecimal());
+        Assert.Equal(350m, res.GetProperty("estimate").GetProperty("bidPrice").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Import_resolves_assembly_code()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.NewEstimateAsync(c, pid, "import-asm-ok");
+
+        // Create an assembly (no components → computed rate 0) and reference it by code.
+        const string code = "ASM-IMP-1";
+        (await c.PostAsJsonAsync("/api/assemblies", new { code, name = "Import test", unit = "m3", isActive = true })).EnsureSuccessStatusCode();
+
+        var xlsx = Api.Xlsx(ws =>
+        {
+            Header(ws, FullHeader);
+            ws.Cell(2, 2).Value = "Concrete"; ws.Cell(2, 4).Value = "RC footing"; ws.Cell(2, 5).Value = "m3"; ws.Cell(2, 6).Value = 2; ws.Cell(2, 8).Value = code;
+        });
+        var res = await (await c.PostAsync($"/api/estimates/{eid}/import", Api.FileForm(xlsx))).Json();
+        Assert.Equal(1, res.GetProperty("itemsAdded").GetInt32());
+        var item = res.GetProperty("estimate").GetProperty("sections")[0].GetProperty("items")[0];
+        Assert.NotEqual(JsonValueKind.Null, item.GetProperty("assemblyId").ValueKind);   // resolved to the assembly
+        Assert.Equal(0m, item.GetProperty("unitRate").GetDecimal());                     // engine-derived, not the sheet's ad-hoc rate
+    }
+
+    [Fact]
+    public async Task Import_rejects_missing_required_column()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.NewEstimateAsync(c, pid, "import-nocol");
+        // Header has Description but no Quantity.
+        var xlsx = Api.Xlsx(ws => { Header(ws, "Description"); ws.Cell(2, 1).Value = "x"; });
+        var r = await c.PostAsync($"/api/estimates/{eid}/import", Api.FileForm(xlsx));
+        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+        Assert.Contains("Quantity", await r.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Import_rejects_unknown_assembly_code()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.NewEstimateAsync(c, pid, "import-badasm");
+        var xlsx = Api.Xlsx(ws =>
+        {
+            Header(ws, "Section Title", "Description", "Quantity", "Assembly Code");
+            ws.Cell(2, 1).Value = "S"; ws.Cell(2, 2).Value = "Item"; ws.Cell(2, 3).Value = 1; ws.Cell(2, 4).Value = "NOPE-123";
+        });
+        var r = await c.PostAsync($"/api/estimates/{eid}/import", Api.FileForm(xlsx));
+        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+        Assert.Contains("NOPE-123", await r.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Import_rejects_non_xlsx_and_empty_upload()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.NewEstimateAsync(c, pid, "import-junk");
+
+        // garbage bytes → not a valid workbook
+        var junk = await c.PostAsync($"/api/estimates/{eid}/import", Api.FileForm(new byte[] { 1, 2, 3, 4 }));
+        Assert.Equal(HttpStatusCode.BadRequest, junk.StatusCode);
+
+        // no file part at all
+        var none = await c.PostAsync($"/api/estimates/{eid}/import", new MultipartFormDataContent());
+        Assert.Equal(HttpStatusCode.BadRequest, none.StatusCode);
+    }
+
+    [Fact]
+    public async Task Import_into_published_estimate_is_locked_409()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.NewEstimateAsync(c, pid, "import-locked");
+        (await Api.PutMetaAsync(c, eid, new { title = (string?)null, status = "Published", secondaryCurrency = (string?)null })).EnsureSuccessStatusCode();
+
+        var xlsx = Api.Xlsx(ws =>
+        {
+            Header(ws, "Section Title", "Description", "Quantity", "Unit Rate");
+            ws.Cell(2, 1).Value = "S"; ws.Cell(2, 2).Value = "Item"; ws.Cell(2, 3).Value = 1; ws.Cell(2, 4).Value = 10;
+        });
+        var r = await c.PostAsync($"/api/estimates/{eid}/import", Api.FileForm(xlsx));
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+    }
+}
+
+[Collection("api")]
+public class CopyToProjectTests(ApiFixture fx)
+{
+    [Fact]
+    public async Task Copy_deep_copies_into_target_and_drops_area_tags()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+
+        // Source: one area-tagged item (500) + a fixed prelim (200) + a 10% profit markup.
+        var area = await (await c.PostAsJsonAsync($"/api/projects/{pid}/areas",
+            new { name = "CopyZone", code = "CZ", kind = "Area", parentAreaId = (int?)null, sortOrder = 0, quantity = 0m, unit = (string?)null })).Json();
+        int aid = area.GetProperty("id").GetInt32();
+
+        var eid = await Api.NewEstimateAsync(c, pid, "copysrc");
+        var sid = await Api.AddSectionAsync(c, eid, "CP");
+        await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items", new
+        {
+            description = "CopyItem", unit = "no", quantity = 1, assemblyId = (int?)null, unitRate = 500, sortOrder = 0,
+            components = (object?)null, areaId = aid,
+        });
+        await c.PostAsJsonAsync($"/api/estimates/{eid}/preliminaries", new { description = "Mobilization", kind = "Fixed", amount = 200, sortOrder = 0 });
+        await c.PostAsJsonAsync($"/api/estimates/{eid}/markups", new { type = "Profit", label = (string?)null, percentage = 10, applyOrder = 0 });
+
+        // Target project.
+        var tproj = await (await c.PostAsJsonAsync("/api/projects", new { name = "Copy Target" })).Json();
+        int tpid = tproj.GetProperty("id").GetInt32();
+
+        // Copy across.
+        var summary = await (await c.PostAsJsonAsync($"/api/projects/{pid}/estimates/{eid}/copy",
+            new { targetProjectId = tpid, title = "Copied" })).Json();
+        int newId = summary.GetProperty("id").GetInt32();
+        Assert.Equal("Draft", summary.GetProperty("status").GetString());
+        Assert.Equal("Copied", summary.GetProperty("title").GetString());
+        // (500 + 200) × 1.10 = 770 — a fixed prelim doesn't depend on the target's duration.
+        Assert.Equal(770m, summary.GetProperty("bidPrice").GetDecimal());
+
+        // The copy reproduces BOQ/prelim/markup, but the area tag is dropped (areas are project-scoped).
+        var bd = await c.GetFromJsonAsync<JsonElement>($"/api/estimates/{newId}");
+        Assert.Equal(tpid, bd.GetProperty("projectId").GetInt32());
+        var item = bd.GetProperty("sections")[0].GetProperty("items")[0];
+        Assert.Equal("CopyItem", item.GetProperty("description").GetString());
+        Assert.Equal(JsonValueKind.Null, item.GetProperty("areaId").ValueKind);
+        Assert.Single(bd.GetProperty("preliminaries").EnumerateArray());
+        Assert.Single(bd.GetProperty("markups").EnumerateArray());
+
+        // The source is untouched (still has its area tag).
+        var srcBd = await c.GetFromJsonAsync<JsonElement>($"/api/estimates/{eid}");
+        Assert.Equal(aid, srcBd.GetProperty("sections")[0].GetProperty("items")[0].GetProperty("areaId").GetInt32());
+    }
+
+    [Fact]
+    public async Task Copy_to_same_project_is_400()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.NewEstimateAsync(c, pid, "copysame");
+        var r = await c.PostAsJsonAsync($"/api/projects/{pid}/estimates/{eid}/copy", new { targetProjectId = pid, title = (string?)null });
+        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+    }
+
+    [Fact]
+    public async Task Copy_to_inaccessible_target_is_404()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.NewEstimateAsync(c, pid, "copy404");
+        var r = await c.PostAsJsonAsync($"/api/projects/{pid}/estimates/{eid}/copy", new { targetProjectId = 999999, title = (string?)null });
+        Assert.Equal(HttpStatusCode.NotFound, r.StatusCode);
+    }
+}
+
+[Collection("api")]
+public class FxFreezeTests(ApiFixture fx)
+{
+    static async Task<int> EstimateWithBidAsync(HttpClient c, int pid, string title, decimal rate)
+    {
+        var eid = await Api.NewEstimateAsync(c, pid, title);
+        var sid = await Api.AddSectionAsync(c, eid, "FX");
+        await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items", new
+        {
+            description = "x", unit = "no", quantity = 1, assemblyId = (int?)null, unitRate = rate, sortOrder = 0,
+            components = (object?)null, areaId = (int?)null,
+        });
+        return eid;
+    }
+
+    [Fact]
+    public async Task Publish_freezes_fx_then_revert_goes_live_again()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+
+        // 1 USD = 4 AED → cross AED→USD = 0.25.
+        (await c.PutAsJsonAsync("/api/settings/currencies/USD", new { rateToBase = 4m })).EnsureSuccessStatusCode();
+        var eid = await EstimateWithBidAsync(c, pid, "fxfreeze", 1000m);   // bid 1000 AED
+
+        // Draft + secondary USD → live (not frozen): 1000 × 0.25 = 250.
+        (await Api.PutMetaAsync(c, eid, new { title = (string?)null, status = (string?)null, secondaryCurrency = "USD" })).EnsureSuccessStatusCode();
+        var draft = (await c.GetFromJsonAsync<JsonElement>($"/api/estimates/{eid}")).GetProperty("fx");
+        Assert.Equal("USD", draft.GetProperty("secondaryCurrency").GetString());
+        Assert.False(draft.GetProperty("frozen").GetBoolean());
+        Assert.Equal(250m, draft.GetProperty("convertedBidPrice").GetDecimal());
+
+        // Publish → snapshot the rate.
+        (await Api.PutMetaAsync(c, eid, new { title = (string?)null, status = "Published", secondaryCurrency = (string?)null })).EnsureSuccessStatusCode();
+        var pub = (await c.GetFromJsonAsync<JsonElement>($"/api/estimates/{eid}")).GetProperty("fx");
+        Assert.True(pub.GetProperty("frozen").GetBoolean());
+        Assert.Equal(250m, pub.GetProperty("convertedBidPrice").GetDecimal());
+
+        // Move the tenant rate to 1 USD = 5 AED — the frozen published bid must NOT drift.
+        (await c.PutAsJsonAsync("/api/settings/currencies/USD", new { rateToBase = 5m })).EnsureSuccessStatusCode();
+        var pub2 = (await c.GetFromJsonAsync<JsonElement>($"/api/estimates/{eid}")).GetProperty("fx");
+        Assert.Equal(250m, pub2.GetProperty("convertedBidPrice").GetDecimal());
+
+        // Revert to Draft → live again at the new rate: 1000 × 0.20 = 200.
+        (await Api.PutMetaAsync(c, eid, new { title = (string?)null, status = "Draft", secondaryCurrency = (string?)null })).EnsureSuccessStatusCode();
+        var draft2 = (await c.GetFromJsonAsync<JsonElement>($"/api/estimates/{eid}")).GetProperty("fx");
+        Assert.False(draft2.GetProperty("frozen").GetBoolean());
+        Assert.Equal(200m, draft2.GetProperty("convertedBidPrice").GetDecimal());
+
+        // Clear the secondary currency → no fx view.
+        (await Api.PutMetaAsync(c, eid, new { title = (string?)null, status = (string?)null, secondaryCurrency = "" })).EnsureSuccessStatusCode();
+        var cleared = await c.GetFromJsonAsync<JsonElement>($"/api/estimates/{eid}");
+        Assert.Equal(JsonValueKind.Null, cleared.GetProperty("fx").ValueKind);
+
+        await c.DeleteAsync("/api/settings/currencies/USD");   // cleanup scratch rate
+    }
+
+    [Fact]
+    public async Task Secondary_currency_without_a_rate_yields_no_fx()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await EstimateWithBidAsync(c, pid, "fxnorate", 100m);
+
+        // ZZZ has no rate and isn't the base → fx can't be built.
+        (await Api.PutMetaAsync(c, eid, new { title = (string?)null, status = (string?)null, secondaryCurrency = "ZZZ" })).EnsureSuccessStatusCode();
+        var bd = await c.GetFromJsonAsync<JsonElement>($"/api/estimates/{eid}");
+        Assert.Equal(JsonValueKind.Null, bd.GetProperty("fx").ValueKind);
     }
 }
