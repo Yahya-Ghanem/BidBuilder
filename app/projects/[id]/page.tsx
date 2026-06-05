@@ -358,6 +358,7 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
   const assemblies = useQuery({ queryKey: ["assemblies"], queryFn: () => fetchApi<AssemblyRow[]>("/api/assemblies") })
   const costTypes = useQuery({ queryKey: ["cost-types"], queryFn: () => fetchApi<CostComponentType[]>("/api/cost-components") })
   const areas = useQuery({ queryKey: ["areas", data?.projectId], queryFn: () => fetchApi<Area[]>(`/api/projects/${data!.projectId}/areas`), enabled: data?.projectId != null })
+  const boqCollapse = useCollapse()
 
   // Every estimate mutation returns the recomputed breakdown — push it into cache.
   const apply = (d: EstimateBreakdown) => qc.setQueryData(key, d)
@@ -510,20 +511,26 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
       <Card className="overflow-hidden">
         <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-2">
           <span className="text-sm font-semibold">Bill of Quantities</span>
-          {editAdd && (
-            <div className="flex items-center gap-2">
-              <input ref={fileRef} type="file" accept=".xlsx" className="hidden"
-                onChange={(ev) => { const f = ev.target.files?.[0]; if (f) importMut.mutate(f); ev.target.value = "" }} />
-              <Button variant="ghost" className="h-7 px-2 text-xs" onClick={downloadTemplate}><FileDown className="h-3.5 w-3.5" /> Template</Button>
-              <Button variant="ghost" className="h-7 px-2 text-xs" disabled={importMut.isPending} onClick={() => fileRef.current?.click()}>
-                <Upload className="h-3.5 w-3.5" /> {importMut.isPending ? "Importing…" : "Import"}
-              </Button>
-              <AddSection onAdd={(v) => addSection.mutate(v)} />
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {e.sections.length > 0 && (
+              <ExpandCollapseAll onExpand={boqCollapse.expandAll} onCollapse={() => boqCollapse.collapseAll(e.sections.map((s) => s.id))} />
+            )}
+            {editAdd && (
+              <>
+                <input ref={fileRef} type="file" accept=".xlsx" className="hidden"
+                  onChange={(ev) => { const f = ev.target.files?.[0]; if (f) importMut.mutate(f); ev.target.value = "" }} />
+                <Button variant="ghost" className="h-7 px-2 text-xs" onClick={downloadTemplate}><FileDown className="h-3.5 w-3.5" /> Template</Button>
+                <Button variant="ghost" className="h-7 px-2 text-xs" disabled={importMut.isPending} onClick={() => fileRef.current?.click()}>
+                  <Upload className="h-3.5 w-3.5" /> {importMut.isPending ? "Importing…" : "Import"}
+                </Button>
+                <AddSection onAdd={(v) => addSection.mutate(v)} />
+              </>
+            )}
+          </div>
         </div>
         {e.sections.map((s) => (
           <SectionBlock key={s.id} section={s} currency={c} assemblies={assemblies.data ?? []} costTypes={costTypes.data ?? []} areas={areas.data ?? []}
+            open={boqCollapse.isOpen(s.id)} onToggle={() => boqCollapse.toggle(s.id)}
             canAdd={editAdd} canEdit={editEdit} canDelete={editDelete}
             onAddItem={(v) => addItem.mutate({ ...v, sectionId: s.id })}
             onUpdItem={(v) => updItem.mutate(v)}
@@ -664,28 +671,37 @@ function WhatIfPanel({ estimateId, markups, currency, canEdit }: {
   )
 }
 
-function SectionBlock({ section, currency, assemblies, costTypes, areas, canAdd, canEdit, canDelete, onAddItem, onUpdItem, onDelItem, onDelSection }: {
+function SectionBlock({ section, currency, assemblies, costTypes, areas, open, onToggle, canAdd, canEdit, canDelete, onAddItem, onUpdItem, onDelItem, onDelSection }: {
   section: SectionBreakdown; currency: string; assemblies: AssemblyRow[]; costTypes: CostComponentType[]; areas: Area[]
+  open: boolean; onToggle: () => void
   canAdd: boolean; canEdit: boolean; canDelete: boolean
   onAddItem: (v: any) => void; onUpdItem: (v: any) => void; onDelItem: (iid: number) => void; onDelSection: () => void
 }) {
   return (
     <div className="border-t border-[var(--border)]">
       <div className="flex items-center justify-between bg-slate-50/60 px-4 py-2">
-        <span className="font-semibold text-slate-700">{section.code} {section.title}</span>
+        <span className="flex items-center gap-1.5 font-semibold text-slate-700">
+          <CollapseToggle open={open} hasChildren={section.items.length > 0} onToggle={onToggle} />
+          {section.code} {section.title}
+          {!open && section.items.length > 0 && <span className="text-xs font-normal text-slate-400">· {section.items.length} item(s)</span>}
+        </span>
         <div className="flex items-center gap-3">
           <span className="font-semibold">{money(section.sectionTotal, currency)}</span>
           {canDelete && <button onClick={onDelSection} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
         </div>
       </div>
-      <table className="w-full text-sm">
-        <tbody>
-          {section.items.map((i) => (
-            <ItemRow key={i.id} item={i} currency={currency} costTypes={costTypes} areas={areas} canEdit={canEdit} canDelete={canDelete} onUpd={onUpdItem} onDel={() => onDelItem(i.id)} />
-          ))}
-        </tbody>
-      </table>
-      {canAdd && <AddItemForm assemblies={assemblies} costTypes={costTypes} areas={areas} onAdd={onAddItem} />}
+      {open && (
+        <>
+          <table className="w-full text-sm">
+            <tbody>
+              {section.items.map((i) => (
+                <ItemRow key={i.id} item={i} currency={currency} costTypes={costTypes} areas={areas} canEdit={canEdit} canDelete={canDelete} onUpd={onUpdItem} onDel={() => onDelItem(i.id)} />
+              ))}
+            </tbody>
+          </table>
+          {canAdd && <AddItemForm assemblies={assemblies} costTypes={costTypes} areas={areas} onAdd={onAddItem} />}
+        </>
+      )}
     </div>
   )
 }
