@@ -347,27 +347,53 @@ function ActivitiesView({ estimateId, projectId }: { estimateId: number; project
 /* Cost by area — the area roll-up (direct + rolled-up totals, cost per unit). */
 function CostByAreaView({ estimateId }: { estimateId: number }) {
   const { data, isLoading, error } = useQuery({ queryKey: ["areas-rollup", estimateId], queryFn: () => fetchApi<AreaRollup>(`/api/estimates/${estimateId}/areas-rollup`) })
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set())
+  const toggle = (id: number) => setCollapsed((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   if (isLoading) return <Preparing />
   if (error) return <ErrorCard e={error} />
   if (!data?.areas.length) return <EmptyCard>No costed areas yet.</EmptyCard>
   const c = data.currency
+  const childrenOf = (pid: number | null) => data.areas.filter((a) => a.parentAreaId === pid)
+  const parentIds = data.areas.filter((a) => childrenOf(a.id).length > 0).map((a) => a.id)
+
   const render = (parentId: number | null, depth: number): ReactNode =>
-    data.areas.filter((a) => a.parentAreaId === parentId).map((a) => (
-      <div key={a.id}>
-        <div className="grid grid-cols-[1fr_110px_130px_120px] items-center gap-2 border-t border-[var(--border)] py-1.5 text-sm" style={{ paddingLeft: depth * 18 + 8 }}>
-          <span className="flex items-center gap-2"><Folder className="h-4 w-4 text-slate-400" /><span className="text-slate-800">{a.name}</span><span className="text-xs text-slate-400">{a.kind}</span></span>
-          <span className="text-right text-xs text-slate-500">{a.itemCount} item(s)</span>
-          <span className="text-right font-medium">{money(a.rollupTotal, c)}</span>
-          <span className="text-right text-xs text-slate-500">{a.costPerUnit != null ? `${money(a.costPerUnit, c)}/${a.unit || "unit"}` : "—"}</span>
+    childrenOf(parentId).map((a) => {
+      const kids = childrenOf(a.id)
+      const has = kids.length > 0
+      const open = !collapsed.has(a.id)
+      return (
+        <div key={a.id}>
+          <div className="grid grid-cols-[1fr_110px_130px_120px] items-center gap-2 border-t border-[var(--border)] py-1.5 text-sm" style={{ paddingLeft: depth * 18 + 8 }}>
+            <span className="flex items-center gap-1.5">
+              {has
+                ? <button onClick={() => toggle(a.id)} className="text-slate-400 hover:text-slate-600">{open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}</button>
+                : <span className="inline-block w-3.5" />}
+              <Folder className="h-4 w-4 text-slate-400" />
+              <span className="text-slate-800">{a.name}</span>
+              <span className="text-xs text-slate-400">{a.kind}{!open && has ? ` · ${kids.length} sub-area(s)` : ""}</span>
+            </span>
+            <span className="text-right text-xs text-slate-500">{a.itemCount} item(s)</span>
+            <span className="text-right font-medium">{money(a.rollupTotal, c)}</span>
+            <span className="text-right text-xs text-slate-500">{a.costPerUnit != null ? `${money(a.costPerUnit, c)}/${a.unit || "unit"}` : "—"}</span>
+          </div>
+          {open && render(a.id, depth + 1)}
         </div>
-        {render(a.id, depth + 1)}
-      </div>
-    ))
+      )
+    })
   return (
     <Card className="p-4">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-600">Cost by area</h3>
-        <span className="text-xs text-slate-500">Assigned {money(data.assignedTotal, c)} · Unassigned {money(data.unassignedTotal, c)}</span>
+        <div className="flex items-center gap-3">
+          {parentIds.length > 0 && (
+            <div className="flex items-center gap-1 text-xs">
+              <button onClick={() => setCollapsed(new Set())} className="rounded px-1.5 py-0.5 text-slate-500 hover:bg-slate-100">Expand all</button>
+              <span className="text-slate-300">·</span>
+              <button onClick={() => setCollapsed(new Set(parentIds))} className="rounded px-1.5 py-0.5 text-slate-500 hover:bg-slate-100">Collapse all</button>
+            </div>
+          )}
+          <span className="text-xs text-slate-500">Assigned {money(data.assignedTotal, c)} · Unassigned {money(data.unassignedTotal, c)}</span>
+        </div>
       </div>
       <div className="grid grid-cols-[1fr_110px_130px_120px] gap-2 pb-1 text-xs text-slate-400" style={{ paddingLeft: 8 }}>
         <span>Area</span><span className="text-right">Items</span><span className="text-right">Roll-up total</span><span className="text-right">Cost / unit</span>
