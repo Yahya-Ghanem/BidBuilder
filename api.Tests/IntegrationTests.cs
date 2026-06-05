@@ -443,9 +443,10 @@ public class ExportTests(ApiFixture fx)
 
         var bldg = "Bldg-" + System.Guid.NewGuid().ToString("N")[..6];
         var floor = "Floor-" + System.Guid.NewGuid().ToString("N")[..6];
+        var unitName = "Unit-" + System.Guid.NewGuid().ToString("N")[..6];
         var top  = await Area(bldg, "Area", null);
         var sub  = await Area(floor, "SubArea", top);
-        var unit = await Area("Unit-" + System.Guid.NewGuid().ToString("N")[..6], "Unit", sub);
+        var unit = await Area(unitName, "Unit", sub);
 
         await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items", new
         {
@@ -479,9 +480,63 @@ public class ExportTests(ApiFixture fx)
         Assert.Equal(2000m, subRow.Cell(4).GetValue<decimal>());
         Assert.DoesNotContain(subWs.RowsUsed(), row => row.Cell(1).GetString().Contains("Painting"));
 
+        // Unit level: a single unit row with the rolled-up totals; no activity detail.
+        var unitWs = await SheetAsync("unit");
+        var unitRow = unitWs.RowsUsed().First(row => row.Cell(1).GetString().Contains(unitName));
+        Assert.Equal(1500m, unitRow.Cell(2).GetValue<decimal>());
+        Assert.Equal(2000m, unitRow.Cell(4).GetValue<decimal>());
+        Assert.DoesNotContain(unitWs.RowsUsed(), row => row.Cell(1).GetString().Contains("Plastering"));
+
         // Detail level (default): the activity rows are present.
         var detailWs = await SheetAsync("detail");
         Assert.Contains(detailWs.RowsUsed(), row => row.Cell(1).GetString().Contains("Plastering"));
+    }
+
+    // Cost-by-Area honours ?level= too: each summary level lists only rows of that Level.
+    [Fact]
+    public async Task Cost_by_area_export_respects_level()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.NewEstimateAsync(c, pid, "cbalevels");
+        var sid = await Api.AddSectionAsync(c, eid, "CB");
+
+        async Task<int> Area(string name, string kind, int? parent) =>
+            (await (await c.PostAsJsonAsync($"/api/projects/{pid}/areas", new
+            {
+                name, code = name[..System.Math.Min(8, name.Length)], kind, parentAreaId = parent,
+                sortOrder = 0, quantity = 0m, unit = (string?)null,
+            })).Json()).GetProperty("id").GetInt32();
+
+        var bldg = "CBldg-" + System.Guid.NewGuid().ToString("N")[..6];
+        var floor = "CFloor-" + System.Guid.NewGuid().ToString("N")[..6];
+        var unitName = "CUnit-" + System.Guid.NewGuid().ToString("N")[..6];
+        var top  = await Area(bldg, "Area", null);
+        var sub  = await Area(floor, "SubArea", top);
+        var unit = await Area(unitName, "Unit", sub);
+        await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items", new
+        {
+            description = "x", unit = "no", quantity = 1, assemblyId = (int?)null, unitRate = 750, sortOrder = 0,
+            components = (object?)null, areaId = unit,
+        });
+
+        async Task<IXLWorksheet> SheetAsync(string level)
+        {
+            var bytes = await (await c.GetAsync($"/api/estimates/{eid}/cost-by-area.xlsx?level={level}")).Content.ReadAsByteArrayAsync();
+            return new XLWorkbook(new MemoryStream(bytes)).Worksheets.First();
+        }
+
+        // Area level shows the Area row (total 750 rolled up) but NOT the sub-area or unit.
+        var areaWs = await SheetAsync("area");
+        var areaRow = areaWs.RowsUsed().First(row => row.Cell(1).GetString().Contains(bldg));
+        Assert.Equal(750m, areaRow.Cell(4).GetValue<decimal>());
+        Assert.DoesNotContain(areaWs.RowsUsed(), row => row.Cell(1).GetString().Contains(floor));
+        Assert.DoesNotContain(areaWs.RowsUsed(), row => row.Cell(1).GetString().Contains(unitName));
+
+        // Unit level shows the Unit row but not the area/sub-area.
+        var unitWs = await SheetAsync("unit");
+        Assert.Contains(unitWs.RowsUsed(), row => row.Cell(1).GetString().Contains(unitName));
+        Assert.DoesNotContain(unitWs.RowsUsed(), row => row.Cell(1).GetString().Contains(bldg));
     }
 }
 

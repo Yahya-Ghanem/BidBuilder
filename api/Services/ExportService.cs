@@ -363,11 +363,17 @@ public class ExportService
     {
         "area" => "area",
         "subarea" or "sub-area" => "subarea",
+        "unit" => "unit",
         _ => "detail",
     };
 
-    private static string ActivitiesTitle(string level) =>
-        level == "area" ? "Activities by Area" : level == "subarea" ? "Activities by Sub-area" : "Activities by Unit";
+    private static string ActivitiesTitle(string level) => level switch
+    {
+        "area" => "Activities by Area",
+        "subarea" => "Activities by Sub-area",
+        "unit" => "Activities by Unit (summary)",
+        _ => "Activities by Unit",
+    };
 
     /// <summary>
     /// Writes the Area → activities table (Material / Manpower / Total) starting at
@@ -381,7 +387,7 @@ public class ExportService
         decimal Comp(ItemBreakdown i, string code) => i.Components.FirstOrDefault(c => c.Code == code)?.Amount ?? 0;
         var rolled = RollupMatLab(m.AreaRollup?.Areas ?? new(), items);
 
-        var firstHeader = level == "area" ? "Area" : level == "subarea" ? "Sub-area" : "Area / Activity";
+        var firstHeader = level switch { "area" => "Area", "subarea" => "Sub-area", "unit" => "Unit", _ => "Area / Activity" };
         ws.Cell(r, 1).Value = firstHeader; ws.Cell(r, 2).Value = $"Material ({e.Currency})";
         ws.Cell(r, 3).Value = $"Manpower ({e.Currency})"; ws.Cell(r, 4).Value = $"Total ({e.Currency})";
         StyleHeader(ws.Range(r, 1, r, 4));
@@ -391,9 +397,9 @@ public class ExportService
         // Area / Sub-area summary modes: one rolled-up row per area of the chosen level —
         // no activity detail. Each row carries the Material / Manpower / Total of everything
         // beneath it (the same roll-up the detail group rows use).
-        if (level is "area" or "subarea")
+        if (level is "area" or "subarea" or "unit")
         {
-            var kind = level == "area" ? "Area" : "SubArea";
+            var kind = level switch { "area" => "Area", "subarea" => "SubArea", _ => "Unit" };
             int firstSum = r;
             if (m.AreaRollup is { Areas.Count: > 0 })
                 foreach (var node in FlattenAreas(m.AreaRollup.Areas).Select(t => t.Node).Where(n => n.Kind == kind))
@@ -473,9 +479,9 @@ public class ExportService
         var sb = new StringBuilder(); sb.Append('﻿');
 
         // Area / Sub-area summary: one rolled-up row per area of the chosen level.
-        if (level is "area" or "subarea")
+        if (level is "area" or "subarea" or "unit")
         {
-            var kind = level == "area" ? "Area" : "SubArea";
+            var kind = level switch { "area" => "Area", "subarea" => "SubArea", _ => "Unit" };
             var rolled = RollupMatLab(m.AreaRollup?.Areas ?? new(), items);
             sb.Append("Name,Level,Material,Manpower,Total,Currency\r\n");
             if (m.AreaRollup is { Areas.Count: > 0 })
@@ -513,7 +519,7 @@ public class ExportService
         var items = e.Sections.SelectMany(s => s.Items).Where(i => i.AreaId != null).ToList();
         decimal Comp(ItemBreakdown i, string code) => i.Components.FirstOrDefault(c => c.Code == code)?.Amount ?? 0;
         var rolled = RollupMatLab(m.AreaRollup?.Areas ?? new(), items);
-        var firstHeader = level == "area" ? "Area" : level == "subarea" ? "Sub-area" : "Area / Activity";
+        var firstHeader = level switch { "area" => "Area", "subarea" => "Sub-area", "unit" => "Unit", _ => "Area / Activity" };
 
         var doc = Document.Create(container => container.Page(page =>
         {
@@ -567,13 +573,36 @@ public class ExportService
     }
 
     // ── Cost by area (standalone) ───────────────────────────────────────────
-    public byte[] BuildCostByAreaExcel(ExportModel m)
+    public byte[] BuildCostByAreaExcel(ExportModel m, string level = "detail")
     {
+        level = NormalizeLevel(level);
         using var wb = new XLWorkbook();
-        var ws = wb.AddWorksheet("Cost by Area");
-        var r = ExcelHeader(ws, m, "Cost by Area");
-        RenderCostByArea(ws, m, r);
+        var title = CostByAreaTitle(level);
+        var ws = wb.AddWorksheet(title);
+        var r = ExcelHeader(ws, m, title);
+        RenderCostByArea(ws, m, r, level);
         using var ms = new MemoryStream(); wb.SaveAs(ms); return ms.ToArray();
+    }
+
+    private static string CostByAreaTitle(string level) => level switch
+    {
+        "area" => "Cost by Area",
+        "subarea" => "Cost by Sub-area",
+        "unit" => "Cost by Unit",
+        _ => "Cost by Area",
+    };
+
+    /// <summary>Flattened area nodes for a Cost-by-Area level: the full tree for "detail",
+    /// or a flat (depth 0) list filtered to one Level for the summary modes.</summary>
+    private static List<(AreaRollupRow Node, int Depth)> NodesForLevel(List<AreaRollupRow> areas, string level)
+    {
+        var flat = FlattenAreas(areas);
+        if (level is "area" or "subarea" or "unit")
+        {
+            var kind = level switch { "area" => "Area", "subarea" => "SubArea", _ => "Unit" };
+            return flat.Where(t => t.Node.Kind == kind).Select(t => (t.Node, 0)).ToList();
+        }
+        return flat;
     }
 
     /// <summary>
@@ -581,10 +610,11 @@ public class ExportService
     /// top-level areas shaded, nested levels zebra-striped, a teal data bar on the
     /// Total column, and a highlighted "Assigned to areas" total row.
     /// </summary>
-    private static void RenderCostByArea(IXLWorksheet ws, ExportModel m, int r)
+    private static void RenderCostByArea(IXLWorksheet ws, ExportModel m, int r, string level = "detail")
     {
         var e = m.Estimate;
-        ws.Cell(r, 1).Value = "Area"; ws.Cell(r, 2).Value = "Level"; ws.Cell(r, 3).Value = "Items";
+        var firstHeader = level switch { "subarea" => "Sub-area", "unit" => "Unit", _ => "Area" };
+        ws.Cell(r, 1).Value = firstHeader; ws.Cell(r, 2).Value = "Level"; ws.Cell(r, 3).Value = "Items";
         ws.Cell(r, 4).Value = $"Total ({e.Currency})"; ws.Cell(r, 5).Value = "Measure"; ws.Cell(r, 6).Value = "Cost / unit";
         StyleHeader(ws.Range(r, 1, r, 6));
         ws.Range(r, 3, r, 4).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
@@ -595,7 +625,7 @@ public class ExportService
         if (rollup is { Areas.Count: > 0 })
         {
             var counts = RollupCounts(rollup.Areas);
-            foreach (var (node, depth) in FlattenAreas(rollup.Areas))
+            foreach (var (node, depth) in NodesForLevel(rollup.Areas, level))
             {
                 ws.Cell(r, 1).Value = new string(' ', depth * 4) + node.Name;
                 ws.Cell(r, 2).Value = node.Kind;
@@ -645,15 +675,16 @@ public class ExportService
         ws.Columns().AdjustToContents();
     }
 
-    public byte[] BuildCostByAreaCsv(ExportModel m)
+    public byte[] BuildCostByAreaCsv(ExportModel m, string level = "detail")
     {
+        level = NormalizeLevel(level);
         var ci = CultureInfo.InvariantCulture;
         var sb = new StringBuilder(); sb.Append('﻿');
         sb.Append("Area,Level,Items,Total,Measure,Cost per unit,Currency\r\n");
         if (m.AreaRollup is { Areas.Count: > 0 })
         {
             var counts = RollupCounts(m.AreaRollup.Areas);
-            foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas))
+            foreach (var (node, depth) in NodesForLevel(m.AreaRollup.Areas, level))
                 sb.Append(CsvEsc(new string(' ', depth * 2) + node.Name)).Append(',')
                   .Append(CsvEsc(node.Kind)).Append(',')
                   .Append(counts.GetValueOrDefault(node.Id).ToString(ci)).Append(',')
@@ -665,20 +696,21 @@ public class ExportService
         return Encoding.UTF8.GetBytes(sb.ToString());
     }
 
-    public byte[] BuildCostByAreaPdf(ExportModel m)
+    public byte[] BuildCostByAreaPdf(ExportModel m, string level = "detail")
     {
+        level = NormalizeLevel(level);
         var e = m.Estimate;
         string Money(decimal v) => $"{e.Currency} {v:#,##0.00}";
         var doc = Document.Create(container => container.Page(page =>
         {
             page.Margin(36); page.Size(PageSizes.A4); page.DefaultTextStyle(x => x.FontSize(9));
-            PdfHeader(page, m, "Cost by Area");
+            PdfHeader(page, m, CostByAreaTitle(level));
             page.Content().PaddingVertical(8).Column(col =>
             {
                 if (m.AreaRollup is { Areas.Count: > 0 })
                 {
                     var counts = RollupCounts(m.AreaRollup.Areas);
-                    foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas))
+                    foreach (var (node, depth) in NodesForLevel(m.AreaRollup.Areas, level))
                         col.Item().Row(rr =>
                         {
                             var count = counts.GetValueOrDefault(node.Id);
