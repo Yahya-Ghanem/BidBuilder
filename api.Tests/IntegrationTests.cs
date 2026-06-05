@@ -416,6 +416,10 @@ public class ExportTests(ApiFixture fx)
         Assert.True(subRow.Cell(1).Style.Font.Bold);
         Assert.NotEqual(XLColor.White, subRow.Cell(1).Style.Fill.BackgroundColor);
         Assert.NotEqual(XLColor.NoColor, subRow.Cell(1).Style.Fill.BackgroundColor);
+
+        // The Items column rolls up: the sub-area has no direct items, but the one item on
+        // the unit beneath it must be counted (was 0 before the roll-up fix).
+        Assert.Equal(1, subRow.Cell(3).GetValue<int>());
     }
 }
 
