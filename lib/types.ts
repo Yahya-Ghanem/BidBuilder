@@ -174,16 +174,18 @@ export interface AdminGroup {
 export interface BenchmarkPoint {
   projectCode: string; projectName: string; areaName: string; kind: string; unit: string
   quantity: number; total: number; costPerUnit: number; currency: string
+  costPerUnitBase: number | null   // cost/unit normalized to the tenant base currency (null = no rate)
 }
 export interface BenchmarkUnitGroup {
-  unit: string; count: number; min: number; avg: number; max: number
+  unit: string; count: number; convertibleCount: number; baseCurrency: string
+  min: number | null; avg: number | null; max: number | null   // in baseCurrency, over convertible points
   currencies: string[]; points: BenchmarkPoint[]
 }
 export interface ProjectBenchmark {
   projectId: number; code: string; name: string; currency: string
   estimateTitle: string | null; revision: number | null; status: string | null; bidPrice: number
 }
-export interface BenchmarkResult { projects: ProjectBenchmark[]; units: BenchmarkUnitGroup[] }
+export interface BenchmarkResult { baseCurrency: string; projects: ProjectBenchmark[]; units: BenchmarkUnitGroup[] }
 
 export interface WhatIfMarkupLine {
   type: string
