@@ -6,6 +6,7 @@ import { LayoutGrid, FolderKanban, Library, Boxes, LogOut, Settings, ScrollText,
 import { useAuth, useRequireAuth } from "@/lib/auth"
 import { usePermissions } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
+import { ProjectsTreeProvider, ProjectsSidebarTree } from "@/components/projects-tree"
 import type { ReactNode } from "react"
 
 const NAV = [
@@ -36,27 +37,30 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
   }
 
   return (
-    <div className="grid min-h-screen grid-cols-[240px_1fr]">
-      <aside className="flex flex-col border-r border-[var(--border)] bg-white">
+    <ProjectsTreeProvider>
+    <div className="grid min-h-screen grid-cols-[280px_1fr]">
+      <aside className="flex max-h-screen flex-col border-r border-[var(--border)] bg-white">
         <div className="flex items-center gap-2 px-5 py-4 text-lg font-bold">
           <LayoutGrid className="h-5 w-5 text-[var(--brand)]" />
           BidBuilder
         </div>
-        <nav className="flex-1 space-y-1 px-3">
+        <nav className="flex-1 space-y-1 overflow-auto px-3">
           {nav.map(({ href, label, icon: Icon }) => {
             const active = pathname.startsWith(href)
             return (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition",
-                  active ? "bg-[var(--brand)]/10 text-[var(--brand)]" : "text-slate-600 hover:bg-slate-100",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </Link>
+              <div key={href}>
+                <Link
+                  href={href}
+                  className={cn(
+                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition",
+                    active ? "bg-[var(--brand)]/10 text-[var(--brand)]" : "text-slate-600 hover:bg-slate-100",
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </Link>
+                {href === "/projects" && pathname.startsWith("/projects") && <ProjectsSidebarTree />}
+              </div>
             )
           })}
         </nav>
@@ -81,5 +85,6 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
         <main className="flex-1 overflow-auto p-6">{children}</main>
       </div>
     </div>
+    </ProjectsTreeProvider>
   )
 }
