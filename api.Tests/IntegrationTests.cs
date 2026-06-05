@@ -1170,3 +1170,116 @@ public class FxFreezeTests(ApiFixture fx)
         Assert.Equal(JsonValueKind.Null, bd.GetProperty("fx").ValueKind);
     }
 }
+
+// ── Platform SuperAdmin: tenant-less login + cross-tenant tenant management ──────
+[Collection("api")]
+public class PlatformTests(ApiFixture fx)
+{
+    static async Task CreateTenantAsync(HttpClient super, object body) =>
+        Assert.Equal(HttpStatusCode.Created,
+            (await super.PostAsJsonAsync("/api/platform/tenants", body)).StatusCode);
+
+    // The SuperAdmin signs in with NO tenant header (dedicated platform-login) and can
+    // enumerate every tenant — including the seeded "default".
+    [Fact]
+    public async Task SuperAdmin_logs_in_without_a_tenant_and_lists_tenants()
+    {
+        var super = await fx.PlatformAdminClientAsync();
+        var tenants = await super.GetFromJsonAsync<JsonElement>("/api/platform/tenants");
+        Assert.Contains(tenants.EnumerateArray(), t => t.GetProperty("slug").GetString() == "default");
+        // The aggregate columns are present (default tenant has its seeded admin + sample project).
+        var def = tenants.EnumerateArray().First(t => t.GetProperty("slug").GetString() == "default");
+        Assert.True(def.GetProperty("userCount").GetInt32() >= 1);
+    }
+
+    // Creating a tenant provisions its defaults + first admin; that admin can then sign in
+    // to their own workspace and use it normally.
+    [Fact]
+    public async Task SuperAdmin_creates_a_tenant_whose_admin_can_log_in()
+    {
+        var super = await fx.PlatformAdminClientAsync();
+        await CreateTenantAsync(super, new
+        {
+            slug = "acme-build", name = "ACME Build", defaultLocale = "en",
+            adminName = "ACME Admin", adminEmail = "admin@acme-build.local", adminPassword = "Pw@123456",
+        });
+
+        // The new admin logs into the new workspace and gets a working (empty) project list.
+        var admin = await fx.AuthedClientAsync("admin@acme-build.local", "Pw@123456", "acme-build");
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/api/projects")).StatusCode);
+        // It's a clean tenant — none of the default tenant's sample project leaks across.
+        var projects = await admin.GetFromJsonAsync<JsonElement>("/api/projects");
+        Assert.DoesNotContain(projects.EnumerateArray(), p => p.GetProperty("code").GetString() == "PRJ-2026-001");
+    }
+
+    [Fact]
+    public async Task Duplicate_slug_is_rejected()
+    {
+        var super = await fx.PlatformAdminClientAsync();
+        await CreateTenantAsync(super, new { slug = "dupe-co", name = "Dupe Co" });
+        var again = await super.PostAsJsonAsync("/api/platform/tenants", new { slug = "dupe-co", name = "Dupe Co 2" });
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+    }
+
+    // Suspending a tenant is a hard stop: its members can't log in until it's re-activated.
+    [Fact]
+    public async Task Suspending_a_tenant_blocks_its_users_login()
+    {
+        var super = await fx.PlatformAdminClientAsync();
+        await CreateTenantAsync(super, new
+        {
+            slug = "susp-co", name = "Suspend Co",
+            adminName = "S Admin", adminEmail = "admin@susp-co.local", adminPassword = "Pw@123456",
+        });
+        var id = (await super.GetFromJsonAsync<JsonElement>("/api/platform/tenants"))
+            .EnumerateArray().First(t => t.GetProperty("slug").GetString() == "susp-co").GetProperty("id").GetGuid();
+
+        // Active → login works.
+        var login = fx.ClientForTenant("susp-co");
+        Assert.Equal(HttpStatusCode.OK,
+            (await login.PostAsJsonAsync("/api/auth/login", new { email = "admin@susp-co.local", password = "Pw@123456" })).StatusCode);
+
+        // Suspend → login is 403 (workspace suspended), not a credential 401.
+        Assert.Equal(HttpStatusCode.OK, (await super.PostAsync($"/api/platform/tenants/{id}/suspend", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await fx.ClientForTenant("susp-co").PostAsJsonAsync("/api/auth/login", new { email = "admin@susp-co.local", password = "Pw@123456" })).StatusCode);
+
+        // Re-activate → login works again.
+        Assert.Equal(HttpStatusCode.OK, (await super.PostAsync($"/api/platform/tenants/{id}/activate", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await fx.ClientForTenant("susp-co").PostAsJsonAsync("/api/auth/login", new { email = "admin@susp-co.local", password = "Pw@123456" })).StatusCode);
+    }
+
+    // A TenantAdmin (even with full tenant rights) is NOT a platform operator.
+    [Fact]
+    public async Task TenantAdmin_cannot_reach_platform_endpoints()
+    {
+        var admin = await fx.AdminClientAsync();
+        Assert.Equal(HttpStatusCode.Forbidden, (await admin.GetAsync("/api/platform/tenants")).StatusCode);
+    }
+
+    // A SuperAdmin token carries no tenant — tenant-scoped routes refuse it up front (400),
+    // rather than faulting on an unresolved tenant.
+    [Fact]
+    public async Task SuperAdmin_token_is_refused_on_tenant_scoped_routes()
+    {
+        var super = await fx.PlatformAdminClientAsync();
+        Assert.Equal(HttpStatusCode.BadRequest, (await super.GetAsync("/api/projects")).StatusCode);
+    }
+
+    // platform-login admits only a real SuperAdmin — a tenant admin's credentials are 401.
+    [Fact]
+    public async Task Platform_login_rejects_a_tenant_admin()
+    {
+        var resp = await fx.Client().PostAsJsonAsync("/api/auth/platform-login",
+            new { email = "admin@bidbuilder.local", password = "Admin@12345" });
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    // Anonymous callers can't touch platform administration.
+    [Fact]
+    public async Task Anonymous_cannot_reach_platform_endpoints()
+    {
+        Assert.Equal(HttpStatusCode.Unauthorized, (await fx.Client().GetAsync("/api/platform/tenants")).StatusCode);
+    }
+}

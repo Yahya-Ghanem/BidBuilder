@@ -159,6 +159,7 @@ app.MapActivityEndpoints();
 app.MapProjectTypeEndpoints();
 app.MapUserManagementEndpoints();
 app.MapBenchmarkEndpoints();
+app.MapPlatformEndpoints();
 
 app.Run();
 
