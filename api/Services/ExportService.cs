@@ -394,23 +394,26 @@ public class ExportService
         ws.Range(r, 2, r, 4).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
         int header = r; r++;
 
-        // Area / Sub-area summary modes: one rolled-up row per area of the chosen level —
-        // no activity detail. Each row carries the Material / Manpower / Total of everything
-        // beneath it (the same roll-up the detail group rows use).
+        // Summary modes keep the hierarchy down to the chosen level — Sub-area shows
+        // Area → Sub-area; Unit shows Area → Sub-area → Unit — each row rolled up, with
+        // NO activity detail. Rows are indented and styled by Level (Area bold on teal,
+        // Sub-area bold on slate, Unit plain).
         if (level is "area" or "subarea" or "unit")
         {
-            var kind = level switch { "area" => "Area", "subarea" => "SubArea", _ => "Unit" };
+            int maxRank = level switch { "area" => 0, "subarea" => 1, _ => 2 };
             int firstSum = r;
             if (m.AreaRollup is { Areas.Count: > 0 })
-                foreach (var node in FlattenAreas(m.AreaRollup.Areas).Select(t => t.Node).Where(n => n.Kind == kind))
+                foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas).Where(t => KindRank(t.Node.Kind) <= maxRank))
                 {
                     var (mat, lab) = rolled.GetValueOrDefault(node.Id);
-                    ws.Cell(r, 1).Value = node.Name;
+                    ws.Cell(r, 1).Value = new string(' ', depth * 4) + node.Name + "  (" + node.Kind + ")";
                     ws.Cell(r, 2).Value = mat;              ws.Cell(r, 2).Style.NumberFormat.Format = "#,##0.00";
                     ws.Cell(r, 3).Value = lab;              ws.Cell(r, 3).Style.NumberFormat.Format = "#,##0.00";
                     ws.Cell(r, 4).Value = node.RollupTotal; ws.Cell(r, 4).Style.NumberFormat.Format = "#,##0.00";
                     ws.Cell(r, 4).Style.Font.SetFontColor(BrandDark);
-                    if ((r - firstSum) % 2 == 1) ws.Range(r, 1, r, 4).Style.Fill.SetBackgroundColor(BandFill);
+                    var rng = ws.Range(r, 1, r, 4);
+                    if (node.Kind == "Area") { rng.Style.Font.SetBold(); rng.Style.Fill.SetBackgroundColor(GroupFill); }
+                    else if (node.Kind == "SubArea") { rng.Style.Font.SetBold(); rng.Style.Fill.SetBackgroundColor(depth <= 1 ? SubGroupFill : SubGroupFillLt); }
                     r++;
                 }
             int lastSum = r - 1;
@@ -478,17 +481,18 @@ public class ExportService
         decimal Comp(ItemBreakdown i, string code) => i.Components.FirstOrDefault(c => c.Code == code)?.Amount ?? 0;
         var sb = new StringBuilder(); sb.Append('﻿');
 
-        // Area / Sub-area summary: one rolled-up row per area of the chosen level.
+        // Summary modes keep the hierarchy down to the chosen level (Sub-area ⇒ Area +
+        // Sub-area; Unit ⇒ Area + Sub-area + Unit), rolled up, with no activity detail.
         if (level is "area" or "subarea" or "unit")
         {
-            var kind = level switch { "area" => "Area", "subarea" => "SubArea", _ => "Unit" };
+            int maxRank = level switch { "area" => 0, "subarea" => 1, _ => 2 };
             var rolled = RollupMatLab(m.AreaRollup?.Areas ?? new(), items);
             sb.Append("Name,Level,Material,Manpower,Total,Currency\r\n");
             if (m.AreaRollup is { Areas.Count: > 0 })
-                foreach (var node in FlattenAreas(m.AreaRollup.Areas).Select(t => t.Node).Where(n => n.Kind == kind))
+                foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas).Where(t => KindRank(t.Node.Kind) <= maxRank))
                 {
                     var (mat, lab) = rolled.GetValueOrDefault(node.Id);
-                    sb.Append(CsvEsc(node.Name)).Append(',')
+                    sb.Append(CsvEsc(new string(' ', depth * 2) + node.Name)).Append(',')
                       .Append(CsvEsc(node.Kind)).Append(',')
                       .Append(mat.ToString("0.00", ci)).Append(',')
                       .Append(lab.ToString("0.00", ci)).Append(',')
@@ -537,13 +541,13 @@ public class ExportService
                 });
                 if (m.AreaRollup is { Areas.Count: > 0 })
                 {
-                    if (level is "area" or "subarea")
+                    if (level is "area" or "subarea" or "unit")
                     {
-                        var kind = level == "area" ? "Area" : "SubArea";
-                        foreach (var node in FlattenAreas(m.AreaRollup.Areas).Select(t => t.Node).Where(n => n.Kind == kind))
+                        int maxRank = level switch { "area" => 0, "subarea" => 1, _ => 2 };
+                        foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas).Where(t => KindRank(t.Node.Kind) <= maxRank))
                         {
                             var (gMat, gLab) = rolled.GetValueOrDefault(node.Id);
-                            table.Cell().Padding(3).Text(node.Name);
+                            table.Cell().PaddingLeft(depth * 12).Padding(3).Text($"{node.Name}  ({node.Kind})").SemiBold();
                             table.Cell().Padding(3).AlignRight().Text($"{gMat:#,##0.00}");
                             table.Cell().Padding(3).AlignRight().Text($"{gLab:#,##0.00}");
                             table.Cell().Padding(3).AlignRight().Text($"{node.RollupTotal:#,##0.00}");
@@ -599,11 +603,16 @@ public class ExportService
         var flat = FlattenAreas(areas);
         if (level is "area" or "subarea" or "unit")
         {
-            var kind = level switch { "area" => "Area", "subarea" => "SubArea", _ => "Unit" };
-            return flat.Where(t => t.Node.Kind == kind).Select(t => (t.Node, 0)).ToList();
+            // Keep the hierarchy down to the chosen level (Sub-area ⇒ Area + Sub-area,
+            // Unit ⇒ Area + Sub-area + Unit), preserving depth for indentation.
+            int maxRank = level switch { "area" => 0, "subarea" => 1, _ => 2 };
+            return flat.Where(t => KindRank(t.Node.Kind) <= maxRank).ToList();
         }
         return flat;
     }
+
+    /// <summary>Depth rank of an area Level for level-limited summaries: Area &lt; Sub-area &lt; Unit.</summary>
+    private static int KindRank(string kind) => kind switch { "Area" => 0, "SubArea" => 1, "Unit" => 2, _ => 3 };
 
     /// <summary>
     /// Writes the area roll-up table starting at <paramref name="r"/>: brand header,

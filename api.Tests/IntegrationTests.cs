@@ -466,22 +466,27 @@ public class ExportTests(ApiFixture fx)
             return wb.Worksheets.First();
         }
 
-        // Area level: a single "Bldg" row with the rolled-up totals; the activity rows are gone.
+        // Area level: just the "Bldg" row with rolled-up totals; no sub-area/unit/activities.
         var areaWs = await SheetAsync("area");
         var areaRow = areaWs.RowsUsed().First(row => row.Cell(1).GetString().Contains(bldg));
         Assert.Equal(1500m, areaRow.Cell(2).GetValue<decimal>());
         Assert.Equal(500m, areaRow.Cell(3).GetValue<decimal>());
         Assert.Equal(2000m, areaRow.Cell(4).GetValue<decimal>());
+        Assert.DoesNotContain(areaWs.RowsUsed(), row => row.Cell(1).GetString().Contains(floor));
         Assert.DoesNotContain(areaWs.RowsUsed(), row => row.Cell(1).GetString().Contains("Plastering"));
 
-        // Sub-Area level: a single "Floor" row, same rolled-up totals, no activity detail.
+        // Sub-Area level: hierarchy Area → Sub-area (the "Floor" row), no unit/activities.
         var subWs = await SheetAsync("subarea");
+        Assert.Contains(subWs.RowsUsed(), row => row.Cell(1).GetString().Contains(bldg));
         var subRow = subWs.RowsUsed().First(row => row.Cell(1).GetString().Contains(floor));
         Assert.Equal(2000m, subRow.Cell(4).GetValue<decimal>());
+        Assert.DoesNotContain(subWs.RowsUsed(), row => row.Cell(1).GetString().Contains(unitName));
         Assert.DoesNotContain(subWs.RowsUsed(), row => row.Cell(1).GetString().Contains("Painting"));
 
-        // Unit level: a single unit row with the rolled-up totals; no activity detail.
+        // Unit level: full hierarchy Area → Sub-area → Unit, still no activity detail.
         var unitWs = await SheetAsync("unit");
+        Assert.Contains(unitWs.RowsUsed(), row => row.Cell(1).GetString().Contains(bldg));
+        Assert.Contains(unitWs.RowsUsed(), row => row.Cell(1).GetString().Contains(floor));
         var unitRow = unitWs.RowsUsed().First(row => row.Cell(1).GetString().Contains(unitName));
         Assert.Equal(1500m, unitRow.Cell(2).GetValue<decimal>());
         Assert.Equal(2000m, unitRow.Cell(4).GetValue<decimal>());
@@ -533,10 +538,17 @@ public class ExportTests(ApiFixture fx)
         Assert.DoesNotContain(areaWs.RowsUsed(), row => row.Cell(1).GetString().Contains(floor));
         Assert.DoesNotContain(areaWs.RowsUsed(), row => row.Cell(1).GetString().Contains(unitName));
 
-        // Unit level shows the Unit row but not the area/sub-area.
+        // Sub-Area level: hierarchy Area → Sub-area, no unit.
+        var subWs = await SheetAsync("subarea");
+        Assert.Contains(subWs.RowsUsed(), row => row.Cell(1).GetString().Contains(bldg));
+        Assert.Contains(subWs.RowsUsed(), row => row.Cell(1).GetString().Contains(floor));
+        Assert.DoesNotContain(subWs.RowsUsed(), row => row.Cell(1).GetString().Contains(unitName));
+
+        // Unit level: full hierarchy Area → Sub-area → Unit (parents retained for context).
         var unitWs = await SheetAsync("unit");
         Assert.Contains(unitWs.RowsUsed(), row => row.Cell(1).GetString().Contains(unitName));
-        Assert.DoesNotContain(unitWs.RowsUsed(), row => row.Cell(1).GetString().Contains(bldg));
+        Assert.Contains(unitWs.RowsUsed(), row => row.Cell(1).GetString().Contains(bldg));
+        Assert.Contains(unitWs.RowsUsed(), row => row.Cell(1).GetString().Contains(floor));
     }
 }
 
