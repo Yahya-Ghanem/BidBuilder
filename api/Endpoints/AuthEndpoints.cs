@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using BidBuilder.Api.Auth;
 using BidBuilder.Api.Data;
+using BidBuilder.Api.Models;
 using BidBuilder.Api.Tenancy;
 
 namespace BidBuilder.Api.Endpoints;
@@ -23,6 +24,12 @@ public static class AuthEndpoints
         // logged in, the JWT). Returns a JWT carrying tenant_slug + role.
         grp.MapPost("/login", async (LoginRequest req, AppDbContext db, ITenantContext tenant, JwtService jwt) =>
         {
+            // A suspended workspace blocks all of its members — checked before any
+            // credential work so a suspended tenant is a hard stop.
+            var workspace = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tenant.TenantId);
+            if (workspace is null || workspace.IsSuspended)
+                return Results.Json(new { error = "This workspace is suspended. Contact your administrator." }, statusCode: 403);
+
             var user = await db.Users.FirstOrDefaultAsync(u => u.Email == req.Email.Trim().ToLower());
             if (user is null || !user.IsActive)
                 return Results.Json(new { error = "Invalid credentials" }, statusCode: 401);
@@ -34,6 +41,31 @@ public static class AuthEndpoints
             await db.SaveChangesAsync();
 
             var (token, expires) = jwt.Issue(user, tenant.TenantSlug);
+            return Results.Ok(new LoginResponse(
+                token, expires,
+                new UserDto(user.Id, user.Name, user.Email, user.Role.ToString())));
+        })
+        .AllowAnonymous();
+
+        // POST /api/auth/platform-login — SuperAdmin sign-in. SuperAdmins have no tenant,
+        // so this needs no X-Tenant-Id and is exempt from tenant resolution in the
+        // middleware. The lookup bypasses the tenant query filter and matches only a
+        // platform SuperAdmin (TenantId null). Same generic 401 on any failure.
+        grp.MapPost("/platform-login", async (LoginRequest req, AppDbContext db, JwtService jwt) =>
+        {
+            var email = req.Email.Trim().ToLower();
+            var user = await db.Users.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.Email == email && u.TenantId == null && u.Role == UserRole.SuperAdmin);
+            if (user is null || !user.IsActive)
+                return Results.Json(new { error = "Invalid credentials" }, statusCode: 401);
+
+            if (!BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
+                return Results.Json(new { error = "Invalid credentials" }, statusCode: 401);
+
+            user.LastLoginAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+
+            var (token, expires) = jwt.IssuePlatform(user);
             return Results.Ok(new LoginResponse(
                 token, expires,
                 new UserDto(user.Id, user.Name, user.Email, user.Role.ToString())));

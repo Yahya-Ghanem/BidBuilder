@@ -17,6 +17,14 @@ public class JwtService(IConfiguration cfg)
     public const string TenantSlugClaim = "tenant_slug";
     public const string TenantIdClaim   = "tenant_id";
 
+    /// <summary>
+    /// Issue a platform-level token for a SuperAdmin. These users have no tenant, so
+    /// the token carries an empty tenant_slug; <see cref="Tenancy.TenantResolutionMiddleware"/>
+    /// recognises the SuperAdmin role and lets the request through without resolving a
+    /// tenant (it may only reach the /api/platform endpoints).
+    /// </summary>
+    public (string Token, DateTime ExpiresAt) IssuePlatform(User user) => Issue(user, "");
+
     public (string Token, DateTime ExpiresAt) Issue(User user, string tenantSlug)
     {
         var key      = cfg["Jwt:SigningKey"] ?? throw new InvalidOperationException("Jwt:SigningKey not configured");

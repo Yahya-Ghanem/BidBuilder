@@ -57,6 +57,9 @@ export default function LoginPage() {
             {busy ? "Signing in…" : "Sign in"}
           </Button>
         </form>
+        <p className="mt-4 text-center text-xs text-slate-400">
+          <a href="/platform" className="hover:text-[var(--brand)] hover:underline">Platform administration</a>
+        </p>
       </Card>
     </div>
   )

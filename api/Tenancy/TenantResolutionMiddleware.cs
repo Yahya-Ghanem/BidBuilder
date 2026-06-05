@@ -29,6 +29,35 @@ public class TenantResolutionMiddleware(
             return;
         }
 
+        // Platform SuperAdmin sign-in is tenant-less and anonymous — let it through
+        // before any tenant resolution (it carries no tenant claim or header).
+        if (path.StartsWith("/api/auth/platform-login", StringComparison.OrdinalIgnoreCase))
+        {
+            await next(ctx);
+            return;
+        }
+
+        // SuperAdmins operate at the platform level with NO tenant scope. Their token
+        // carries role=SuperAdmin and an empty tenant. Let them reach the /api/platform
+        // endpoints with the tenant context deliberately unresolved (those endpoints
+        // work on non-tenant-scoped data). Any other /api route would fault on the
+        // unresolved tenant, so refuse it up front with a clear message instead.
+        if (ctx.User.Identity?.IsAuthenticated == true &&
+            string.Equals(ctx.User.FindFirst("role")?.Value, "SuperAdmin", StringComparison.Ordinal))
+        {
+            if (path.StartsWith("/api/platform", StringComparison.OrdinalIgnoreCase))
+            {
+                await next(ctx);
+                return;
+            }
+            ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await ctx.Response.WriteAsJsonAsync(new
+            {
+                error = "SuperAdmin sessions operate only on the /api/platform endpoints.",
+            });
+            return;
+        }
+
         // 1. JWT claim-based resolution (real auth path)
         string? slug = null;
         if (ctx.User.Identity?.IsAuthenticated == true)

@@ -88,6 +88,106 @@ public static class DbInitializer
         // auto-stamp in SaveChanges target this tenant.
         if (!tenant.IsResolved) tenant.Set(t.Id, t.Slug);
 
+        // Seed this tenant's standard defaults (settings, modules, catalogs, Admins
+        // team). Shared with the platform "create tenant" flow so a tenant minted by a
+        // SuperAdmin gets the exact same baseline.
+        var adminGroup = await SeedTenantDefaultsAsync(db, t);
+
+        // ── Admin user ─────────────────────────────────────────────────────────
+        // Credentials are configurable (Seed:AdminEmail / Seed:AdminPassword). In
+        // Development a well-known demo login is fine; outside Development we refuse
+        // to seed a default credential — a password MUST be supplied explicitly, or
+        // the initial admin is skipped (create it out-of-band). This keeps the famous
+        // "Admin@12345" out of any real deployment.
+        var adminEmail    = cfg["Seed:AdminEmail"]    ?? "admin@bidbuilder.local";
+        var adminPassword = cfg["Seed:AdminPassword"] ?? (isDev ? "Admin@12345" : null);
+        if (!await db.Users.AnyAsync(u => u.Email == adminEmail))
+        {
+            if (adminPassword is null)
+            {
+                log?.LogWarning(
+                    "Skipping initial admin seed outside Development: set Seed__AdminPassword " +
+                    "(and optionally Seed__AdminEmail) to create the first admin.");
+            }
+            else
+            {
+                var admin = new User
+                {
+                    TenantId = t.Id, Email = adminEmail,
+                    Name = "Demo Admin", Role = UserRole.TenantAdmin, IsActive = true,
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
+                };
+                db.Users.Add(admin);
+                await db.SaveChangesAsync();
+                db.UserGroups.Add(new UserGroup { TenantId = t.Id, UserId = admin.Id, GroupId = adminGroup.Id });
+                await db.SaveChangesAsync();
+            }
+        }
+
+        // ── Sample project assigned to the Admins team ───────────────────────
+        // Demo content is seeded in Development, or anywhere Seed:DemoData=true.
+        var seedDemo = isDev || cfg.GetValue<bool>("Seed:DemoData");
+        if (seedDemo && !await db.Projects.AnyAsync())
+        {
+            var project = new Project
+            {
+                TenantId = t.Id, Code = "PRJ-2026-001", Name = "Sample Tender — Warehouse Block A",
+                ClientName = "ACME Industries", Location = "Abu Dhabi", Currency = "AED",
+                Status = ProjectStatus.Bidding, DurationMonths = 9,
+            };
+            db.Projects.Add(project);
+            await db.SaveChangesAsync();
+
+            db.ProjectTeams.Add(new ProjectTeam
+            {
+                TenantId = t.Id, ProjectId = project.Id, GroupId = adminGroup.Id, IsLead = true,
+            });
+            db.Estimates.Add(new Estimate
+            {
+                TenantId = t.Id, ProjectId = project.Id, Revision = 1,
+                Title = "Base Estimate", Status = EstimateStatus.Draft, Currency = "AED",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // ── Platform SuperAdmin ───────────────────────────────────────────────
+        // A tenant-less platform operator (manages tenants via /api/platform). Like the
+        // tenant admin, a default credential is only used in Development; elsewhere a
+        // password MUST be supplied via Seed:SuperAdminPassword or the account is skipped.
+        var superEmail    = cfg["Seed:SuperAdminEmail"]    ?? "superadmin@bidbuilder.local";
+        var superPassword = cfg["Seed:SuperAdminPassword"] ?? (isDev ? "Super@12345" : null);
+        // User isn't IHasTenant, so it's never tenant-stamped; the filter would hide a
+        // null-tenant row, so look it up with filters off.
+        if (superPassword is not null &&
+            !await db.Users.IgnoreQueryFilters().AnyAsync(u => u.Email == superEmail && u.TenantId == null))
+        {
+            db.Users.Add(new User
+            {
+                TenantId = null, Email = superEmail, Name = "Platform Admin",
+                Role = UserRole.SuperAdmin, IsActive = true,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(superPassword),
+            });
+            await db.SaveChangesAsync();
+        }
+        else if (superPassword is null)
+        {
+            log?.LogWarning(
+                "Skipping SuperAdmin seed outside Development: set Seed__SuperAdminPassword " +
+                "(and optionally Seed__SuperAdminEmail) to create the platform operator.");
+        }
+    }
+
+    /// <summary>
+    /// Seed a tenant's standard baseline — settings, RBAC modules, the default
+    /// cost-component / activity / project-type catalogs, and the built-in "Admins"
+    /// team with full permissions on every module. Idempotent, so it also backfills
+    /// older tenants. The caller MUST have resolved the tenant context to
+    /// <paramref name="t"/> (so query filters + the SaveChanges auto-stamp target it).
+    /// Returns the Admins group so the caller can attach the tenant's first admin.
+    /// Shared by startup seeding and the platform "create tenant" endpoint.
+    /// </summary>
+    public static async Task<Group> SeedTenantDefaultsAsync(AppDbContext db, Tenant t)
+    {
         // ── Tenant settings ──────────────────────────────────────────────────
         if (!await db.TenantSettings.AnyAsync())
         {
@@ -100,14 +200,11 @@ public static class DbInitializer
 
         // ── Modules ────────────────────────────────────────────────────────────
         var existingCodes = await db.Modules.Select(m => m.Code).ToListAsync();
-        var moduleEntities = new List<Module>();
         for (int i = 0; i < Modules.Length; i++)
         {
             var (code, name) = Modules[i];
             if (existingCodes.Contains(code)) continue;
-            var m = new Module { TenantId = t.Id, Code = code, Name = name, SortOrder = i, IsActive = true };
-            db.Modules.Add(m);
-            moduleEntities.Add(m);
+            db.Modules.Add(new Module { TenantId = t.Id, Code = code, Name = name, SortOrder = i, IsActive = true });
         }
         await db.SaveChangesAsync();
 
@@ -169,61 +266,6 @@ public static class DbInitializer
             await db.SaveChangesAsync();
         }
 
-        // ── Admin user ─────────────────────────────────────────────────────────
-        // Credentials are configurable (Seed:AdminEmail / Seed:AdminPassword). In
-        // Development a well-known demo login is fine; outside Development we refuse
-        // to seed a default credential — a password MUST be supplied explicitly, or
-        // the initial admin is skipped (create it out-of-band). This keeps the famous
-        // "Admin@12345" out of any real deployment.
-        var adminEmail    = cfg["Seed:AdminEmail"]    ?? "admin@bidbuilder.local";
-        var adminPassword = cfg["Seed:AdminPassword"] ?? (isDev ? "Admin@12345" : null);
-        if (!await db.Users.AnyAsync(u => u.Email == adminEmail))
-        {
-            if (adminPassword is null)
-            {
-                log?.LogWarning(
-                    "Skipping initial admin seed outside Development: set Seed__AdminPassword " +
-                    "(and optionally Seed__AdminEmail) to create the first admin.");
-            }
-            else
-            {
-                var admin = new User
-                {
-                    TenantId = t.Id, Email = adminEmail,
-                    Name = "Demo Admin", Role = UserRole.TenantAdmin, IsActive = true,
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
-                };
-                db.Users.Add(admin);
-                await db.SaveChangesAsync();
-                db.UserGroups.Add(new UserGroup { TenantId = t.Id, UserId = admin.Id, GroupId = adminGroup.Id });
-                await db.SaveChangesAsync();
-            }
-        }
-
-        // ── Sample project assigned to the Admins team ───────────────────────
-        // Demo content is seeded in Development, or anywhere Seed:DemoData=true.
-        var seedDemo = isDev || cfg.GetValue<bool>("Seed:DemoData");
-        if (seedDemo && !await db.Projects.AnyAsync())
-        {
-            var project = new Project
-            {
-                TenantId = t.Id, Code = "PRJ-2026-001", Name = "Sample Tender — Warehouse Block A",
-                ClientName = "ACME Industries", Location = "Abu Dhabi", Currency = "AED",
-                Status = ProjectStatus.Bidding, DurationMonths = 9,
-            };
-            db.Projects.Add(project);
-            await db.SaveChangesAsync();
-
-            db.ProjectTeams.Add(new ProjectTeam
-            {
-                TenantId = t.Id, ProjectId = project.Id, GroupId = adminGroup.Id, IsLead = true,
-            });
-            db.Estimates.Add(new Estimate
-            {
-                TenantId = t.Id, ProjectId = project.Id, Revision = 1,
-                Title = "Base Estimate", Status = EstimateStatus.Draft, Currency = "AED",
-            });
-            await db.SaveChangesAsync();
-        }
+        return adminGroup;
     }
 }

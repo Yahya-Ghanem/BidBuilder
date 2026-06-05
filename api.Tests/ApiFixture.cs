@@ -79,6 +79,8 @@ public sealed class ApiFixture : IAsyncLifetime
         // need the known baseline, so opt in explicitly (mirrors a real first-boot config).
         Environment.SetEnvironmentVariable("Seed__AdminPassword", "Admin@12345");
         Environment.SetEnvironmentVariable("Seed__DemoData", "true");
+        // Seed a platform SuperAdmin so the platform/tenant-management tests have an operator.
+        Environment.SetEnvironmentVariable("Seed__SuperAdminPassword", "Super@12345");
         _factory = new Factory();
         _ = _factory.Services;   // force host build → runs DbInitializer (migrate + seed)
         return Task.CompletedTask;
@@ -141,6 +143,21 @@ public sealed class ApiFixture : IAsyncLifetime
             }
         }
         return await AuthedClientAsync(email, password, slug);
+    }
+
+    /// <summary>
+    /// A client authenticated as the seeded platform SuperAdmin. SuperAdmins have no
+    /// tenant, so this sends NO X-Tenant-Id and uses the dedicated platform-login path.
+    /// </summary>
+    public async Task<HttpClient> PlatformAdminClientAsync(
+        string email = "superadmin@bidbuilder.local", string password = "Super@12345")
+    {
+        var c = _factory.CreateClient();   // deliberately no X-Tenant-Id header
+        var resp = await c.PostAsJsonAsync("/api/auth/platform-login", new { email, password });
+        resp.EnsureSuccessStatusCode();
+        var body = await resp.Content.ReadFromJsonAsync<LoginResponse>();
+        c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", body!.Token);
+        return c;
     }
 
     private sealed record LoginResponse(string Token);
