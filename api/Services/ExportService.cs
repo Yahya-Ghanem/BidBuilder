@@ -24,7 +24,9 @@ public class ExportService
     // A small, consistent theme so every sheet reads as one branded document.
     private static readonly XLColor Brand       = XLColor.FromArgb(0x0F, 0x76, 0x6E); // teal-700 — headers / accents
     private static readonly XLColor BrandDark   = XLColor.FromArgb(0x13, 0x4E, 0x4A); // teal-900 — total figures
-    private static readonly XLColor GroupFill   = XLColor.FromArgb(0xCC, 0xFB, 0xF1); // teal-100 — section / top-level rows
+    private static readonly XLColor GroupFill   = XLColor.FromArgb(0xCC, 0xFB, 0xF1); // teal-100 — area / top-level rows
+    private static readonly XLColor SubGroupFill   = XLColor.FromArgb(0xCB, 0xD5, 0xE1); // slate-300 — sub-area rows
+    private static readonly XLColor SubGroupFillLt = XLColor.FromArgb(0xE2, 0xE8, 0xF0); // slate-200 — deeper sub-area rows
     private static readonly XLColor BandFill    = XLColor.FromArgb(0xF1, 0xF5, 0xF9); // slate-100 — zebra stripe
     private static readonly XLColor BorderColor = XLColor.FromArgb(0x94, 0xA3, 0xB8); // slate-400 — table outline
     private static readonly XLColor BorderLight = XLColor.FromArgb(0xE2, 0xE8, 0xF0); // slate-200 — inner gridlines
@@ -520,8 +522,19 @@ public class ExportService
                     ws.Cell(r, 5).Value = $"{node.Quantity:0.####} {node.Unit}".Trim();
                     if (node.CostPerUnit is decimal cpu) { ws.Cell(r, 6).Value = cpu; ws.Cell(r, 6).Style.NumberFormat.Format = "#,##0.00"; }
                 }
-                if (depth == 0) { ws.Range(r, 1, r, 6).Style.Font.SetBold(); ws.Range(r, 1, r, 6).Style.Fill.SetBackgroundColor(GroupFill); }
-                else if (depth % 2 == 1) ws.Range(r, 1, r, 6).Style.Fill.SetBackgroundColor(BandFill);
+                // Style by Level so the hierarchy reads at a glance: Areas bold on teal,
+                // Sub-areas bold on slate (lighter the deeper they nest), Units plain.
+                var rowRange = ws.Range(r, 1, r, 6);
+                if (node.Kind == "Area")
+                {
+                    rowRange.Style.Font.SetBold();
+                    rowRange.Style.Fill.SetBackgroundColor(GroupFill);
+                }
+                else if (node.Kind == "SubArea")
+                {
+                    rowRange.Style.Font.SetBold();
+                    rowRange.Style.Fill.SetBackgroundColor(depth <= 1 ? SubGroupFill : SubGroupFillLt);
+                }
                 r++;
             }
             lastData = r - 1;
