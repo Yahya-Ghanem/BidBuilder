@@ -510,11 +510,12 @@ public class ExportService
         var rollup = m.AreaRollup;
         if (rollup is { Areas.Count: > 0 })
         {
+            var counts = RollupCounts(rollup.Areas);
             foreach (var (node, depth) in FlattenAreas(rollup.Areas))
             {
                 ws.Cell(r, 1).Value = new string(' ', depth * 4) + node.Name;
                 ws.Cell(r, 2).Value = node.Kind;
-                ws.Cell(r, 3).Value = node.ItemCount;
+                ws.Cell(r, 3).Value = counts.GetValueOrDefault(node.Id);
                 ws.Cell(r, 4).Value = node.RollupTotal; ws.Cell(r, 4).Style.NumberFormat.Format = "#,##0.00";
                 ws.Cell(r, 4).Style.Font.SetFontColor(BrandDark);
                 if (node.Quantity > 0)
@@ -566,14 +567,17 @@ public class ExportService
         var sb = new StringBuilder(); sb.Append('﻿');
         sb.Append("Area,Level,Items,Total,Measure,Cost per unit,Currency\r\n");
         if (m.AreaRollup is { Areas.Count: > 0 })
+        {
+            var counts = RollupCounts(m.AreaRollup.Areas);
             foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas))
                 sb.Append(CsvEsc(new string(' ', depth * 2) + node.Name)).Append(',')
                   .Append(CsvEsc(node.Kind)).Append(',')
-                  .Append(node.ItemCount.ToString(ci)).Append(',')
+                  .Append(counts.GetValueOrDefault(node.Id).ToString(ci)).Append(',')
                   .Append(node.RollupTotal.ToString("0.00", ci)).Append(',')
                   .Append(CsvEsc(node.Quantity > 0 ? $"{node.Quantity.ToString("0.####", ci)} {node.Unit}".Trim() : "")).Append(',')
                   .Append(node.CostPerUnit is decimal cpu ? cpu.ToString("0.00", ci) : "").Append(',')
                   .Append(CsvEsc(m.Estimate.Currency)).Append("\r\n");
+        }
         return Encoding.UTF8.GetBytes(sb.ToString());
     }
 
@@ -589,12 +593,14 @@ public class ExportService
             {
                 if (m.AreaRollup is { Areas.Count: > 0 })
                 {
+                    var counts = RollupCounts(m.AreaRollup.Areas);
                     foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas))
                         col.Item().Row(rr =>
                         {
+                            var count = counts.GetValueOrDefault(node.Id);
                             var measure = node.Quantity > 0 ? $", {node.Quantity:0.####} {node.Unit}".TrimEnd() : "";
                             rr.RelativeItem().PaddingLeft(depth * 12)
-                              .Text($"{node.Name}  ({node.Kind}{(node.ItemCount > 0 ? $", {node.ItemCount} item(s)" : "")}{measure})").FontSize(8);
+                              .Text($"{node.Name}  ({node.Kind}{(count > 0 ? $", {count} item(s)" : "")}{measure})").FontSize(8);
                             rr.ConstantItem(150).AlignRight().Text(
                                 node.CostPerUnit is decimal cpu ? $"{Money(node.RollupTotal)}  ({Money(cpu)}/{node.Unit ?? "unit"})" : Money(node.RollupTotal)).FontSize(8);
                         });
@@ -684,6 +690,28 @@ public class ExportService
             if (childrenOf.TryGetValue(id, out var kids))
                 foreach (var k in kids) { var (cm, cl) = Roll(k); mat += cm; lab += cl; }
             return memo[id] = (mat, lab);
+        }
+        foreach (var a in areas) Roll(a.Id);
+        return memo;
+    }
+
+    /// <summary>
+    /// Item counts rolled UP the area tree (each area carries its own directly-assigned
+    /// items plus every descendant's), keyed by area id — so a Sub-area / Area row shows
+    /// the total number of priced items beneath it instead of its (usually zero) direct count.
+    /// </summary>
+    private static Dictionary<int, int> RollupCounts(List<AreaRollupRow> areas)
+    {
+        var direct = areas.ToDictionary(a => a.Id, a => a.ItemCount);
+        var childrenOf = areas.Where(a => a.ParentAreaId is not null)
+            .GroupBy(a => a.ParentAreaId!.Value).ToDictionary(g => g.Key, g => g.Select(x => x.Id).ToList());
+        var memo = new Dictionary<int, int>();
+        int Roll(int id)
+        {
+            if (memo.TryGetValue(id, out var cached)) return cached;
+            var n = direct.GetValueOrDefault(id);
+            if (childrenOf.TryGetValue(id, out var kids)) foreach (var k in kids) n += Roll(k);
+            return memo[id] = n;
         }
         foreach (var a in areas) Roll(a.Id);
         return memo;
