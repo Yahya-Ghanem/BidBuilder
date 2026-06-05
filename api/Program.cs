@@ -139,8 +139,11 @@ app.UseAuthorization();
 
 app.MapHealthChecks("/healthz");
 
+// Authenticated-only diagnostic. /healthz (above) is the anonymous liveness probe;
+// ping requires auth so it can't be used to enumerate tenant slugs while anonymous.
 app.MapGet("/api/ping", (ITenantContext t) =>
-    Results.Ok(new { ok = true, tenant = t.TenantSlug, at = DateTime.UtcNow }));
+    Results.Ok(new { ok = true, tenant = t.TenantSlug, at = DateTime.UtcNow }))
+   .RequireAuthorization();
 
 app.MapAuthEndpoints();
 app.MapProjectEndpoints();

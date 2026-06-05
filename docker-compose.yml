@@ -14,7 +14,7 @@
 # Endpoints:
 #   http://localhost:8081/healthz    API health probe
 #   http://localhost:8081/swagger    Swagger UI (Development)
-#   http://localhost:8081/api/ping   smoke endpoint (X-Tenant-Id: default)
+#   http://localhost:8081/api/ping   smoke endpoint (requires a Bearer token; tenant from the JWT)
 #   localhost:5433                   Postgres (host 5433 → container 5432; avoids
 #                                    clashing with a native Postgres on 5432)
 #

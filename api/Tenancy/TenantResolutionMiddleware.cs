@@ -45,11 +45,7 @@ public class TenantResolutionMiddleware(
             if (!env.IsDevelopment())
             {
                 logger.LogWarning("Request to {Path} missing tenant claim/header", path);
-                ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                await ctx.Response.WriteAsJsonAsync(new
-                {
-                    error = "Tenant context required (sign in or pass X-Tenant-Id)",
-                });
+                await WriteTenantRequiredAsync(ctx);
                 return;
             }
             slug = "default";
@@ -60,13 +56,27 @@ public class TenantResolutionMiddleware(
 
         if (tenant is null)
         {
-            ctx.Response.StatusCode = StatusCodes.Status404NotFound;
-            await ctx.Response.WriteAsJsonAsync(new { error = $"Unknown tenant '{slug}'" });
+            // Respond identically to the missing-tenant case — a generic 401 that never
+            // confirms whether a given slug exists and never echoes the supplied value.
+            // This removes the tenant-slug enumeration oracle (an unauthenticated caller
+            // could otherwise tell a real slug from a fake one by the 404 vs proceed).
+            // The attempted slug is logged server-side only, for ops.
+            logger.LogWarning("Request to {Path} with unresolved tenant slug {Slug}", path, slug);
+            await WriteTenantRequiredAsync(ctx);
             return;
         }
 
         tenantCtx.Set(tenant.Id, tenant.Slug);
         await next(ctx);
+    }
+
+    private static Task WriteTenantRequiredAsync(HttpContext ctx)
+    {
+        ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        return ctx.Response.WriteAsJsonAsync(new
+        {
+            error = "Tenant context required (sign in or pass a valid X-Tenant-Id).",
+        });
     }
 }
 
