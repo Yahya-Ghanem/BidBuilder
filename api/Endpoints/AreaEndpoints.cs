@@ -90,9 +90,13 @@ public static class AreaEndpoints
         });
 
         // ── Per-estimate cost roll-up (unit → sub-area → area → project) ───────
-        app.MapGet("/api/estimates/{id:int}/areas-rollup", async (int id, ClaimsPrincipal me, ProjectAccessService access, AreaRollupService rollup) =>
+        app.MapGet("/api/estimates/{id:int}/areas-rollup", async (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AreaRollupService rollup) =>
         {
+            // Project access (hides existence) then the same `projects` View gate the
+            // area reads enforce — the roll-up exposes per-area cost figures, so a
+            // teammate without View must not read it.
             if (!await access.CanAccessEstimateAsync(me, id)) return NotFound();
+            if (!await perm.CanAsync(me, Mod, ModuleAction.View)) return Forbid(Mod, "View");
             var result = await rollup.ComputeAsync(id);
             return result is null ? NotFound() : Results.Ok(result);
         }).RequireAuthorization();

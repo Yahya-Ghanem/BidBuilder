@@ -1,8 +1,13 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using BidBuilder.Api.Data;
+using BidBuilder.Api.Models;
+using BidBuilder.Api.Tenancy;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Npgsql;
 using Xunit;
@@ -88,14 +93,51 @@ public sealed class ApiFixture : IAsyncLifetime
     }
 
     /// <summary>A client authenticated as the seeded tenant admin.</summary>
-    public async Task<HttpClient> AdminClientAsync()
+    public Task<HttpClient> AdminClientAsync() => AuthedClientAsync("admin@bidbuilder.local", "Admin@12345");
+
+    /// <summary>Log in as an arbitrary existing user (default tenant unless overridden)
+    /// and return a Bearer-authenticated client.</summary>
+    public async Task<HttpClient> AuthedClientAsync(string email, string password, string tenantSlug = "default")
     {
-        var c = Client();
-        var resp = await c.PostAsJsonAsync("/api/auth/login", new { email = "admin@bidbuilder.local", password = "Admin@12345" });
+        var c = _factory.CreateClient();
+        c.DefaultRequestHeaders.Add("X-Tenant-Id", tenantSlug);
+        var resp = await c.PostAsJsonAsync("/api/auth/login", new { email, password });
         resp.EnsureSuccessStatusCode();
         var body = await resp.Content.ReadFromJsonAsync<LoginResponse>();
         c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", body!.Token);
         return c;
+    }
+
+    /// <summary>
+    /// Seed a SECOND tenant (idempotently) with its own TenantAdmin and return a client
+    /// logged in as that admin. There's no tenant-provisioning endpoint, so this writes
+    /// the Tenant + admin User directly via a DI scope. Tenant/User aren't IHasTenant, so
+    /// the SaveChanges auto-stamp doesn't fire; the tenant context is resolved before the
+    /// User insert so its TenantId is set explicitly. Used to prove cross-tenant isolation.
+    /// </summary>
+    public async Task<HttpClient> SecondTenantAdminClientAsync(
+        string slug = "tenant2", string email = "admin@tenant2.local", string password = "Admin@12345")
+    {
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            if (await db.Tenants.FirstOrDefaultAsync(x => x.Slug == slug) is null)
+            {
+                var t = new Tenant { Id = Guid.NewGuid(), Slug = slug, Name = "Second Tenant", DefaultLocale = "en" };
+                db.Tenants.Add(t);
+                await db.SaveChangesAsync();
+                // Resolve the tenant so this scope's context targets it for any further writes.
+                scope.ServiceProvider.GetRequiredService<ITenantContext>().Set(t.Id, t.Slug);
+                db.Users.Add(new User
+                {
+                    TenantId = t.Id, Email = email, Name = "T2 Admin",
+                    Role = UserRole.TenantAdmin, IsActive = true,
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
+                });
+                await db.SaveChangesAsync();
+            }
+        }
+        return await AuthedClientAsync(email, password, slug);
     }
 
     private sealed record LoginResponse(string Token);
