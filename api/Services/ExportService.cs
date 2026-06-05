@@ -20,15 +20,44 @@ public record ExportModel(
 /// </summary>
 public class ExportService
 {
+    // ── Workbook palette ─────────────────────────────────────────────────────
+    // A small, consistent theme so every sheet reads as one branded document.
+    private static readonly XLColor Brand       = XLColor.FromArgb(0x0F, 0x76, 0x6E); // teal-700 — headers / accents
+    private static readonly XLColor BrandDark   = XLColor.FromArgb(0x13, 0x4E, 0x4A); // teal-900 — total figures
+    private static readonly XLColor GroupFill   = XLColor.FromArgb(0xCC, 0xFB, 0xF1); // teal-100 — section / top-level rows
+    private static readonly XLColor BandFill    = XLColor.FromArgb(0xF1, 0xF5, 0xF9); // slate-100 — zebra stripe
+    private static readonly XLColor BorderColor = XLColor.FromArgb(0x94, 0xA3, 0xB8); // slate-400 — table outline
+    private static readonly XLColor BorderLight = XLColor.FromArgb(0xE2, 0xE8, 0xF0); // slate-200 — inner gridlines
+    private static readonly XLColor MatColor    = XLColor.FromArgb(0xF5, 0x9E, 0x0B); // amber-500 — material bars
+    private static readonly XLColor ManColor    = XLColor.FromArgb(0x3B, 0x82, 0xF6); // blue-500  — manpower bars
+
+    /// <summary>Brand-fill a header row range (bold white on teal, centred).</summary>
+    private static void StyleHeader(IXLRange r)
+    {
+        r.Style.Font.SetBold().Font.SetFontColor(XLColor.White);
+        r.Style.Fill.SetBackgroundColor(Brand);
+        r.Style.Alignment.SetVertical(XLAlignmentVerticalValues.Center);
+    }
+
+    /// <summary>Thin outline + hairline inner gridlines around a table range.</summary>
+    private static void Box(IXLRange r)
+    {
+        r.Style.Border.SetOutsideBorder(XLBorderStyleValues.Thin);
+        r.Style.Border.SetOutsideBorderColor(BorderColor);
+        r.Style.Border.SetInsideBorder(XLBorderStyleValues.Hair);
+        r.Style.Border.SetInsideBorderColor(BorderLight);
+    }
+
     // ── Excel ──────────────────────────────────────────────────────────────
     public byte[] BuildExcel(ExportModel m)
     {
         var e = m.Estimate;
         using var wb = new XLWorkbook();
 
-        // Summary sheet
+        // ── Summary sheet ───────────────────────────────────────────────────
         var sum = wb.AddWorksheet("Bid Summary");
-        sum.Cell("A1").Value = m.CompanyName; sum.Cell("A1").Style.Font.SetBold().Font.FontSize = 16;
+        sum.Cell("A1").Value = m.CompanyName;
+        sum.Cell("A1").Style.Font.SetBold().Font.SetFontSize(16).Font.SetFontColor(Brand);
 
         if (m.LogoBytes is { Length: > 0 })
         {
@@ -45,12 +74,17 @@ public class ExportService
         if (!string.IsNullOrWhiteSpace(m.CompanyAddress)) { sum.Cell(h, 1).Value = m.CompanyAddress; sum.Cell(h, 1).Style.Font.FontColor = XLColor.Gray; h++; }
         if (!string.IsNullOrWhiteSpace(m.CompanyContact)) { sum.Cell(h, 1).Value = m.CompanyContact; sum.Cell(h, 1).Style.Font.FontColor = XLColor.Gray; h++; }
         h++; // spacer row
-        sum.Cell(h++, 1).Value = $"Bid Summary — {m.ProjectCode}";
+        sum.Cell(h, 1).Value = $"Bid Summary — {m.ProjectCode}";
+        sum.Cell(h, 1).Style.Font.SetBold().Font.SetFontSize(12).Font.SetFontColor(BrandDark); h++;
         sum.Cell(h, 1).Value = m.ProjectName; sum.Cell(h, 1).Style.Font.SetBold(); h++;
-        sum.Cell(h++, 1).Value = $"Client: {m.Client ?? "—"}    Location: {m.Location ?? "—"}";
-        sum.Cell(h++, 1).Value = $"Generated: {m.GeneratedOn}    Currency: {e.Currency}";
+        sum.Cell(h, 1).Value = $"Client: {m.Client ?? "—"}    Location: {m.Location ?? "—"}"; sum.Cell(h, 1).Style.Font.FontColor = XLColor.Gray; h++;
+        sum.Cell(h, 1).Value = $"Generated: {m.GeneratedOn}    Currency: {e.Currency}"; sum.Cell(h, 1).Style.Font.FontColor = XLColor.Gray; h++;
 
         int r = h + 1;
+        sum.Cell(r, 1).Value = "Component"; sum.Cell(r, 2).Value = $"Amount ({e.Currency})";
+        StyleHeader(sum.Range(r, 1, r, 2));
+        sum.Cell(r, 2).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
+        int sumHead = r; r++;
         void Line(string label, decimal value, bool bold = false)
         {
             sum.Cell(r, 1).Value = label;
@@ -61,7 +95,13 @@ public class ExportService
         Line("Direct cost", e.DirectCost);
         Line("Indirect (preliminaries)", e.IndirectCost);
         Line("Markups", e.MarkupCost);
-        Line("BID PRICE", e.BidPrice, bold: true);
+        // BID PRICE — the headline figure, reversed out on the brand colour.
+        sum.Cell(r, 1).Value = "BID PRICE";
+        sum.Cell(r, 2).Value = e.BidPrice; sum.Cell(r, 2).Style.NumberFormat.Format = "#,##0.00";
+        var bidRange = sum.Range(r, 1, r, 2);
+        bidRange.Style.Font.SetBold().Font.SetFontColor(XLColor.White).Font.SetFontSize(12);
+        bidRange.Style.Fill.SetBackgroundColor(Brand);
+        int sumLast = r; r++;
         if (e.Fx is not null)
         {
             sum.Cell(r, 1).Value = $"≈ in {e.Fx.SecondaryCurrency}  (1 {e.Currency} = {e.Fx.Rate:#,##0.######} {e.Fx.SecondaryCurrency}{(e.Fx.Frozen ? ", frozen" : "")})";
@@ -69,34 +109,42 @@ public class ExportService
             sum.Cell(r, 2).Value = e.Fx.ConvertedBidPrice;
             sum.Cell(r, 2).Style.NumberFormat.Format = "#,##0.00";
             sum.Cell(r, 2).Style.Font.SetItalic().Font.FontColor = XLColor.Gray;
-            r++;
+            sumLast = r; r++;
         }
+        Box(sum.Range(sumHead, 1, sumLast, 2));
         sum.Columns().AdjustToContents();
+        sum.Column(2).Width = Math.Max(sum.Column(2).Width, 18);
 
-        // Priced BOQ sheet
+        // ── Priced BOQ sheet ────────────────────────────────────────────────
         var boq = wb.AddWorksheet("Priced BOQ");
-        var head = boq.Row(1);
         boq.Cell(1, 1).Value = "Code"; boq.Cell(1, 2).Value = "Description"; boq.Cell(1, 3).Value = "Unit";
-        boq.Cell(1, 4).Value = "Qty"; boq.Cell(1, 5).Value = "Rate"; boq.Cell(1, 6).Value = "Total";
-        head.Style.Font.SetBold().Fill.SetBackgroundColor(XLColor.LightGray);
+        boq.Cell(1, 4).Value = "Qty"; boq.Cell(1, 5).Value = $"Rate ({e.Currency})"; boq.Cell(1, 6).Value = $"Total ({e.Currency})";
+        StyleHeader(boq.Range(1, 1, 1, 6));
+        boq.Range(1, 4, 1, 6).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
 
         int row = 2;
         foreach (var s in e.Sections)
         {
             boq.Cell(row, 1).Value = s.Code;
-            boq.Cell(row, 2).Value = s.Title; boq.Range(row, 2, row, 5).Style.Font.SetBold();
+            boq.Cell(row, 2).Value = s.Title;
             boq.Cell(row, 6).Value = s.SectionTotal; boq.Cell(row, 6).Style.NumberFormat.Format = "#,##0.00";
-            boq.Row(row).Style.Fill.SetBackgroundColor(XLColor.FromArgb(0xF1, 0xF5, 0xF9));
-            boq.Cell(row, 6).Style.Font.SetBold();
+            var secRange = boq.Range(row, 1, row, 6);
+            secRange.Style.Font.SetBold();
+            secRange.Style.Fill.SetBackgroundColor(GroupFill);
+            boq.Cell(row, 6).Style.Font.SetFontColor(BrandDark);
             row++;
+            bool band = false;
             foreach (var i in s.Items)
             {
+                var fill = band ? BandFill : XLColor.White;
                 boq.Cell(row, 1).Value = i.ItemCode;
                 boq.Cell(row, 2).Value = i.Description;
                 boq.Cell(row, 3).Value = i.Unit;
                 boq.Cell(row, 4).Value = i.Quantity; boq.Cell(row, 4).Style.NumberFormat.Format = "#,##0.####";
                 boq.Cell(row, 5).Value = i.UnitRate;  boq.Cell(row, 5).Style.NumberFormat.Format = "#,##0.00";
                 boq.Cell(row, 6).Value = i.LineTotal; boq.Cell(row, 6).Style.NumberFormat.Format = "#,##0.00";
+                boq.Cell(row, 6).Style.Font.SetFontColor(BrandDark);
+                boq.Range(row, 1, row, 6).Style.Fill.SetBackgroundColor(fill);
                 row++;
                 // Unit-rate build-up detail (Material/Labor/… + Waste%/Overheads%).
                 foreach (var comp in i.Components)
@@ -106,44 +154,20 @@ public class ExportService
                         : "";
                     boq.Cell(row, 2).Value = $"    • {comp.Name}{detail}";
                     boq.Cell(row, 5).Value = comp.Amount; boq.Cell(row, 5).Style.NumberFormat.Format = "#,##0.00";
+                    boq.Range(row, 1, row, 6).Style.Fill.SetBackgroundColor(fill);
                     boq.Row(row).Style.Font.SetItalic().Font.FontColor = XLColor.Gray;
                     row++;
                 }
+                band = !band;
             }
         }
+        if (row > 2) Box(boq.Range(1, 1, row - 1, 6));
+        boq.SheetView.FreezeRows(1);
         boq.Columns().AdjustToContents();
 
-        // Cost-by-Area sheet (line totals escalated up the area tree)
+        // ── Cost-by-Area sheet (line totals escalated up the area tree) ───────
         if (m.AreaRollup is { Areas.Count: > 0 })
-        {
-            var ar = wb.AddWorksheet("Cost by Area");
-            ar.Cell(1, 1).Value = "Area"; ar.Cell(1, 2).Value = "Level"; ar.Cell(1, 3).Value = "Items";
-            ar.Cell(1, 4).Value = "Total"; ar.Cell(1, 5).Value = "Measure"; ar.Cell(1, 6).Value = "Cost / unit";
-            ar.Row(1).Style.Font.SetBold().Fill.SetBackgroundColor(XLColor.LightGray);
-            int ai = 2;
-            foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas))
-            {
-                ar.Cell(ai, 1).Value = new string(' ', depth * 4) + node.Name;
-                ar.Cell(ai, 2).Value = node.Kind;
-                ar.Cell(ai, 3).Value = node.ItemCount;
-                ar.Cell(ai, 4).Value = node.RollupTotal; ar.Cell(ai, 4).Style.NumberFormat.Format = "#,##0.00";
-                if (node.Quantity > 0)
-                {
-                    ar.Cell(ai, 5).Value = $"{node.Quantity:0.####} {node.Unit}".Trim();
-                    if (node.CostPerUnit is decimal cpu) { ar.Cell(ai, 6).Value = cpu; ar.Cell(ai, 6).Style.NumberFormat.Format = "#,##0.00"; }
-                }
-                ai++;
-            }
-            ar.Cell(ai, 1).Value = "Assigned to areas"; ar.Cell(ai, 1).Style.Font.SetBold();
-            ar.Cell(ai, 4).Value = m.AreaRollup.AssignedTotal; ar.Cell(ai, 4).Style.NumberFormat.Format = "#,##0.00"; ar.Cell(ai, 4).Style.Font.SetBold();
-            ai++;
-            if (m.AreaRollup.UnassignedTotal > 0)
-            {
-                ar.Cell(ai, 1).Value = "Unassigned";
-                ar.Cell(ai, 4).Value = m.AreaRollup.UnassignedTotal; ar.Cell(ai, 4).Style.NumberFormat.Format = "#,##0.00";
-            }
-            ar.Columns().AdjustToContents();
-        }
+            RenderCostByArea(wb.AddWorksheet("Cost by Area"), m, 1);
 
         using var ms = new MemoryStream();
         wb.SaveAs(ms);
@@ -323,31 +347,61 @@ public class ExportService
     // ── Activities by unit (standalone) ─────────────────────────────────────
     public byte[] BuildActivitiesExcel(ExportModel m)
     {
+        using var wb = new XLWorkbook();
+        var ws = wb.AddWorksheet("Activities by Unit");
+        var r = ExcelHeader(ws, m, "Activities by Unit");
+        RenderActivities(ws, m, r);
+        using var ms = new MemoryStream(); wb.SaveAs(ms); return ms.ToArray();
+    }
+
+    /// <summary>
+    /// Writes the Area → activities table (Material / Manpower / Total) starting at
+    /// <paramref name="r"/>: brand header, shaded area rows, zebra-striped activities,
+    /// and colour-coded data bars so material vs manpower magnitudes read at a glance.
+    /// </summary>
+    private static void RenderActivities(IXLWorksheet ws, ExportModel m, int r)
+    {
         var e = m.Estimate;
         var items = e.Sections.SelectMany(s => s.Items).Where(i => i.AreaId != null).ToList();
         decimal Comp(ItemBreakdown i, string code) => i.Components.FirstOrDefault(c => c.Code == code)?.Amount ?? 0;
 
-        using var wb = new XLWorkbook();
-        var ws = wb.AddWorksheet("Activities by Unit");
-        var r = ExcelHeader(ws, m, "Activities by Unit");
-        ws.Cell(r, 1).Value = "Area / Activity"; ws.Cell(r, 2).Value = "Material"; ws.Cell(r, 3).Value = "Manpower"; ws.Cell(r, 4).Value = "Total";
-        ws.Row(r).Style.Font.SetBold().Fill.SetBackgroundColor(XLColor.LightGray); r++;
+        ws.Cell(r, 1).Value = "Area / Activity"; ws.Cell(r, 2).Value = $"Material ({e.Currency})";
+        ws.Cell(r, 3).Value = $"Manpower ({e.Currency})"; ws.Cell(r, 4).Value = $"Total ({e.Currency})";
+        StyleHeader(ws.Range(r, 1, r, 4));
+        ws.Range(r, 2, r, 4).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
+        int header = r; r++;
+        int firstData = r;
         if (m.AreaRollup is { Areas.Count: > 0 })
             foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas))
             {
                 ws.Cell(r, 1).Value = new string(' ', depth * 4) + node.Name + "  (" + node.Kind + ")";
-                ws.Cell(r, 1).Style.Font.SetBold(); r++;
+                var gr = ws.Range(r, 1, r, 4);
+                gr.Style.Font.SetBold(); gr.Style.Fill.SetBackgroundColor(GroupFill);
+                ws.Cell(r, 1).Style.Font.SetFontColor(BrandDark);
+                r++;
+                bool band = false;
                 foreach (var i in items.Where(x => x.AreaId == node.Id))
                 {
                     ws.Cell(r, 1).Value = new string(' ', depth * 4 + 4) + i.Description;
                     ws.Cell(r, 2).Value = Comp(i, "MAT"); ws.Cell(r, 2).Style.NumberFormat.Format = "#,##0.00";
                     ws.Cell(r, 3).Value = Comp(i, "LAB"); ws.Cell(r, 3).Style.NumberFormat.Format = "#,##0.00";
                     ws.Cell(r, 4).Value = i.LineTotal;    ws.Cell(r, 4).Style.NumberFormat.Format = "#,##0.00";
+                    ws.Cell(r, 4).Style.Font.SetFontColor(BrandDark);
+                    if (band) ws.Range(r, 1, r, 4).Style.Fill.SetBackgroundColor(BandFill);
+                    band = !band;
                     r++;
                 }
             }
+        int lastData = r - 1;
+        if (lastData >= firstData)
+        {
+            ws.Range(firstData, 2, lastData, 2).AddConditionalFormat().DataBar(MatColor).LowestValue().HighestValue();
+            ws.Range(firstData, 3, lastData, 3).AddConditionalFormat().DataBar(ManColor).LowestValue().HighestValue();
+            ws.Range(firstData, 4, lastData, 4).AddConditionalFormat().DataBar(Brand).LowestValue().HighestValue();
+            Box(ws.Range(header, 1, lastData, 4));
+        }
+        ws.SheetView.FreezeRows(header);
         ws.Columns().AdjustToContents();
-        using var ms = new MemoryStream(); wb.SaveAs(ms); return ms.ToArray();
     }
 
     public byte[] BuildActivitiesCsv(ExportModel m)
@@ -414,9 +468,25 @@ public class ExportService
         using var wb = new XLWorkbook();
         var ws = wb.AddWorksheet("Cost by Area");
         var r = ExcelHeader(ws, m, "Cost by Area");
+        RenderCostByArea(ws, m, r);
+        using var ms = new MemoryStream(); wb.SaveAs(ms); return ms.ToArray();
+    }
+
+    /// <summary>
+    /// Writes the area roll-up table starting at <paramref name="r"/>: brand header,
+    /// top-level areas shaded, nested levels zebra-striped, a teal data bar on the
+    /// Total column, and a highlighted "Assigned to areas" total row.
+    /// </summary>
+    private static void RenderCostByArea(IXLWorksheet ws, ExportModel m, int r)
+    {
+        var e = m.Estimate;
         ws.Cell(r, 1).Value = "Area"; ws.Cell(r, 2).Value = "Level"; ws.Cell(r, 3).Value = "Items";
-        ws.Cell(r, 4).Value = "Total"; ws.Cell(r, 5).Value = "Measure"; ws.Cell(r, 6).Value = "Cost / unit";
-        ws.Row(r).Style.Font.SetBold().Fill.SetBackgroundColor(XLColor.LightGray); r++;
+        ws.Cell(r, 4).Value = $"Total ({e.Currency})"; ws.Cell(r, 5).Value = "Measure"; ws.Cell(r, 6).Value = "Cost / unit";
+        StyleHeader(ws.Range(r, 1, r, 6));
+        ws.Range(r, 3, r, 4).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
+        ws.Cell(r, 6).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
+        int header = r; r++;
+        int firstData = r, lastData = r - 1;
         var rollup = m.AreaRollup;
         if (rollup is { Areas.Count: > 0 })
         {
@@ -426,23 +496,37 @@ public class ExportService
                 ws.Cell(r, 2).Value = node.Kind;
                 ws.Cell(r, 3).Value = node.ItemCount;
                 ws.Cell(r, 4).Value = node.RollupTotal; ws.Cell(r, 4).Style.NumberFormat.Format = "#,##0.00";
+                ws.Cell(r, 4).Style.Font.SetFontColor(BrandDark);
                 if (node.Quantity > 0)
                 {
                     ws.Cell(r, 5).Value = $"{node.Quantity:0.####} {node.Unit}".Trim();
                     if (node.CostPerUnit is decimal cpu) { ws.Cell(r, 6).Value = cpu; ws.Cell(r, 6).Style.NumberFormat.Format = "#,##0.00"; }
                 }
+                if (depth == 0) { ws.Range(r, 1, r, 6).Style.Font.SetBold(); ws.Range(r, 1, r, 6).Style.Fill.SetBackgroundColor(GroupFill); }
+                else if (depth % 2 == 1) ws.Range(r, 1, r, 6).Style.Fill.SetBackgroundColor(BandFill);
                 r++;
             }
-            ws.Cell(r, 1).Value = "Assigned to areas"; ws.Cell(r, 1).Style.Font.SetBold();
-            ws.Cell(r, 4).Value = rollup.AssignedTotal; ws.Cell(r, 4).Style.NumberFormat.Format = "#,##0.00"; ws.Cell(r, 4).Style.Font.SetBold(); r++;
+            lastData = r - 1;
+
+            ws.Cell(r, 1).Value = "Assigned to areas";
+            ws.Cell(r, 4).Value = rollup.AssignedTotal; ws.Cell(r, 4).Style.NumberFormat.Format = "#,##0.00";
+            var ta = ws.Range(r, 1, r, 6);
+            ta.Style.Font.SetBold().Font.SetFontColor(XLColor.White);
+            ta.Style.Fill.SetBackgroundColor(Brand);
+            r++;
             if (rollup.UnassignedTotal > 0)
             {
                 ws.Cell(r, 1).Value = "Unassigned";
-                ws.Cell(r, 4).Value = rollup.UnassignedTotal; ws.Cell(r, 4).Style.NumberFormat.Format = "#,##0.00"; r++;
+                ws.Cell(r, 4).Value = rollup.UnassignedTotal; ws.Cell(r, 4).Style.NumberFormat.Format = "#,##0.00";
+                ws.Range(r, 1, r, 6).Style.Font.SetItalic().Font.SetFontColor(XLColor.Gray);
+                r++;
             }
+            if (lastData >= firstData)
+                ws.Range(firstData, 4, lastData, 4).AddConditionalFormat().DataBar(Brand).LowestValue().HighestValue();
+            Box(ws.Range(header, 1, r - 1, 6));
         }
+        ws.SheetView.FreezeRows(header);
         ws.Columns().AdjustToContents();
-        using var ms = new MemoryStream(); wb.SaveAs(ms); return ms.ToArray();
     }
 
     public byte[] BuildCostByAreaCsv(ExportModel m)
@@ -497,12 +581,14 @@ public class ExportService
     /// <summary>Compact document header (company + project + title) for a standalone Excel sheet.</summary>
     private static int ExcelHeader(IXLWorksheet ws, ExportModel m, string title)
     {
-        ws.Cell("A1").Value = m.CompanyName; ws.Cell("A1").Style.Font.SetBold().Font.FontSize = 14;
+        ws.Cell("A1").Value = m.CompanyName;
+        ws.Cell("A1").Style.Font.SetBold().Font.SetFontSize(15).Font.SetFontColor(Brand);
         int h = 2;
-        ws.Cell(h++, 1).Value = $"{title} — {m.ProjectCode}";
+        ws.Cell(h, 1).Value = $"{title} — {m.ProjectCode}";
+        ws.Cell(h, 1).Style.Font.SetBold().Font.SetFontSize(11).Font.SetFontColor(BrandDark); h++;
         ws.Cell(h, 1).Value = m.ProjectName; ws.Cell(h, 1).Style.Font.SetBold(); h++;
-        ws.Cell(h++, 1).Value = $"Client: {m.Client ?? "—"}    Location: {m.Location ?? "—"}";
-        ws.Cell(h++, 1).Value = $"Generated: {m.GeneratedOn}    Currency: {m.Estimate.Currency}";
+        ws.Cell(h, 1).Value = $"Client: {m.Client ?? "—"}    Location: {m.Location ?? "—"}"; ws.Cell(h, 1).Style.Font.FontColor = XLColor.Gray; h++;
+        ws.Cell(h, 1).Value = $"Generated: {m.GeneratedOn}    Currency: {m.Estimate.Currency}"; ws.Cell(h, 1).Style.Font.FontColor = XLColor.Gray; h++;
         return h + 1; // leave a spacer row before the table
     }
 
