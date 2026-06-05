@@ -25,6 +25,8 @@ export interface Project {
   tenderDueAt: string | null
   teamCount: number
   estimateCount: number
+  projectTypeId: number | null
+  projectTypeName: string | null
 }
 
 export interface ModulePermission {
@@ -121,6 +123,9 @@ export interface CostComponentType {
   id: number; code: string; name: string; calcKind: string; sortOrder: number; isActive: boolean; builtin: boolean
 }
 export interface ActivityType {
+  id: number; name: string; sortOrder: number; isActive: boolean; builtin: boolean
+}
+export interface ProjectType {
   id: number; name: string; sortOrder: number; isActive: boolean; builtin: boolean
 }
 export interface SectionBreakdown {

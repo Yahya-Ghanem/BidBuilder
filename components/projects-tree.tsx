@@ -10,9 +10,9 @@ import {
 import { toast } from "sonner"
 import { fetchApi } from "@/lib/api"
 import { usePermissions } from "@/lib/permissions"
-import type { Project, EstimateSummary, EstimateBreakdown, Area, AreaRollup } from "@/lib/types"
+import type { Project, EstimateSummary, EstimateBreakdown, Area, AreaRollup, ProjectType } from "@/lib/types"
 import { Button, Input, Card } from "@/components/ui"
-import { Modal, Field } from "@/components/form"
+import { Modal, Field, Select } from "@/components/form"
 
 /* ── Selection context (shared between the sidebar tree and the detail pane) ── */
 
@@ -101,7 +101,7 @@ function ProjectBranch({ project, depth }: { project: Project; depth: number }) 
     <div>
       <Row depth={depth} open={open} hasChildren={has}
         icon={open && has ? <FolderOpen className="h-3.5 w-3.5" /> : <Folder className="h-3.5 w-3.5" />}
-        label={project.name} hint={project.code}
+        label={project.name} hint={`${project.code}${project.projectTypeName ? ` · ${project.projectTypeName}` : ""}`}
         onToggle={has ? () => setOpen((o) => !o) : undefined} />
       {open && has && <EstimatesBranch projectId={project.id} projectName={project.name} depth={depth + 1} />}
     </div>
@@ -440,29 +440,40 @@ function MarkupsView({ estimateId }: { estimateId: number }) {
 
 function NewProjectModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const qc = useQueryClient()
-  const [form, setForm] = useState({ name: "", clientName: "", location: "", currency: "AED", durationMonths: "" })
+  const { data: projectTypes } = useQuery({ queryKey: ["project-types"], queryFn: () => fetchApi<ProjectType[]>("/api/project-types") })
+  const activeTypes = (projectTypes ?? []).filter((t) => t.isActive)
+  const [form, setForm] = useState({ name: "", clientName: "", location: "", currency: "AED", durationMonths: "", projectTypeId: "" })
   const mut = useMutation({
     mutationFn: () => fetchApi<Project>("/api/projects", {
       method: "POST",
       body: JSON.stringify({
         name: form.name, clientName: form.clientName || null, location: form.location || null,
         currency: form.currency, durationMonths: form.durationMonths ? Number(form.durationMonths) : null,
+        projectTypeId: form.projectTypeId ? Number(form.projectTypeId) : null,
       }),
     }),
     onSuccess: (p) => {
       toast.success(`Project ${p.code} created`)
       qc.invalidateQueries({ queryKey: ["projects"] })
-      setForm({ name: "", clientName: "", location: "", currency: "AED", durationMonths: "" })
+      setForm({ name: "", clientName: "", location: "", currency: "AED", durationMonths: "", projectTypeId: "" })
       onClose()
     },
     onError: (e) => toast.error((e as Error).message),
   })
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value })
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value })
   return (
     <Modal open={open} onClose={onClose} title="New project">
       <form id="new-project" onSubmit={(e) => { e.preventDefault(); mut.mutate() }} className="space-y-3">
         <Field label="Name *"><Input value={form.name} onChange={set("name")} required /></Field>
-        <Field label="Client"><Input value={form.clientName} onChange={set("clientName")} /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Client"><Input value={form.clientName} onChange={set("clientName")} /></Field>
+          <Field label="Project type">
+            <Select value={form.projectTypeId} onChange={set("projectTypeId")}>
+              <option value="">— none —</option>
+              {activeTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </Select>
+          </Field>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Location"><Input value={form.location} onChange={set("location")} /></Field>
           <Field label="Currency"><Input value={form.currency} onChange={set("currency")} /></Field>

@@ -15,6 +15,7 @@ public class Project : IHasTenant
     public string?       Location    { get; set; }
     public string        Currency    { get; set; } = "AED"; // ISO-4217
     public ProjectStatus Status      { get; set; } = ProjectStatus.Draft;
+    public int?          ProjectTypeId { get; set; }         // → ProjectType catalog (nullable)
 
     public DateTime?     TenderDueAt { get; set; }
     public int?          DurationMonths { get; set; }       // drives time-related prelims

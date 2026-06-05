@@ -10,15 +10,15 @@ namespace BidBuilder.Api.Endpoints;
 public record ProjectDto(
     int Id, string Code, string Name, string? ClientName, string? Location,
     string Currency, string Status, int? DurationMonths, DateTime? TenderDueAt,
-    int TeamCount, int EstimateCount);
+    int TeamCount, int EstimateCount, int? ProjectTypeId, string? ProjectTypeName);
 
 public record CreateProjectRequest(
     string Name, string? Code, string? ClientName, string? Location,
-    string? Currency, int? DurationMonths, DateTime? TenderDueAt);
+    string? Currency, int? DurationMonths, DateTime? TenderDueAt, int? ProjectTypeId);
 
 public record UpdateProjectRequest(
     string Name, string? ClientName, string? Location,
-    string? Currency, int? DurationMonths, DateTime? TenderDueAt, string? Status);
+    string? Currency, int? DurationMonths, DateTime? TenderDueAt, string? Status, int? ProjectTypeId);
 
 public record AssignTeamRequest(int GroupId, bool IsLead);
 public record ProjectTeamDto(int GroupId, string GroupCode, string GroupName, bool IsLead);
@@ -39,7 +39,8 @@ public static class ProjectEndpoints
                 .Select(p => new ProjectDto(
                     p.Id, p.Code, p.Name, p.ClientName, p.Location, p.Currency,
                     p.Status.ToString(), p.DurationMonths, p.TenderDueAt,
-                    p.ProjectTeams.Count, p.Estimates.Count))
+                    p.ProjectTeams.Count, p.Estimates.Count, p.ProjectTypeId,
+                    db.ProjectTypes.Where(t => t.Id == p.ProjectTypeId).Select(t => t.Name).FirstOrDefault()))
                 .ToListAsync();
             return Results.Ok(list);
         });
@@ -53,7 +54,8 @@ public static class ProjectEndpoints
                 .Select(p => new ProjectDto(
                     p.Id, p.Code, p.Name, p.ClientName, p.Location, p.Currency,
                     p.Status.ToString(), p.DurationMonths, p.TenderDueAt,
-                    p.ProjectTeams.Count, p.Estimates.Count))
+                    p.ProjectTeams.Count, p.Estimates.Count, p.ProjectTypeId,
+                    db.ProjectTypes.Where(t => t.Id == p.ProjectTypeId).Select(t => t.Name).FirstOrDefault()))
                 .FirstOrDefaultAsync();
             return dto is null
                 ? Results.NotFound(new { error = "Project not found or not accessible" })
@@ -75,6 +77,9 @@ public static class ProjectEndpoints
             if (await db.Projects.AnyAsync(p => p.Code == code))
                 return Results.Conflict(new { error = $"Project code '{code}' already exists" });
 
+            if (req.ProjectTypeId is int tid && !await db.ProjectTypes.AnyAsync(t => t.Id == tid))
+                return Results.BadRequest(new { error = "Unknown project type" });
+
             var project = new Project
             {
                 Code = code,
@@ -84,16 +89,18 @@ public static class ProjectEndpoints
                 Currency = string.IsNullOrWhiteSpace(req.Currency) ? "AED" : req.Currency!.Trim(),
                 DurationMonths = req.DurationMonths,
                 TenderDueAt = req.TenderDueAt,
+                ProjectTypeId = req.ProjectTypeId,
                 Status = ProjectStatus.Draft,
             };
             db.Projects.Add(project);
             await db.SaveChangesAsync();
             await audit.LogAsync(me, "project.create", "Project", project.Code, project.Name);
 
+            var typeName = await TypeName(db, project.ProjectTypeId);
             return Results.Created($"/api/projects/{project.Id}", new ProjectDto(
                 project.Id, project.Code, project.Name, project.ClientName, project.Location,
                 project.Currency, project.Status.ToString(), project.DurationMonths,
-                project.TenderDueAt, 0, 0));
+                project.TenderDueAt, 0, 0, project.ProjectTypeId, typeName));
         });
 
         // PUT /api/projects/{id} — edit project details (TenantAdmin only). Changing
@@ -109,6 +116,9 @@ public static class ProjectEndpoints
             var p = await db.Projects.FirstOrDefaultAsync(x => x.Id == id);
             if (p is null) return Results.NotFound(new { error = "Project not found" });
 
+            if (req.ProjectTypeId is int tid && !await db.ProjectTypes.AnyAsync(t => t.Id == tid))
+                return Results.BadRequest(new { error = "Unknown project type" });
+
             var durationChanged = p.DurationMonths != req.DurationMonths;
 
             p.Name = req.Name.Trim();
@@ -117,6 +127,7 @@ public static class ProjectEndpoints
             if (!string.IsNullOrWhiteSpace(req.Currency)) p.Currency = req.Currency.Trim();
             p.DurationMonths = req.DurationMonths;
             p.TenderDueAt = req.TenderDueAt;
+            p.ProjectTypeId = req.ProjectTypeId;
             if (!string.IsNullOrWhiteSpace(req.Status))
             {
                 if (!Enum.TryParse<ProjectStatus>(req.Status, true, out var st))
@@ -139,7 +150,8 @@ public static class ProjectEndpoints
                 p.Id, p.Code, p.Name, p.ClientName, p.Location, p.Currency, p.Status.ToString(),
                 p.DurationMonths, p.TenderDueAt,
                 await db.ProjectTeams.CountAsync(t => t.ProjectId == id),
-                await db.Estimates.CountAsync(e => e.ProjectId == id)));
+                await db.Estimates.CountAsync(e => e.ProjectId == id),
+                p.ProjectTypeId, await TypeName(db, p.ProjectTypeId)));
         });
 
         // GET /api/projects/groups — all teams in the tenant, for the assignment
@@ -214,4 +226,7 @@ public static class ProjectEndpoints
         var count = await db.Projects.CountAsync(p => p.Code.StartsWith(prefix));
         return $"{prefix}{(count + 1):D3}";
     }
+
+    private static async Task<string?> TypeName(AppDbContext db, int? typeId) =>
+        typeId is int id ? await db.ProjectTypes.Where(t => t.Id == id).Select(t => t.Name).FirstOrDefaultAsync() : null;
 }
