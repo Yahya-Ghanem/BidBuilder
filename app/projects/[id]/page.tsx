@@ -358,7 +358,7 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
   const assemblies = useQuery({ queryKey: ["assemblies"], queryFn: () => fetchApi<AssemblyRow[]>("/api/assemblies") })
   const costTypes = useQuery({ queryKey: ["cost-types"], queryFn: () => fetchApi<CostComponentType[]>("/api/cost-components") })
   const areas = useQuery({ queryKey: ["areas", data?.projectId], queryFn: () => fetchApi<Area[]>(`/api/projects/${data!.projectId}/areas`), enabled: data?.projectId != null })
-  const boqCollapse = useCollapse()
+  const boqCollapse = useCollapse(data?.sections.map((s) => s.id) ?? [], true)
 
   // Every estimate mutation returns the recomputed breakdown — push it into cache.
   const apply = (d: EstimateBreakdown) => qc.setQueryData(key, d)
@@ -931,9 +931,19 @@ function ExpandCollapseAll({ onExpand, onCollapse }: { onExpand: () => void; onC
   )
 }
 
-/** Hook: a set of collapsed node ids + toggle/expand-all/collapse-all helpers. */
-function useCollapse() {
+/** Hook: a set of collapsed node ids + toggle/expand-all/collapse-all helpers.
+ *  Pass startCollapsed to begin fully collapsed once `collapsibleIds` first
+ *  arrive (data loads async) — keeps large trees light on initial render. */
+function useCollapse(collapsibleIds: Iterable<number> = [], startCollapsed = false) {
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set())
+  const seeded = useRef(false)
+  useEffect(() => {
+    if (!startCollapsed || seeded.current) return
+    const arr = Array.from(collapsibleIds)
+    if (arr.length === 0) return
+    seeded.current = true
+    setCollapsed(new Set(arr))
+  })
   const toggle = (id: number) => setCollapsed((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   const isOpen = (id: number) => !collapsed.has(id)
   const collapseAll = (ids: Iterable<number>) => setCollapsed(new Set(ids))
@@ -953,8 +963,8 @@ function AreasPanel({ projectId }: { projectId: number }) {
     onSuccess: () => { inval(); toast.success("Area deleted") }, onError: (e) => toast.error((e as Error).message),
   })
   const childrenOf = (id: number | null) => (areas ?? []).filter((a) => a.parentAreaId === id)
-  const { toggle, isOpen, collapseAll, expandAll } = useCollapse()
   const parentIds = useMemo(() => new Set((areas ?? []).filter((a) => a.parentAreaId != null).map((a) => a.parentAreaId as number)), [areas])
+  const { toggle, isOpen, collapseAll, expandAll } = useCollapse(parentIds, true)
 
   function Node({ area, depth }: { area: Area; depth: number }) {
     const kids = childrenOf(area.id)
@@ -1036,7 +1046,8 @@ function AreaModal({ projectId, parentAreaId, area, onClose, onSaved }: { projec
 /** Per-estimate cost roll-up: item line totals escalated up the area tree. */
 function AreaRollupPanel({ estimateId, currency }: { estimateId: number; currency: string }) {
   const { data } = useQuery({ queryKey: ["areas-rollup", estimateId], queryFn: () => fetchApi<AreaRollup>(`/api/estimates/${estimateId}/areas-rollup`) })
-  const { toggle, isOpen, collapseAll, expandAll } = useCollapse()
+  const seedIds = data ? data.areas.filter((a) => data.areas.some((x) => x.parentAreaId === a.id)).map((a) => a.id) : []
+  const { toggle, isOpen, collapseAll, expandAll } = useCollapse(seedIds, true)
   if (!data || data.areas.length === 0) return null
   const childrenOf = (id: number | null) => data.areas.filter((a) => a.parentAreaId === id)
   const parentIds = new Set(data.areas.filter((a) => childrenOf(a.id).length > 0).map((a) => a.id))
@@ -1095,13 +1106,13 @@ function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdi
     id: it.id, itemCode: it.itemCode, description: it.description, unit: it.unit, assemblyId: it.assemblyId,
     unitRate: it.unitRate, sortOrder: it.sortOrder, areaId: it.areaId, quantity: it.quantity,
   })
-  const { toggle, isOpen, collapseAll, expandAll } = useCollapse()
   // Collapsible = any area with children OR with activities (collapsing hides both).
   const collapsibleIds = useMemo(() => {
     const s = new Set<number>()
     for (const a of areas) if (areas.some((x) => x.parentAreaId === a.id) || items.some((it) => it.areaId === a.id)) s.add(a.id)
     return s
   }, [areas, items])
+  const { toggle, isOpen, collapseAll, expandAll } = useCollapse(collapsibleIds, true)
 
   function Node({ area, depth }: { area: Area; depth: number }) {
     const acts = byArea(area.id)
