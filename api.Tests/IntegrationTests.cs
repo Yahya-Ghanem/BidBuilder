@@ -286,6 +286,24 @@ public class ExportTests(ApiFixture fx)
         Assert.Equal(HttpStatusCode.OK, r.StatusCode);
         Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", r.Content.Headers.ContentType?.MediaType);
     }
+
+    [Theory]
+    [InlineData("activities.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "ActivitiesByUnit.xlsx")]
+    [InlineData("activities.csv", "text/csv", "ActivitiesByUnit.csv")]
+    [InlineData("activities.pdf", "application/pdf", "ActivitiesByUnit.pdf")]
+    [InlineData("cost-by-area.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "CostByArea.xlsx")]
+    [InlineData("cost-by-area.csv", "text/csv", "CostByArea.csv")]
+    [InlineData("cost-by-area.pdf", "application/pdf", "CostByArea.pdf")]
+    public async Task Activities_and_cost_by_area_exports(string path, string mime, string filename)
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.FirstEstimateIdAsync(c, pid);
+        var r = await c.GetAsync($"/api/estimates/{eid}/{path}");
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.Equal(mime, r.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(filename, r.Content.Headers.ContentDisposition?.FileNameStar ?? r.Content.Headers.ContentDisposition?.FileName);
+    }
 }
 
 [Collection("api")]

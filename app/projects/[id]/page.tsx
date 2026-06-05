@@ -446,6 +446,14 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
       toast.error((err as Error).message)
     }
   }
+  async function dlActivities(kind: "xlsx" | "pdf" | "csv") {
+    try { await downloadFile(`/api/estimates/${estimateId}/activities.${kind}`, `ActivitiesByUnit.${kind}`) }
+    catch (err) { toast.error((err as Error).message) }
+  }
+  async function dlCostByArea(kind: "xlsx" | "pdf" | "csv") {
+    try { await downloadFile(`/api/estimates/${estimateId}/cost-by-area.${kind}`, `CostByArea.${kind}`) }
+    catch (err) { toast.error((err as Error).message) }
+  }
 
   // Add an activity under a unit: ensure the auto "Activities" section exists, then
   // create a BOQ item tagged to that unit with the material/manpower build-up.
@@ -554,12 +562,12 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
 
       {(areas.data?.length ?? 0) > 0 && (
         <ActivitiesPanel breakdown={e} areas={areas.data ?? []} costTypes={costTypes.data ?? []} currency={c}
-          canAdd={editAdd} canEdit={editEdit} canDelete={editDelete} canExport={canReports} onExport={dl}
+          canAdd={editAdd} canEdit={editEdit} canDelete={editDelete} canExport={canReports} onExport={dlActivities}
           onAddActivity={addActivity} onUpdItem={(v) => updItem.mutate(v)} onDelItem={(iid) => delItem.mutate(iid)}
           onCloneRoom={(areaId, name) => cloneRoom.mutate({ areaId, name })} />
       )}
 
-      <AreaRollupPanel estimateId={estimateId} currency={c} />
+      <AreaRollupPanel estimateId={estimateId} currency={c} canExport={canReports} onExport={dlCostByArea} />
 
       {/* Prelims + markups */}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -1056,7 +1064,7 @@ function AreaModal({ projectId, parentAreaId, area, onClose, onSaved }: { projec
 }
 
 /** Per-estimate cost roll-up: item line totals escalated up the area tree. */
-function AreaRollupPanel({ estimateId, currency }: { estimateId: number; currency: string }) {
+function AreaRollupPanel({ estimateId, currency, canExport, onExport }: { estimateId: number; currency: string; canExport: boolean; onExport: (kind: "xlsx" | "csv" | "pdf") => void }) {
   const { data } = useQuery({ queryKey: ["areas-rollup", estimateId], queryFn: () => fetchApi<AreaRollup>(`/api/estimates/${estimateId}/areas-rollup`) })
   const seedIds = data ? data.areas.filter((a) => data.areas.some((x) => x.parentAreaId === a.id)).map((a) => a.id) : []
   const { toggle, isOpen, collapseAll, expandAll } = useCollapse(seedIds, true)
@@ -1086,7 +1094,16 @@ function AreaRollupPanel({ estimateId, currency }: { estimateId: number; currenc
     <Card className="p-4">
       <div className="mb-2 flex items-center justify-between">
         <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-600"><FolderTree className="h-4 w-4" /> Cost by area</h4>
-        {parentIds.size > 0 && <ExpandCollapseAll onExpand={expandAll} onCollapse={() => collapseAll(parentIds)} />}
+        <div className="flex items-center gap-2">
+          {canExport && (
+            <>
+              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("xlsx")}><FileSpreadsheet className="h-4 w-4" /> Excel</Button>
+              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("csv")}><Table className="h-4 w-4" /> CSV</Button>
+              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("pdf")}><FileText className="h-4 w-4" /> PDF</Button>
+            </>
+          )}
+          {parentIds.size > 0 && <ExpandCollapseAll onExpand={expandAll} onCollapse={() => collapseAll(parentIds)} />}
+        </div>
       </div>
       {childrenOf(null).map((r) => <Row key={r.id} a={r} depth={0} />)}
       <div className="mt-2 flex items-center justify-between border-t border-[var(--border)] pt-2 text-sm">
