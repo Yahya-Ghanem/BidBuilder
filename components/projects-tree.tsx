@@ -3,8 +3,9 @@
 import { createContext, useContext, useState, type ReactNode } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
-  Plus, ChevronRight, ChevronDown, Building2, Folder, FolderOpen, FileText, ExternalLink,
+  Plus, ChevronRight, ChevronDown, Building2, Folder, FolderOpen, FileText, ExternalLink, Maximize2,
   LayoutGrid, Table as TableIcon, Hammer, Coins, ClipboardList, Percent,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -55,16 +56,20 @@ export const money = (n: number, c: string) => `${c} ${n.toLocaleString(undefine
 /* ── Sidebar tree (master) ─────────────────────────────────────────────────── */
 
 function Row({
-  depth, open, hasChildren, icon, label, hint, selected, onToggle,
+  depth, open, hasChildren, icon, label, hint, selected, onToggle, onDoubleClick, title,
 }: {
   depth: number; open?: boolean; hasChildren: boolean; icon: ReactNode
-  label: ReactNode; hint?: ReactNode; selected?: boolean; onToggle?: () => void
+  label: ReactNode; hint?: ReactNode; selected?: boolean
+  onToggle?: () => void; onDoubleClick?: () => void; title?: string
 }) {
+  const interactive = !!(onToggle || onDoubleClick)
   return (
     <div
-      className={`flex items-center gap-1.5 rounded px-1 py-1 text-sm select-none ${onToggle ? "cursor-pointer" : ""} ${selected ? "bg-[var(--brand)]/10 text-[var(--brand)]" : "hover:bg-slate-100 text-slate-700"}`}
+      className={`flex items-center gap-1.5 rounded px-1 py-1 text-sm select-none ${interactive ? "cursor-pointer" : ""} ${selected ? "bg-[var(--brand)]/10 text-[var(--brand)]" : "hover:bg-slate-100 text-slate-700"}`}
       style={{ paddingLeft: depth * 14 + 4 }}
       onClick={onToggle}
+      onDoubleClick={onDoubleClick}
+      title={title}
     >
       {hasChildren
         ? <span className="shrink-0 text-slate-400">{open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}</span>
@@ -123,12 +128,18 @@ function EstimatesBranch({ projectId, projectName, depth }: { projectId: number;
 
 function EstimateBranch({ estimate, projectId, projectName, depth }: { estimate: EstimateSummary; projectId: number; projectName: string; depth: number }) {
   const [open, setOpen] = useState(false)
+  const router = useRouter()
   const { selected, select } = useProjectsTree()
   const estimateLabel = `Rev ${estimate.revision} · ${estimate.title}`
   return (
     <div>
       <Row depth={depth} open={open} hasChildren icon={<FileText className="h-3.5 w-3.5" />}
         label={estimateLabel} onToggle={() => setOpen((o) => !o)} />
+      {open && (
+        <Row depth={depth + 1} hasChildren={false} icon={<Maximize2 className="h-3.5 w-3.5" />}
+          label="Full display" hint="open editor" title="Double-click to open the full editor"
+          onDoubleClick={() => router.push(`/projects/${projectId}`)} />
+      )}
       {open && SECTIONS.map((s) => {
         const isSel = selected?.estimateId === estimate.id && selected?.section === s.key
         return (
