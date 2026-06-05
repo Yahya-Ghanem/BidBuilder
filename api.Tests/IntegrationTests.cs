@@ -336,11 +336,62 @@ public class BenchmarkTests(ApiFixture fx)
         (await c.SendAsync(put)).EnsureSuccessStatusCode();
 
         var res = await c.GetFromJsonAsync<JsonElement>("/api/benchmarks");
+        Assert.Equal("AED", res.GetProperty("baseCurrency").GetString());
         var group = res.GetProperty("units").EnumerateArray().First(u => u.GetProperty("unit").GetString() == "key");
-        // 2000 / 10 keys = 200 per key
+        // 2000 / 10 keys = 200 per key; in base currency (AED) so base == native
         Assert.Contains(group.GetProperty("points").EnumerateArray(),
-            p => p.GetProperty("costPerUnit").GetDecimal() == 200m);
+            p => p.GetProperty("costPerUnit").GetDecimal() == 200m
+              && p.GetProperty("costPerUnitBase").GetDecimal() == 200m);
         Assert.True(group.GetProperty("max").GetDecimal() >= 200m);
+    }
+
+    [Fact]
+    public async Task Benchmarks_normalize_mixed_currencies_to_base()
+    {
+        var c = await fx.AdminClientAsync();
+
+        // A project that bids in USD (the tenant base is AED).
+        var proj = await (await c.PostAsJsonAsync("/api/projects",
+            new { name = "FX Bench", currency = "USD" })).Json();
+        int pid = proj.GetProperty("id").GetInt32();
+
+        // Tenant rate: 1 USD = 3.6725 AED.
+        (await c.PutAsJsonAsync("/api/settings/currencies/USD", new { rateToBase = 3.6725m })).EnsureSuccessStatusCode();
+
+        // 100 m2bench; one 1000 item → cost/m2bench = 10 USD.
+        var area = await (await c.PostAsJsonAsync($"/api/projects/{pid}/areas",
+            new { name = "Block", code = "B", kind = "Area", parentAreaId = (int?)null, sortOrder = 0, quantity = 100m, unit = "m2bench" })).Json();
+        int aid = area.GetProperty("id").GetInt32();
+
+        var eid = await Api.NewEstimateAsync(c, pid, "fxbench");
+        var sid = await Api.AddSectionAsync(c, eid, "FX1");
+        await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items", new
+        {
+            description = "fitout", unit = "no", quantity = 1, assemblyId = (int?)null, unitRate = 1000, sortOrder = 0,
+            components = (object?)null, areaId = aid,
+        });
+        var bd = await c.GetFromJsonAsync<JsonElement>($"/api/estimates/{eid}");
+        var rv = bd.GetProperty("rowVersion").GetString();
+        var put = new HttpRequestMessage(HttpMethod.Put, $"/api/estimates/{eid}")
+        { Content = JsonContent.Create(new { title = "fxbench", status = "Published", secondaryCurrency = (string?)null }) };
+        put.Headers.TryAddWithoutValidation("If-Match", rv);
+        (await c.SendAsync(put)).EnsureSuccessStatusCode();
+
+        var res = await c.GetFromJsonAsync<JsonElement>("/api/benchmarks");
+        Assert.Equal("AED", res.GetProperty("baseCurrency").GetString());
+        var group = res.GetProperty("units").EnumerateArray().First(u => u.GetProperty("unit").GetString() == "m2bench");
+
+        // The USD point: 10 USD/unit normalized to AED = 10 × 3.6725 = 36.73 (round2).
+        var pt = group.GetProperty("points").EnumerateArray().First(p => p.GetProperty("currency").GetString() == "USD");
+        Assert.Equal(10m, pt.GetProperty("costPerUnit").GetDecimal());
+        Assert.Equal(36.73m, pt.GetProperty("costPerUnitBase").GetDecimal());
+
+        // Aggregate is present, in base currency, and nothing was excluded.
+        Assert.Equal(group.GetProperty("count").GetInt32(), group.GetProperty("convertibleCount").GetInt32());
+        Assert.Equal(36.73m, group.GetProperty("max").GetDecimal());
+
+        // cleanup: drop the scratch rate so other runs see a clean table
+        await c.DeleteAsync("/api/settings/currencies/USD");
     }
 
     [Fact]
