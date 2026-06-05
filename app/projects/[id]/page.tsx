@@ -554,7 +554,7 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
 
       {(areas.data?.length ?? 0) > 0 && (
         <ActivitiesPanel breakdown={e} areas={areas.data ?? []} costTypes={costTypes.data ?? []} currency={c}
-          canAdd={editAdd} canEdit={editEdit} canDelete={editDelete}
+          canAdd={editAdd} canEdit={editEdit} canDelete={editDelete} canExport={canReports} onExport={dl}
           onAddActivity={addActivity} onUpdItem={(v) => updItem.mutate(v)} onDelItem={(iid) => delItem.mutate(iid)}
           onCloneRoom={(areaId, name) => cloneRoom.mutate({ areaId, name })} />
       )}
@@ -1100,9 +1100,10 @@ function AreaRollupPanel({ estimateId, currency }: { estimateId: number; currenc
 /** Unit-centric activities: the area tree with each unit's activities (BOQ items
  *  tagged to it) showing Material (M) + Manpower (L) + total, with add/edit/delete.
  *  Reuses BOQ items + the cost build-up, so everything flows into the bid. */
-function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdit, canDelete, onAddActivity, onUpdItem, onDelItem, onCloneRoom }: {
+function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdit, canDelete, canExport, onExport, onAddActivity, onUpdItem, onDelItem, onCloneRoom }: {
   breakdown: EstimateBreakdown; areas: Area[]; costTypes: CostComponentType[]; currency: string
   canAdd: boolean; canEdit: boolean; canDelete: boolean
+  canExport: boolean; onExport: (kind: "xlsx" | "csv" | "pdf") => void
   onAddActivity: (areaId: number, v: { description: string; unit: string; components: CompInput[] }) => void
   onUpdItem: (v: any) => void; onDelItem: (iid: number) => void
   onCloneRoom: (areaId: number, name: string) => void
@@ -1165,7 +1166,16 @@ function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdi
     <Card className="p-4">
       <div className="mb-1 flex items-center justify-between">
         <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-600"><FolderTree className="h-4 w-4" /> Activities by unit</h4>
-        {collapsibleIds.size > 0 && <ExpandCollapseAll onExpand={expandAll} onCollapse={() => collapseAll(collapsibleIds)} />}
+        <div className="flex items-center gap-2">
+          {canExport && (
+            <>
+              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("xlsx")}><FileSpreadsheet className="h-4 w-4" /> Excel</Button>
+              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("csv")}><Table className="h-4 w-4" /> CSV</Button>
+              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("pdf")}><FileText className="h-4 w-4" /> PDF</Button>
+            </>
+          )}
+          {collapsibleIds.size > 0 && <ExpandCollapseAll onExpand={expandAll} onCollapse={() => collapseAll(collapsibleIds)} />}
+        </div>
       </div>
       <p className="mb-2 text-xs text-slate-400">Add work activities under each unit; each carries Material (qty × price) and Manpower (hours × rate). M = material, L = manpower; total includes any other components.</p>
       {childrenOf(null).map((r) => <Node key={r.id} area={r} depth={0} />)}
