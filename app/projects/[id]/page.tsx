@@ -1036,25 +1036,35 @@ function AreaModal({ projectId, parentAreaId, area, onClose, onSaved }: { projec
 /** Per-estimate cost roll-up: item line totals escalated up the area tree. */
 function AreaRollupPanel({ estimateId, currency }: { estimateId: number; currency: string }) {
   const { data } = useQuery({ queryKey: ["areas-rollup", estimateId], queryFn: () => fetchApi<AreaRollup>(`/api/estimates/${estimateId}/areas-rollup`) })
+  const { toggle, isOpen, collapseAll, expandAll } = useCollapse()
   if (!data || data.areas.length === 0) return null
   const childrenOf = (id: number | null) => data.areas.filter((a) => a.parentAreaId === id)
+  const parentIds = new Set(data.areas.filter((a) => childrenOf(a.id).length > 0).map((a) => a.id))
   function Row({ a, depth }: { a: AreaRollupRow; depth: number }) {
+    const kids = childrenOf(a.id)
+    const open = isOpen(a.id)
     return (
       <>
         <div className="flex items-center justify-between py-1 text-sm" style={{ paddingLeft: depth * 18 }}>
-          <span>{a.name} <span className="text-xs text-slate-400">{a.kind}{a.itemCount ? ` · ${a.itemCount} item${a.itemCount > 1 ? "s" : ""}` : ""}{a.quantity > 0 ? ` · ${a.quantity}${a.unit ? ` ${a.unit}` : ""}` : ""}</span></span>
+          <span className="flex items-center">
+            <CollapseToggle open={open} hasChildren={kids.length > 0} onToggle={() => toggle(a.id)} />
+            {a.name} <span className="ml-1 text-xs text-slate-400">{a.kind}{a.itemCount ? ` · ${a.itemCount} item${a.itemCount > 1 ? "s" : ""}` : ""}{a.quantity > 0 ? ` · ${a.quantity}${a.unit ? ` ${a.unit}` : ""}` : ""}{!open && kids.length > 0 ? ` · ${kids.length} sub-area${kids.length > 1 ? "s" : ""}` : ""}</span>
+          </span>
           <span className="text-right">
             <span className="font-medium">{money(a.rollupTotal, currency)}</span>
             {a.costPerUnit != null && <span className="ml-2 text-xs text-slate-400">{money(a.costPerUnit, currency)}/{a.unit || "unit"}</span>}
           </span>
         </div>
-        {childrenOf(a.id).map((k) => <Row key={k.id} a={k} depth={depth + 1} />)}
+        {open && kids.map((k) => <Row key={k.id} a={k} depth={depth + 1} />)}
       </>
     )
   }
   return (
     <Card className="p-4">
-      <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-600"><FolderTree className="h-4 w-4" /> Cost by area</h4>
+      <div className="mb-2 flex items-center justify-between">
+        <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-600"><FolderTree className="h-4 w-4" /> Cost by area</h4>
+        {parentIds.size > 0 && <ExpandCollapseAll onExpand={expandAll} onCollapse={() => collapseAll(parentIds)} />}
+      </div>
       {childrenOf(null).map((r) => <Row key={r.id} a={r} depth={0} />)}
       <div className="mt-2 flex items-center justify-between border-t border-[var(--border)] pt-2 text-sm">
         <span className="text-slate-500">Assigned to areas{data.unassignedTotal > 0 ? ` · unassigned ${money(data.unassignedTotal, currency)}` : ""}</span>
