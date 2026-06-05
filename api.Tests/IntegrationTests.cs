@@ -696,6 +696,151 @@ public class UserManagementTests(ApiFixture fx)
 }
 
 [Collection("api")]
+public class SecurityTests(ApiFixture fx)
+{
+    static async Task MakeUserAsync(HttpClient admin, string email, params int[] groupIds) =>
+        (await admin.PostAsJsonAsync("/api/admin/users",
+            new { name = email, email, password = "Pw@123456", role = "TenantUser", groupIds })).EnsureSuccessStatusCode();
+
+    static async Task<(int gid, Func<string, int> mod)> MakeGroupAsync(HttpClient admin, string code, params (string code, bool view, bool add, bool edit, bool del)[] perms)
+    {
+        var mods = await admin.GetFromJsonAsync<JsonElement>("/api/admin/modules");
+        int Mod(string c) => mods.EnumerateArray().First(m => m.GetProperty("code").GetString() == c).GetProperty("id").GetInt32();
+        var grp = await (await admin.PostAsJsonAsync("/api/admin/groups", new { code, name = code, description = (string?)null })).Json();
+        int gid = grp.GetProperty("id").GetInt32();
+        await admin.PutAsJsonAsync($"/api/admin/groups/{gid}/permissions", new
+        {
+            permissions = perms.Select(p => new { moduleId = Mod(p.code), canView = p.view, canAdd = p.add, canEdit = p.edit, canDelete = p.del }).ToArray()
+        });
+        return (gid, Mod);
+    }
+
+    // ── Privilege escalation: a plain TenantUser can't reach admin/privileged endpoints ──
+    [Fact]
+    public async Task NonAdmin_is_blocked_from_admin_endpoints()
+    {
+        var admin = await fx.AdminClientAsync();
+        const string email = "sec.plain@bidbuilder.local";
+        await MakeUserAsync(admin, email);
+        var u = await fx.AuthedClientAsync(email, "Pw@123456");
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await u.GetAsync("/api/admin/users")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await u.GetAsync("/api/audit")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await u.PostAsJsonAsync("/api/admin/groups", new { code = "X", name = "X", description = (string?)null })).StatusCode);
+        // project create is admin-only
+        Assert.Equal(HttpStatusCode.Forbidden, (await u.PostAsJsonAsync("/api/projects", new { name = "Hacker project" })).StatusCode);
+    }
+
+    // ── Object-level authorization (IDOR): no project access → 404 on REAL existing ids ──
+    [Fact]
+    public async Task User_without_access_gets_404_on_real_ids()
+    {
+        var admin = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(admin);
+        var eid = await Api.FirstEstimateIdAsync(admin, pid);
+
+        const string email = "sec.noaccess@bidbuilder.local";
+        await MakeUserAsync(admin, email);
+        var u = await fx.AuthedClientAsync(email, "Pw@123456");
+
+        // Real ids that exist — hidden as 404 (not 200, not 403): the user is on no team.
+        Assert.Equal(HttpStatusCode.NotFound, (await u.GetAsync($"/api/projects/{pid}/estimates")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await u.GetAsync($"/api/estimates/{eid}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await u.GetAsync($"/api/projects/{pid}/areas")).StatusCode);
+    }
+
+    // ── RBAC: a view-only teammate HAS access but mutations are 403 (not 404) ──
+    [Fact]
+    public async Task ViewOnly_member_can_read_but_not_mutate()
+    {
+        var admin = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(admin);
+        var eid = await Api.FirstEstimateIdAsync(admin, pid);
+
+        var (gid, _) = await MakeGroupAsync(admin, "SEC-VIEWERS",
+            ("projects", true, false, false, false), ("boq", true, false, false, false));
+        await admin.PostAsJsonAsync($"/api/projects/{pid}/teams", new { groupId = gid, isLead = false });
+        const string email = "sec.viewer@bidbuilder.local";
+        await MakeUserAsync(admin, email, gid);
+        var u = await fx.AuthedClientAsync(email, "Pw@123456");
+
+        // Reads succeed (team access + View).
+        Assert.Equal(HttpStatusCode.OK, (await u.GetAsync($"/api/projects/{pid}/estimates")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await u.GetAsync($"/api/estimates/{eid}")).StatusCode);
+
+        // A BOQ mutation is rejected 403 (access OK, but no boq Add) — proving the
+        // access(404)/permission(403) split, i.e. NOT a 404.
+        var post = await u.PostAsJsonAsync($"/api/estimates/{eid}/sections", new { code = "X", title = "X", sortOrder = 0 });
+        Assert.Equal(HttpStatusCode.Forbidden, post.StatusCode);
+
+        await admin.DeleteAsync($"/api/projects/{pid}/teams/{gid}");
+    }
+
+    // ── The areas-rollup permission fix: requires `projects` View, not just access ──
+    [Fact]
+    public async Task Areas_rollup_requires_projects_view_permission()
+    {
+        var admin = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(admin);
+        var eid = await Api.FirstEstimateIdAsync(admin, pid);
+
+        // boq View only — deliberately NO projects View.
+        var (gid, _) = await MakeGroupAsync(admin, "SEC-BOQONLY", ("boq", true, false, false, false));
+        await admin.PostAsJsonAsync($"/api/projects/{pid}/teams", new { groupId = gid, isLead = false });
+        const string email = "sec.boqonly@bidbuilder.local";
+        await MakeUserAsync(admin, email, gid);
+        var u = await fx.AuthedClientAsync(email, "Pw@123456");
+
+        // Has estimate access (boq View) → the breakdown reads.
+        Assert.Equal(HttpStatusCode.OK, (await u.GetAsync($"/api/estimates/{eid}")).StatusCode);
+        // But the per-area cost roll-up now requires `projects` View → 403.
+        Assert.Equal(HttpStatusCode.Forbidden, (await u.GetAsync($"/api/estimates/{eid}/areas-rollup")).StatusCode);
+
+        await admin.DeleteAsync($"/api/projects/{pid}/teams/{gid}");
+    }
+
+    // ── Tenant isolation: a second tenant's admin can't see the first tenant's data ──
+    [Fact]
+    public async Task Second_tenant_cannot_see_first_tenant_data()
+    {
+        var admin = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(admin);
+        var eid = await Api.FirstEstimateIdAsync(admin, pid);
+
+        var t2 = await fx.SecondTenantAdminClientAsync();
+
+        // Tenant 2 sees none of tenant 1's projects.
+        var projects = await t2.GetFromJsonAsync<JsonElement>("/api/projects");
+        Assert.DoesNotContain(projects.EnumerateArray(), p => p.GetProperty("code").GetString() == "PRJ-2026-001");
+
+        // Tenant 1's real estimate id is hidden cross-tenant (404), not 200.
+        Assert.Equal(HttpStatusCode.NotFound, (await t2.GetAsync($"/api/estimates/{eid}")).StatusCode);
+
+        // Tenant 2's user list contains only its own admin, never tenant 1's.
+        var users = await t2.GetFromJsonAsync<JsonElement>("/api/admin/users");
+        Assert.DoesNotContain(users.EnumerateArray(), us => us.GetProperty("email").GetString() == "admin@bidbuilder.local");
+        Assert.Contains(users.EnumerateArray(), us => us.GetProperty("email").GetString() == "admin@tenant2.local");
+    }
+
+    // ── Auth: a deactivated user cannot log in (and the active one can) ──
+    [Fact]
+    public async Task Deactivated_user_cannot_log_in()
+    {
+        var admin = await fx.AdminClientAsync();
+        const string email = "sec.inactive@bidbuilder.local";
+        var u = await (await admin.PostAsJsonAsync("/api/admin/users",
+            new { name = "Inactive", email, password = "Pw@123456", role = "TenantUser", groupIds = Array.Empty<int>() })).Json();
+        int uid = u.GetProperty("id").GetInt32();
+
+        Assert.Equal(HttpStatusCode.OK, (await fx.Client().PostAsJsonAsync("/api/auth/login", new { email, password = "Pw@123456" })).StatusCode);
+
+        await admin.PutAsJsonAsync($"/api/admin/users/{uid}",
+            new { name = "Inactive", email, role = "TenantUser", isActive = false, groupIds = Array.Empty<int>() });
+        Assert.Equal(HttpStatusCode.Unauthorized, (await fx.Client().PostAsJsonAsync("/api/auth/login", new { email, password = "Pw@123456" })).StatusCode);
+    }
+}
+
+[Collection("api")]
 public class ImportTests(ApiFixture fx)
 {
     static readonly string[] FullHeader = { "Section Code", "Section Title", "Item Code", "Description", "Unit", "Quantity", "Unit Rate", "Assembly Code" };
