@@ -5,8 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
-  Plus, ChevronRight, ChevronDown, Building2, Folder, FolderOpen, FileText, ExternalLink, Maximize2,
-  LayoutGrid, Table as TableIcon, Hammer, Coins, ClipboardList, Percent,
+  Plus, ChevronRight, ChevronDown, Building2, Folder, FolderOpen, FileText, ExternalLink, Maximize2, LayoutGrid,
 } from "lucide-react"
 import { toast } from "sonner"
 import { fetchApi } from "@/lib/api"
@@ -41,15 +40,6 @@ export function useProjectsTree(): TreeCtx {
   if (!ctx) throw new Error("useProjectsTree must be used within ProjectsTreeProvider")
   return ctx
 }
-
-const SECTIONS: { key: SectionKey; label: string; hint?: string; icon: typeof Folder }[] = [
-  { key: "areas", label: "Areas", icon: LayoutGrid },
-  { key: "boq", label: "Bill Of Quantities", icon: TableIcon },
-  { key: "activities", label: "Activities", hint: "by unit", icon: Hammer },
-  { key: "cost-by-area", label: "Cost by area", icon: Coins },
-  { key: "preliminaries", label: "Preliminaries", icon: ClipboardList },
-  { key: "markups", label: "Markups", icon: Percent },
-]
 
 export const money = (n: number, c: string) => `${c} ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 
@@ -126,10 +116,9 @@ function EstimatesBranch({ projectId, projectName, depth }: { projectId: number;
   return <>{data.map((e) => <EstimateBranch key={e.id} estimate={e} projectId={projectId} projectName={projectName} depth={depth} />)}</>
 }
 
-function EstimateBranch({ estimate, projectId, projectName, depth }: { estimate: EstimateSummary; projectId: number; projectName: string; depth: number }) {
+function EstimateBranch({ estimate, projectId, depth }: { estimate: EstimateSummary; projectId: number; projectName: string; depth: number }) {
   const [open, setOpen] = useState(false)
   const router = useRouter()
-  const { selected, select } = useProjectsTree()
   const estimateLabel = `Rev ${estimate.revision} · ${estimate.title}`
   return (
     <div>
@@ -140,14 +129,6 @@ function EstimateBranch({ estimate, projectId, projectName, depth }: { estimate:
           label="Full display" hint="open editor" title="Double-click to open the full editor"
           onDoubleClick={() => router.push(`/projects/${projectId}`)} />
       )}
-      {open && SECTIONS.map((s) => {
-        const isSel = selected?.estimateId === estimate.id && selected?.section === s.key
-        return (
-          <Row key={s.key} depth={depth + 1} hasChildren={false}
-            icon={<s.icon className="h-3.5 w-3.5" />} label={s.label} hint={s.hint} selected={isSel}
-            onToggle={() => select({ projectId, projectName, estimateId: estimate.id, estimateLabel, section: s.key, sectionLabel: s.label })} />
-        )
-      })}
     </div>
   )
 }
@@ -172,7 +153,7 @@ export function ProjectsDetailPane() {
               <span className="font-semibold text-slate-800">{selected.sectionLabel}</span>
             </nav>
           ) : (
-            <p className="text-sm text-slate-500">Click a section node in the sidebar to display its data here.</p>
+            <p className="text-sm text-slate-500">Open a project → estimate in the sidebar, then double-click “Full display” to open the editor.</p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -197,8 +178,8 @@ function EmptyState() {
     <Card className="grid place-items-center p-16 text-center text-slate-400">
       <div>
         <LayoutGrid className="mx-auto mb-3 h-10 w-10 opacity-40" />
-        <p className="text-sm">Pick a project → estimate → section from the tree on the left.</p>
-        <p className="text-xs">Areas · Bill Of Quantities · Activities · Cost by area · Preliminaries · Markups</p>
+        <p className="text-sm">Pick a project → estimate from the tree on the left.</p>
+        <p className="text-xs">Double-click “Full display” to open the full editor.</p>
       </div>
     </Card>
   )
