@@ -822,6 +822,30 @@ public class SecurityTests(ApiFixture fx)
         Assert.Contains(users.EnumerateArray(), us => us.GetProperty("email").GetString() == "admin@tenant2.local");
     }
 
+    // ── Tenant-slug enumeration is closed: an unknown slug looks identical to a missing
+    //    one (generic 401, no echo) and the anonymous /api/ping probe now requires auth ──
+    [Fact]
+    public async Task Unknown_tenant_slug_is_indistinguishable_and_not_echoed()
+    {
+        var ghost = fx.ClientForTenant("does-not-exist-9f3");
+        var resp = await ghost.PostAsJsonAsync("/api/auth/login", new { email = "x@x.com", password = "whatever" });
+
+        // 401 (not the old 404), and the body must not echo the probed slug.
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+        Assert.DoesNotContain("does-not-exist-9f3", await resp.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Ping_requires_auth_so_it_cant_probe_tenants()
+    {
+        // Anonymous → 401 regardless of the tenant header (no 200 oracle).
+        Assert.Equal(HttpStatusCode.Unauthorized, (await fx.Client().GetAsync("/api/ping")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await fx.ClientForTenant("does-not-exist-9f3").GetAsync("/api/ping")).StatusCode);
+        // Authenticated → 200.
+        var admin = await fx.AdminClientAsync();
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/api/ping")).StatusCode);
+    }
+
     // ── Status lock is fail-closed: every content write on a Published revision is 409,
     //    while the read-equivalent writes (recompute, what-if) and the revert PUT stay open ──
     [Fact]

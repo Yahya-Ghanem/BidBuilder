@@ -85,10 +85,13 @@ public sealed class ApiFixture : IAsyncLifetime
     }
 
     /// <summary>A client carrying the default tenant header (unauthenticated).</summary>
-    public HttpClient Client()
+    public HttpClient Client() => ClientForTenant("default");
+
+    /// <summary>An unauthenticated client carrying an arbitrary X-Tenant-Id header.</summary>
+    public HttpClient ClientForTenant(string slug)
     {
         var c = _factory.CreateClient();
-        c.DefaultRequestHeaders.Add("X-Tenant-Id", "default");
+        c.DefaultRequestHeaders.Add("X-Tenant-Id", slug);
         return c;
     }
 
