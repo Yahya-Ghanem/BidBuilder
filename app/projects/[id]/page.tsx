@@ -446,14 +446,16 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
       toast.error((err as Error).message)
     }
   }
-  async function dlActivities(kind: "xlsx" | "pdf" | "csv", level: "detail" | "area" | "subarea" = "detail") {
+  async function dlActivities(kind: "xlsx" | "pdf" | "csv", level: "detail" | "area" | "subarea" | "unit" = "detail") {
     const q = level === "detail" ? "" : `?level=${level}`
-    const suffix = level === "area" ? "ByArea" : level === "subarea" ? "BySubArea" : "ByUnit"
+    const suffix = level === "area" ? "ByArea" : level === "subarea" ? "BySubArea" : level === "unit" ? "ByUnitSummary" : "ByUnit"
     try { await downloadFile(`/api/estimates/${estimateId}/activities.${kind}${q}`, `Activities${suffix}.${kind}`) }
     catch (err) { toast.error((err as Error).message) }
   }
-  async function dlCostByArea(kind: "xlsx" | "pdf" | "csv") {
-    try { await downloadFile(`/api/estimates/${estimateId}/cost-by-area.${kind}`, `CostByArea.${kind}`) }
+  async function dlCostByArea(kind: "xlsx" | "pdf" | "csv", level: "detail" | "area" | "subarea" | "unit" = "detail") {
+    const q = level === "detail" ? "" : `?level=${level}`
+    const suffix = level === "area" ? "ByArea" : level === "subarea" ? "BySubArea" : level === "unit" ? "ByUnit" : "ByArea"
+    try { await downloadFile(`/api/estimates/${estimateId}/cost-by-area.${kind}${q}`, `Cost${suffix}.${kind}`) }
     catch (err) { toast.error((err as Error).message) }
   }
 
@@ -1066,8 +1068,10 @@ function AreaModal({ projectId, parentAreaId, area, onClose, onSaved }: { projec
 }
 
 /** Per-estimate cost roll-up: item line totals escalated up the area tree. */
-function AreaRollupPanel({ estimateId, currency, canExport, onExport }: { estimateId: number; currency: string; canExport: boolean; onExport: (kind: "xlsx" | "csv" | "pdf") => void }) {
+function AreaRollupPanel({ estimateId, currency, canExport, onExport }: { estimateId: number; currency: string; canExport: boolean; onExport: (kind: "xlsx" | "csv" | "pdf", level: "detail" | "area" | "subarea" | "unit") => void }) {
   const { data } = useQuery({ queryKey: ["areas-rollup", estimateId], queryFn: () => fetchApi<AreaRollup>(`/api/estimates/${estimateId}/areas-rollup`) })
+  // Export grouping level (Detail = full tree; Area / Sub-Area / Unit = rolled-up summary).
+  const [level, setLevel] = useState<"detail" | "area" | "subarea" | "unit">("detail")
   const seedIds = data ? data.areas.filter((a) => data.areas.some((x) => x.parentAreaId === a.id)).map((a) => a.id) : []
   const { toggle, isOpen, collapseAll, expandAll } = useCollapse(seedIds, true)
   if (!data || data.areas.length === 0) return null
@@ -1099,9 +1103,20 @@ function AreaRollupPanel({ estimateId, currency, canExport, onExport }: { estima
         <div className="flex items-center gap-2">
           {canExport && (
             <>
-              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("xlsx")}><FileSpreadsheet className="h-4 w-4" /> Excel</Button>
-              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("csv")}><Table className="h-4 w-4" /> CSV</Button>
-              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("pdf")}><FileText className="h-4 w-4" /> PDF</Button>
+              <div className="flex items-center rounded-md border border-[var(--border)] p-0.5 text-xs" title="Choose how the export is grouped">
+                {([["detail", "Detail"], ["area", "Area"], ["subarea", "Sub-Area"], ["unit", "Unit"]] as const).map(([v, lbl]) => (
+                  <button
+                    key={v}
+                    onClick={() => setLevel(v)}
+                    className={`rounded px-2 py-1 ${level === v ? "bg-[var(--brand)] text-white" : "text-slate-600 hover:bg-slate-100"}`}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("xlsx", level)}><FileSpreadsheet className="h-4 w-4" /> Excel</Button>
+              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("csv", level)}><Table className="h-4 w-4" /> CSV</Button>
+              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("pdf", level)}><FileText className="h-4 w-4" /> PDF</Button>
             </>
           )}
           {parentIds.size > 0 && <ExpandCollapseAll onExpand={expandAll} onCollapse={() => collapseAll(parentIds)} />}
@@ -1122,7 +1137,7 @@ function AreaRollupPanel({ estimateId, currency, canExport, onExport }: { estima
 function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdit, canDelete, canExport, onExport, onAddActivity, onUpdItem, onDelItem, onCloneRoom }: {
   breakdown: EstimateBreakdown; areas: Area[]; costTypes: CostComponentType[]; currency: string
   canAdd: boolean; canEdit: boolean; canDelete: boolean
-  canExport: boolean; onExport: (kind: "xlsx" | "csv" | "pdf", level: "detail" | "area" | "subarea") => void
+  canExport: boolean; onExport: (kind: "xlsx" | "csv" | "pdf", level: "detail" | "area" | "subarea" | "unit") => void
   onAddActivity: (areaId: number, v: { description: string; unit: string; components: CompInput[] }) => void
   onUpdItem: (v: any) => void; onDelItem: (iid: number) => void
   onCloneRoom: (areaId: number, name: string) => void
@@ -1133,8 +1148,8 @@ function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdi
   const [adding, setAdding] = useState<Area | null>(null)
   const [editing, setEditing] = useState<ItemBreakdown | null>(null)
   const [cloning, setCloning] = useState<Area | null>(null)
-  // Export grouping: Detail = every activity; Area / Sub-Area = rolled-up summary at that level.
-  const [level, setLevel] = useState<"detail" | "area" | "subarea">("detail")
+  // Export grouping: Detail = every activity; Area / Sub-Area / Unit = rolled-up summary at that level.
+  const [level, setLevel] = useState<"detail" | "area" | "subarea" | "unit">("detail")
   const compAmount = (it: ItemBreakdown, code: string) => it.components.find((c) => c.code === code)?.amount ?? 0
   const editBase = (it: ItemBreakdown) => ({
     id: it.id, itemCode: it.itemCode, description: it.description, unit: it.unit, assemblyId: it.assemblyId,
@@ -1191,7 +1206,7 @@ function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdi
           {canExport && (
             <>
               <div className="flex items-center rounded-md border border-[var(--border)] p-0.5 text-xs" title="Choose how the export is grouped">
-                {([["detail", "Detail"], ["area", "Area"], ["subarea", "Sub-Area"]] as const).map(([v, lbl]) => (
+                {([["detail", "Detail"], ["area", "Area"], ["subarea", "Sub-Area"], ["unit", "Unit"]] as const).map(([v, lbl]) => (
                   <button
                     key={v}
                     onClick={() => setLevel(v)}
