@@ -421,6 +421,68 @@ public class ExportTests(ApiFixture fx)
         // the unit beneath it must be counted (was 0 before the roll-up fix).
         Assert.Equal(1, subRow.Cell(3).GetValue<int>());
     }
+
+    // The Activities export honours ?level= : Area / Sub-Area produce a rolled-up summary
+    // (one row per area of that level, no activity detail), Detail keeps the full tree.
+    [Fact]
+    public async Task Activities_export_respects_level()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.NewEstimateAsync(c, pid, "levels");
+        var sid = await Api.AddSectionAsync(c, eid, "LV");
+        var mat = await Api.TypeIdAsync(c, "MAT");
+        var lab = await Api.TypeIdAsync(c, "LAB");
+
+        async Task<int> Area(string name, string kind, int? parent) =>
+            (await (await c.PostAsJsonAsync($"/api/projects/{pid}/areas", new
+            {
+                name, code = name[..System.Math.Min(8, name.Length)], kind, parentAreaId = parent,
+                sortOrder = 0, quantity = 0m, unit = (string?)null,
+            })).Json()).GetProperty("id").GetInt32();
+
+        var bldg = "Bldg-" + System.Guid.NewGuid().ToString("N")[..6];
+        var floor = "Floor-" + System.Guid.NewGuid().ToString("N")[..6];
+        var top  = await Area(bldg, "Area", null);
+        var sub  = await Area(floor, "SubArea", top);
+        var unit = await Area("Unit-" + System.Guid.NewGuid().ToString("N")[..6], "Unit", sub);
+
+        await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items", new
+        {
+            description = "Plastering", unit = "m2", quantity = 1, assemblyId = (int?)null, unitRate = 0, sortOrder = 0,
+            components = new object[] { new { typeId = mat, value = 1000 }, new { typeId = lab, value = 300 } }, areaId = unit,
+        });
+        await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items", new
+        {
+            description = "Painting", unit = "m2", quantity = 1, assemblyId = (int?)null, unitRate = 0, sortOrder = 1,
+            components = new object[] { new { typeId = mat, value = 500 }, new { typeId = lab, value = 200 } }, areaId = unit,
+        });
+
+        async Task<IXLWorksheet> SheetAsync(string level)
+        {
+            var bytes = await (await c.GetAsync($"/api/estimates/{eid}/activities.xlsx?level={level}")).Content.ReadAsByteArrayAsync();
+            var wb = new XLWorkbook(new MemoryStream(bytes));
+            return wb.Worksheets.First();
+        }
+
+        // Area level: a single "Bldg" row with the rolled-up totals; the activity rows are gone.
+        var areaWs = await SheetAsync("area");
+        var areaRow = areaWs.RowsUsed().First(row => row.Cell(1).GetString().Contains(bldg));
+        Assert.Equal(1500m, areaRow.Cell(2).GetValue<decimal>());
+        Assert.Equal(500m, areaRow.Cell(3).GetValue<decimal>());
+        Assert.Equal(2000m, areaRow.Cell(4).GetValue<decimal>());
+        Assert.DoesNotContain(areaWs.RowsUsed(), row => row.Cell(1).GetString().Contains("Plastering"));
+
+        // Sub-Area level: a single "Floor" row, same rolled-up totals, no activity detail.
+        var subWs = await SheetAsync("subarea");
+        var subRow = subWs.RowsUsed().First(row => row.Cell(1).GetString().Contains(floor));
+        Assert.Equal(2000m, subRow.Cell(4).GetValue<decimal>());
+        Assert.DoesNotContain(subWs.RowsUsed(), row => row.Cell(1).GetString().Contains("Painting"));
+
+        // Detail level (default): the activity rows are present.
+        var detailWs = await SheetAsync("detail");
+        Assert.Contains(detailWs.RowsUsed(), row => row.Cell(1).GetString().Contains("Plastering"));
+    }
 }
 
 [Collection("api")]

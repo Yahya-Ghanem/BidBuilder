@@ -347,35 +347,80 @@ public class ExportService
     }
 
     // ── Activities by unit (standalone) ─────────────────────────────────────
-    public byte[] BuildActivitiesExcel(ExportModel m)
+    public byte[] BuildActivitiesExcel(ExportModel m, string level = "detail")
     {
+        level = NormalizeLevel(level);
         using var wb = new XLWorkbook();
-        var ws = wb.AddWorksheet("Activities by Unit");
-        var r = ExcelHeader(ws, m, "Activities by Unit");
-        RenderActivities(ws, m, r);
+        var title = ActivitiesTitle(level);
+        var ws = wb.AddWorksheet(title);
+        var r = ExcelHeader(ws, m, title);
+        RenderActivities(ws, m, r, level);
         using var ms = new MemoryStream(); wb.SaveAs(ms); return ms.ToArray();
     }
+
+    /// <summary>Normalise the export grouping level from a query string ("area" / "subarea" / "detail").</summary>
+    private static string NormalizeLevel(string? level) => level?.Trim().ToLowerInvariant() switch
+    {
+        "area" => "area",
+        "subarea" or "sub-area" => "subarea",
+        _ => "detail",
+    };
+
+    private static string ActivitiesTitle(string level) =>
+        level == "area" ? "Activities by Area" : level == "subarea" ? "Activities by Sub-area" : "Activities by Unit";
 
     /// <summary>
     /// Writes the Area → activities table (Material / Manpower / Total) starting at
     /// <paramref name="r"/>: brand header, shaded area rows, zebra-striped activities,
     /// and colour-coded data bars so material vs manpower magnitudes read at a glance.
     /// </summary>
-    private static void RenderActivities(IXLWorksheet ws, ExportModel m, int r)
+    private static void RenderActivities(IXLWorksheet ws, ExportModel m, int r, string level = "detail")
     {
         var e = m.Estimate;
         var items = e.Sections.SelectMany(s => s.Items).Where(i => i.AreaId != null).ToList();
         decimal Comp(ItemBreakdown i, string code) => i.Components.FirstOrDefault(c => c.Code == code)?.Amount ?? 0;
+        var rolled = RollupMatLab(m.AreaRollup?.Areas ?? new(), items);
 
-        ws.Cell(r, 1).Value = "Area / Activity"; ws.Cell(r, 2).Value = $"Material ({e.Currency})";
+        var firstHeader = level == "area" ? "Area" : level == "subarea" ? "Sub-area" : "Area / Activity";
+        ws.Cell(r, 1).Value = firstHeader; ws.Cell(r, 2).Value = $"Material ({e.Currency})";
         ws.Cell(r, 3).Value = $"Manpower ({e.Currency})"; ws.Cell(r, 4).Value = $"Total ({e.Currency})";
         StyleHeader(ws.Range(r, 1, r, 4));
         ws.Range(r, 2, r, 4).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
         int header = r; r++;
 
-        // Roll Material/Manpower up the area tree so each group row carries the subtotal
-        // of every activity beneath it (units roll into sub-areas, sub-areas into areas).
-        var rolled = RollupMatLab(m.AreaRollup?.Areas ?? new(), items);
+        // Area / Sub-area summary modes: one rolled-up row per area of the chosen level —
+        // no activity detail. Each row carries the Material / Manpower / Total of everything
+        // beneath it (the same roll-up the detail group rows use).
+        if (level is "area" or "subarea")
+        {
+            var kind = level == "area" ? "Area" : "SubArea";
+            int firstSum = r;
+            if (m.AreaRollup is { Areas.Count: > 0 })
+                foreach (var node in FlattenAreas(m.AreaRollup.Areas).Select(t => t.Node).Where(n => n.Kind == kind))
+                {
+                    var (mat, lab) = rolled.GetValueOrDefault(node.Id);
+                    ws.Cell(r, 1).Value = node.Name;
+                    ws.Cell(r, 2).Value = mat;              ws.Cell(r, 2).Style.NumberFormat.Format = "#,##0.00";
+                    ws.Cell(r, 3).Value = lab;              ws.Cell(r, 3).Style.NumberFormat.Format = "#,##0.00";
+                    ws.Cell(r, 4).Value = node.RollupTotal; ws.Cell(r, 4).Style.NumberFormat.Format = "#,##0.00";
+                    ws.Cell(r, 4).Style.Font.SetFontColor(BrandDark);
+                    if ((r - firstSum) % 2 == 1) ws.Range(r, 1, r, 4).Style.Fill.SetBackgroundColor(BandFill);
+                    r++;
+                }
+            int lastSum = r - 1;
+            if (lastSum >= firstSum)
+            {
+                ws.Range(firstSum, 2, lastSum, 2).AddConditionalFormat().DataBar(MatColor).LowestValue().HighestValue();
+                ws.Range(firstSum, 3, lastSum, 3).AddConditionalFormat().DataBar(ManColor).LowestValue().HighestValue();
+                ws.Range(firstSum, 4, lastSum, 4).AddConditionalFormat().DataBar(Brand).LowestValue().HighestValue();
+                Box(ws.Range(header, 1, lastSum, 4));
+            }
+            ws.SheetView.FreezeRows(header);
+            ws.Columns().AdjustToContents();
+            return;
+        }
+
+        // Detail mode: the full Area → Sub-area → Unit tree with each unit's activities.
         var detailBlocks = new List<(int From, int To)>();   // contiguous activity rows, for data bars
 
         if (m.AreaRollup is { Areas.Count: > 0 })
@@ -419,12 +464,34 @@ public class ExportService
         ws.Columns().AdjustToContents();
     }
 
-    public byte[] BuildActivitiesCsv(ExportModel m)
+    public byte[] BuildActivitiesCsv(ExportModel m, string level = "detail")
     {
+        level = NormalizeLevel(level);
         var e = m.Estimate; var ci = CultureInfo.InvariantCulture;
         var items = e.Sections.SelectMany(s => s.Items).Where(i => i.AreaId != null).ToList();
         decimal Comp(ItemBreakdown i, string code) => i.Components.FirstOrDefault(c => c.Code == code)?.Amount ?? 0;
         var sb = new StringBuilder(); sb.Append('﻿');
+
+        // Area / Sub-area summary: one rolled-up row per area of the chosen level.
+        if (level is "area" or "subarea")
+        {
+            var kind = level == "area" ? "Area" : "SubArea";
+            var rolled = RollupMatLab(m.AreaRollup?.Areas ?? new(), items);
+            sb.Append("Name,Level,Material,Manpower,Total,Currency\r\n");
+            if (m.AreaRollup is { Areas.Count: > 0 })
+                foreach (var node in FlattenAreas(m.AreaRollup.Areas).Select(t => t.Node).Where(n => n.Kind == kind))
+                {
+                    var (mat, lab) = rolled.GetValueOrDefault(node.Id);
+                    sb.Append(CsvEsc(node.Name)).Append(',')
+                      .Append(CsvEsc(node.Kind)).Append(',')
+                      .Append(mat.ToString("0.00", ci)).Append(',')
+                      .Append(lab.ToString("0.00", ci)).Append(',')
+                      .Append(node.RollupTotal.ToString("0.00", ci)).Append(',')
+                      .Append(CsvEsc(e.Currency)).Append("\r\n");
+                }
+            return Encoding.UTF8.GetBytes(sb.ToString());
+        }
+
         sb.Append("Area,Level,Activity,Material,Manpower,Total,Currency\r\n");
         if (m.AreaRollup is { Areas.Count: > 0 })
             foreach (var (node, _) in FlattenAreas(m.AreaRollup.Areas))
@@ -439,43 +506,60 @@ public class ExportService
         return Encoding.UTF8.GetBytes(sb.ToString());
     }
 
-    public byte[] BuildActivitiesPdf(ExportModel m)
+    public byte[] BuildActivitiesPdf(ExportModel m, string level = "detail")
     {
+        level = NormalizeLevel(level);
         var e = m.Estimate;
         var items = e.Sections.SelectMany(s => s.Items).Where(i => i.AreaId != null).ToList();
         decimal Comp(ItemBreakdown i, string code) => i.Components.FirstOrDefault(c => c.Code == code)?.Amount ?? 0;
         var rolled = RollupMatLab(m.AreaRollup?.Areas ?? new(), items);
+        var firstHeader = level == "area" ? "Area" : level == "subarea" ? "Sub-area" : "Area / Activity";
 
         var doc = Document.Create(container => container.Page(page =>
         {
             page.Margin(36); page.Size(PageSizes.A4); page.DefaultTextStyle(x => x.FontSize(9));
-            PdfHeader(page, m, "Activities by Unit");
+            PdfHeader(page, m, ActivitiesTitle(level));
             page.Content().PaddingVertical(8).Table(table =>
             {
                 table.ColumnsDefinition(c => { c.RelativeColumn(3); c.ConstantColumn(70); c.ConstantColumn(70); c.ConstantColumn(80); });
                 table.Header(hd =>
                 {
-                    hd.Cell().Background(Colors.Grey.Lighten2).Padding(3).Text("Area / Activity").Bold();
+                    hd.Cell().Background(Colors.Grey.Lighten2).Padding(3).Text(firstHeader).Bold();
                     hd.Cell().Background(Colors.Grey.Lighten2).Padding(3).AlignRight().Text("Material").Bold();
                     hd.Cell().Background(Colors.Grey.Lighten2).Padding(3).AlignRight().Text("Manpower").Bold();
                     hd.Cell().Background(Colors.Grey.Lighten2).Padding(3).AlignRight().Text("Total").Bold();
                 });
                 if (m.AreaRollup is { Areas.Count: > 0 })
-                    foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas))
+                {
+                    if (level is "area" or "subarea")
                     {
-                        var (gMat, gLab) = rolled.GetValueOrDefault(node.Id);
-                        table.Cell().Background(Colors.Grey.Lighten4).PaddingLeft(depth * 12).Padding(3).Text($"{node.Name} ({node.Kind})").SemiBold();
-                        table.Cell().Background(Colors.Grey.Lighten4).Padding(3).AlignRight().Text($"{gMat:#,##0.00}").SemiBold();
-                        table.Cell().Background(Colors.Grey.Lighten4).Padding(3).AlignRight().Text($"{gLab:#,##0.00}").SemiBold();
-                        table.Cell().Background(Colors.Grey.Lighten4).Padding(3).AlignRight().Text($"{node.RollupTotal:#,##0.00}").SemiBold();
-                        foreach (var i in items.Where(x => x.AreaId == node.Id))
+                        var kind = level == "area" ? "Area" : "SubArea";
+                        foreach (var node in FlattenAreas(m.AreaRollup.Areas).Select(t => t.Node).Where(n => n.Kind == kind))
                         {
-                            table.Cell().PaddingLeft(depth * 12 + 8).Padding(3).Text(i.Description);
-                            table.Cell().Padding(3).AlignRight().Text($"{Comp(i, "MAT"):#,##0.00}");
-                            table.Cell().Padding(3).AlignRight().Text($"{Comp(i, "LAB"):#,##0.00}");
-                            table.Cell().Padding(3).AlignRight().Text($"{i.LineTotal:#,##0.00}");
+                            var (gMat, gLab) = rolled.GetValueOrDefault(node.Id);
+                            table.Cell().Padding(3).Text(node.Name);
+                            table.Cell().Padding(3).AlignRight().Text($"{gMat:#,##0.00}");
+                            table.Cell().Padding(3).AlignRight().Text($"{gLab:#,##0.00}");
+                            table.Cell().Padding(3).AlignRight().Text($"{node.RollupTotal:#,##0.00}");
                         }
                     }
+                    else
+                        foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas))
+                        {
+                            var (gMat, gLab) = rolled.GetValueOrDefault(node.Id);
+                            table.Cell().Background(Colors.Grey.Lighten4).PaddingLeft(depth * 12).Padding(3).Text($"{node.Name} ({node.Kind})").SemiBold();
+                            table.Cell().Background(Colors.Grey.Lighten4).Padding(3).AlignRight().Text($"{gMat:#,##0.00}").SemiBold();
+                            table.Cell().Background(Colors.Grey.Lighten4).Padding(3).AlignRight().Text($"{gLab:#,##0.00}").SemiBold();
+                            table.Cell().Background(Colors.Grey.Lighten4).Padding(3).AlignRight().Text($"{node.RollupTotal:#,##0.00}").SemiBold();
+                            foreach (var i in items.Where(x => x.AreaId == node.Id))
+                            {
+                                table.Cell().PaddingLeft(depth * 12 + 8).Padding(3).Text(i.Description);
+                                table.Cell().Padding(3).AlignRight().Text($"{Comp(i, "MAT"):#,##0.00}");
+                                table.Cell().Padding(3).AlignRight().Text($"{Comp(i, "LAB"):#,##0.00}");
+                                table.Cell().Padding(3).AlignRight().Text($"{i.LineTotal:#,##0.00}");
+                            }
+                        }
+                }
             });
             page.Footer().AlignCenter().Text(x => { x.Span("BidBuilder · "); x.CurrentPageNumber(); x.Span(" / "); x.TotalPages(); });
         }));

@@ -40,18 +40,18 @@ public static class ExportEndpoints
                 return Results.File(bytes, "text/csv", $"{m.ProjectCode}-boq.csv");
             }));
 
-        // ── Activities by unit ──────────────────────────────────────────────
-        grp.MapGet("/{id:int}/activities.xlsx", (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
+        // ── Activities by unit / area / sub-area (level = detail|area|subarea) ──
+        grp.MapGet("/{id:int}/activities.xlsx", (int id, string? level, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
             Export(id, me, access, perm, db, calc, rollup, tc, async m =>
-                Results.File(export.BuildActivitiesExcel(m), Xlsx, "ActivitiesByUnit.xlsx")));
+                Results.File(export.BuildActivitiesExcel(m, level ?? "detail"), Xlsx, ActivitiesFile(level, "xlsx"))));
 
-        grp.MapGet("/{id:int}/activities.csv", (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
+        grp.MapGet("/{id:int}/activities.csv", (int id, string? level, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
             Export(id, me, access, perm, db, calc, rollup, tc, async m =>
-                Results.File(export.BuildActivitiesCsv(m), "text/csv", "ActivitiesByUnit.csv")));
+                Results.File(export.BuildActivitiesCsv(m, level ?? "detail"), "text/csv", ActivitiesFile(level, "csv"))));
 
-        grp.MapGet("/{id:int}/activities.pdf", (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
+        grp.MapGet("/{id:int}/activities.pdf", (int id, string? level, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
             Export(id, me, access, perm, db, calc, rollup, tc, async m =>
-                Results.File(export.BuildActivitiesPdf(m), "application/pdf", "ActivitiesByUnit.pdf")));
+                Results.File(export.BuildActivitiesPdf(m, level ?? "detail"), "application/pdf", ActivitiesFile(level, "pdf"))));
 
         // ── Cost by area ────────────────────────────────────────────────────
         grp.MapGet("/{id:int}/cost-by-area.xlsx", (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
@@ -68,6 +68,15 @@ public static class ExportEndpoints
     }
 
     private const string Xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    /// <summary>Download filename for the activities export, reflecting the grouping level.</summary>
+    private static string ActivitiesFile(string? level, string ext) =>
+        (level?.Trim().ToLowerInvariant()) switch
+        {
+            "area"                  => $"ActivitiesByArea.{ext}",
+            "subarea" or "sub-area" => $"ActivitiesBySubArea.{ext}",
+            _                       => $"ActivitiesByUnit.{ext}",
+        };
 
     private static async Task<IResult> Export(
         int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm,
