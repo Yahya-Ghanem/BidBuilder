@@ -13,7 +13,7 @@ import { usePermissions } from "@/lib/permissions"
 import { Card, Badge, Button, Input, statusColor } from "@/components/ui"
 import { Modal, Field, Select } from "@/components/form"
 import { money, cn } from "@/lib/utils"
-import { FileSpreadsheet, FileText, Table, Users, Layers, FolderTree } from "lucide-react"
+import { FileSpreadsheet, FileText, Table, Users, Layers, FolderTree, ChevronRight, ChevronDown } from "lucide-react"
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -894,6 +894,37 @@ function BuildUpModal({ open, onClose, costTypes, currency, initial, onSave }: {
 }
 
 /** Project area breakdown: a nested Area → Sub-area → Unit tree (add/edit/delete). */
+/** A chevron that expands/collapses a tree node; renders a fixed-width spacer when
+ *  the node has no children so labels stay aligned. */
+function CollapseToggle({ open, hasChildren, onToggle }: { open: boolean; hasChildren: boolean; onToggle: () => void }) {
+  if (!hasChildren) return <span className="inline-block w-[18px]" />
+  return (
+    <button onClick={onToggle} className="rounded p-0.5 text-slate-400 hover:text-slate-700" title={open ? "Collapse" : "Expand"}>
+      {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+    </button>
+  )
+}
+
+/** Expand-all / Collapse-all controls for a tree. */
+function ExpandCollapseAll({ onExpand, onCollapse }: { onExpand: () => void; onCollapse: () => void }) {
+  return (
+    <div className="flex gap-1">
+      <Button variant="ghost" className="h-7 px-2 text-xs" onClick={onExpand}>Expand all</Button>
+      <Button variant="ghost" className="h-7 px-2 text-xs" onClick={onCollapse}>Collapse all</Button>
+    </div>
+  )
+}
+
+/** Hook: a set of collapsed node ids + toggle/expand-all/collapse-all helpers. */
+function useCollapse() {
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set())
+  const toggle = (id: number) => setCollapsed((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const isOpen = (id: number) => !collapsed.has(id)
+  const collapseAll = (ids: Iterable<number>) => setCollapsed(new Set(ids))
+  const expandAll = () => setCollapsed(new Set())
+  return { toggle, isOpen, collapseAll, expandAll }
+}
+
 function AreasPanel({ projectId }: { projectId: number }) {
   const qc = useQueryClient()
   const { can } = usePermissions()
@@ -906,14 +937,19 @@ function AreasPanel({ projectId }: { projectId: number }) {
     onSuccess: () => { inval(); toast.success("Area deleted") }, onError: (e) => toast.error((e as Error).message),
   })
   const childrenOf = (id: number | null) => (areas ?? []).filter((a) => a.parentAreaId === id)
+  const { toggle, isOpen, collapseAll, expandAll } = useCollapse()
+  const parentIds = useMemo(() => new Set((areas ?? []).filter((a) => a.parentAreaId != null).map((a) => a.parentAreaId as number)), [areas])
 
   function Node({ area, depth }: { area: Area; depth: number }) {
+    const kids = childrenOf(area.id)
+    const open = isOpen(area.id)
     return (
       <>
         <div className="flex items-center justify-between rounded py-1 pr-2 hover:bg-slate-50" style={{ paddingLeft: depth * 18 + 4 }}>
-          <span className="text-sm">
+          <span className="flex items-center text-sm">
+            <CollapseToggle open={open} hasChildren={kids.length > 0} onToggle={() => toggle(area.id)} />
             {area.code && <span className="mr-1 font-mono text-xs text-slate-400">{area.code}</span>}
-            {area.name}<span className="ml-2 text-xs text-slate-400">{area.kind}{area.quantity > 0 ? ` · ${area.quantity}${area.unit ? ` ${area.unit}` : ""}` : ""}</span>
+            {area.name}<span className="ml-2 text-xs text-slate-400">{area.kind}{area.quantity > 0 ? ` · ${area.quantity}${area.unit ? ` ${area.unit}` : ""}` : ""}{kids.length > 0 && !open ? ` · ${kids.length}` : ""}</span>
           </span>
           <div className="flex gap-1">
             {canAdd && <button onClick={() => setModal({ parentAreaId: area.id })} className="rounded p-1 text-slate-400 hover:text-[var(--brand)]" title="Add sub-area"><Plus className="h-3.5 w-3.5" /></button>}
@@ -921,7 +957,7 @@ function AreasPanel({ projectId }: { projectId: number }) {
             {canDelete && <button onClick={() => { if (confirm(`Delete area "${area.name}"?`)) del.mutate(area.id) }} className="rounded p-1 text-slate-400 hover:text-rose-600" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>}
           </div>
         </div>
-        {childrenOf(area.id).map((k) => <Node key={k.id} area={k} depth={depth + 1} />)}
+        {open && kids.map((k) => <Node key={k.id} area={k} depth={depth + 1} />)}
       </>
     )
   }
@@ -930,7 +966,10 @@ function AreasPanel({ projectId }: { projectId: number }) {
     <Card className="p-4">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600"><FolderTree className="h-4 w-4" /> Areas</h3>
-        {canAdd && <Button variant="outline" className="h-8 text-xs" onClick={() => setModal({ parentAreaId: null })}><Plus className="h-4 w-4" /> Area</Button>}
+        <div className="flex items-center gap-2">
+          {parentIds.size > 0 && <ExpandCollapseAll onExpand={expandAll} onCollapse={() => collapseAll(parentIds)} />}
+          {canAdd && <Button variant="outline" className="h-8 text-xs" onClick={() => setModal({ parentAreaId: null })}><Plus className="h-4 w-4" /> Area</Button>}
+        </div>
       </div>
       {(areas?.length ?? 0) === 0
         ? <p className="text-xs text-slate-400">No areas yet. Break the project into areas, sub-areas and units — BOQ items tagged to them roll up by location.</p>
@@ -1030,22 +1069,33 @@ function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdi
     id: it.id, itemCode: it.itemCode, description: it.description, unit: it.unit, assemblyId: it.assemblyId,
     unitRate: it.unitRate, sortOrder: it.sortOrder, areaId: it.areaId, quantity: it.quantity,
   })
+  const { toggle, isOpen, collapseAll, expandAll } = useCollapse()
+  // Collapsible = any area with children OR with activities (collapsing hides both).
+  const collapsibleIds = useMemo(() => {
+    const s = new Set<number>()
+    for (const a of areas) if (areas.some((x) => x.parentAreaId === a.id) || items.some((it) => it.areaId === a.id)) s.add(a.id)
+    return s
+  }, [areas, items])
 
   function Node({ area, depth }: { area: Area; depth: number }) {
     const acts = byArea(area.id)
+    const kids = childrenOf(area.id)
+    const hasContent = acts.length > 0 || kids.length > 0
+    const open = isOpen(area.id)
     return (
       <>
         <div className="flex items-center justify-between border-t border-[var(--border)] py-1.5" style={{ paddingLeft: depth * 16 + 4 }}>
-          <span className="text-sm">
+          <span className="flex items-center text-sm">
+            <CollapseToggle open={open} hasChildren={hasContent} onToggle={() => toggle(area.id)} />
             {area.code && <span className="mr-1 font-mono text-xs text-slate-400">{area.code}</span>}
-            {area.name}<span className="ml-2 text-xs text-slate-400">{area.kind}</span>
+            {area.name}<span className="ml-2 text-xs text-slate-400">{area.kind}{!open && acts.length > 0 ? ` · ${acts.length} activit${acts.length > 1 ? "ies" : "y"}` : ""}</span>
           </span>
           <div className="flex items-center gap-1">
             {canAdd && <Button variant="ghost" className="h-6 px-2 text-xs" onClick={() => setCloning(area)}><Copy className="h-3.5 w-3.5" /> Clone</Button>}
             {canAdd && <Button variant="ghost" className="h-6 px-2 text-xs" onClick={() => setAdding(area)}><Plus className="h-3.5 w-3.5" /> Activity</Button>}
           </div>
         </div>
-        {acts.map((it) => (
+        {open && acts.map((it) => (
           <div key={it.id} className="grid grid-cols-[1fr_96px_96px_100px_auto] items-center gap-2 py-1 text-sm" style={{ paddingLeft: depth * 16 + 22 }}>
             <span className="text-slate-700">{it.description}</span>
             <span className="text-right text-xs text-slate-500" title="Material">M {money(compAmount(it, "MAT"), currency)}</span>
@@ -1057,14 +1107,17 @@ function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd, canEdi
             </span>
           </div>
         ))}
-        {childrenOf(area.id).map((k) => <Node key={k.id} area={k} depth={depth + 1} />)}
+        {open && kids.map((k) => <Node key={k.id} area={k} depth={depth + 1} />)}
       </>
     )
   }
 
   return (
     <Card className="p-4">
-      <h4 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-600"><FolderTree className="h-4 w-4" /> Activities by unit</h4>
+      <div className="mb-1 flex items-center justify-between">
+        <h4 className="flex items-center gap-2 text-sm font-semibold text-slate-600"><FolderTree className="h-4 w-4" /> Activities by unit</h4>
+        {collapsibleIds.size > 0 && <ExpandCollapseAll onExpand={expandAll} onCollapse={() => collapseAll(collapsibleIds)} />}
+      </div>
       <p className="mb-2 text-xs text-slate-400">Add work activities under each unit; each carries Material (qty × price) and Manpower (hours × rate). M = material, L = manpower; total includes any other components.</p>
       {childrenOf(null).map((r) => <Node key={r.id} area={r} depth={0} />)}
       {adding && (
