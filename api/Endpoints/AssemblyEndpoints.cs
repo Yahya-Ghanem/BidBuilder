@@ -47,8 +47,9 @@ public static class AssemblyEndpoints
         grp.MapPost("/", async (AssemblyInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db) =>
         {
             var g = await Guard(me, perm, ModuleAction.Add); if (g is not null) return g;
-            if (await db.Assemblies.AnyAsync(a => a.Code == i.Code)) return Dup(i.Code);
-            var a = new Assembly { Code = i.Code.Trim(), Name = i.Name.Trim(), Unit = i.Unit ?? "", IsActive = i.IsActive };
+            var code = i.Code.Trim();
+            if (await db.Assemblies.AnyAsync(a => a.Code == code)) return Dup(code);
+            var a = new Assembly { Code = code, Name = i.Name.Trim(), Unit = i.Unit ?? "", IsActive = i.IsActive };
             db.Assemblies.Add(a); await db.SaveChangesAsync();
             return Results.Created($"/api/assemblies/{a.Id}",
                 new AssemblyListDto(a.Id, a.Code, a.Name, a.Unit, a.ComputedRate, a.IsActive, 0));

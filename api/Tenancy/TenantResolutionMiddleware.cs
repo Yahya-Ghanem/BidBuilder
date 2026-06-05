@@ -95,6 +95,18 @@ public class TenantResolutionMiddleware(
             return;
         }
 
+        // A suspended workspace is a hard kill-switch for EVERY data route, not just new
+        // logins — an already-issued token (up to 8h) must stop working the moment its
+        // tenant is suspended. /api/auth/* is exempted so the login handler can return its
+        // own friendly 403 (and so a re-activated tenant's users can sign back in).
+        if (tenant.IsSuspended && !path.StartsWith("/api/auth", StringComparison.OrdinalIgnoreCase))
+        {
+            logger.LogWarning("Request to {Path} blocked — tenant {Slug} is suspended", path, tenant.Slug);
+            ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await ctx.Response.WriteAsJsonAsync(new { error = "This workspace is suspended. Contact your administrator." });
+            return;
+        }
+
         tenantCtx.Set(tenant.Id, tenant.Slug);
         await next(ctx);
     }

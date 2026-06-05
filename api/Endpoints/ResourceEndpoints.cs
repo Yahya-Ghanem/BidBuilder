@@ -42,8 +42,9 @@ public static class ResourceEndpoints
         labor.MapPost("/", async (LaborInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db) =>
         {
             var g = await Guard(me, perm, ModuleAction.Add); if (g is not null) return g;
-            if (await db.LaborResources.AnyAsync(r => r.Code == i.Code)) return Dup(i.Code);
-            var e = new LaborResource { Code = i.Code.Trim(), Name = i.Name.Trim(), Unit = i.Unit ?? "hr", RatePerHour = i.RatePerHour, IsActive = i.IsActive };
+            var code = i.Code.Trim();
+            if (await db.LaborResources.AnyAsync(r => r.Code == code)) return Dup(code);
+            var e = new LaborResource { Code = code, Name = i.Name.Trim(), Unit = i.Unit ?? "hr", RatePerHour = i.RatePerHour, IsActive = i.IsActive };
             db.LaborResources.Add(e); await db.SaveChangesAsync();
             return Results.Created($"/api/resources/labor/{e.Id}", new LaborDto(e.Id, e.Code, e.Name, e.Unit, e.RatePerHour, e.IsActive));
         });
@@ -76,8 +77,9 @@ public static class ResourceEndpoints
         mat.MapPost("/", async (MaterialInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db) =>
         {
             var g = await Guard(me, perm, ModuleAction.Add); if (g is not null) return g;
-            if (await db.MaterialResources.AnyAsync(r => r.Code == i.Code)) return Dup(i.Code);
-            var e = new MaterialResource { Code = i.Code.Trim(), Name = i.Name.Trim(), Unit = i.Unit, UnitPrice = i.UnitPrice, WastagePct = i.WastagePct, Supplier = i.Supplier, IsActive = i.IsActive };
+            var code = i.Code.Trim();
+            if (await db.MaterialResources.AnyAsync(r => r.Code == code)) return Dup(code);
+            var e = new MaterialResource { Code = code, Name = i.Name.Trim(), Unit = i.Unit, UnitPrice = i.UnitPrice, WastagePct = i.WastagePct, Supplier = i.Supplier, IsActive = i.IsActive };
             db.MaterialResources.Add(e); await db.SaveChangesAsync();
             return Results.Created($"/api/resources/materials/{e.Id}", new MaterialDto(e.Id, e.Code, e.Name, e.Unit, e.UnitPrice, e.WastagePct, e.Supplier, e.IsActive));
         });
@@ -110,8 +112,9 @@ public static class ResourceEndpoints
         eq.MapPost("/", async (EquipmentInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db) =>
         {
             var g = await Guard(me, perm, ModuleAction.Add); if (g is not null) return g;
-            if (await db.EquipmentResources.AnyAsync(r => r.Code == i.Code)) return Dup(i.Code);
-            var e = new EquipmentResource { Code = i.Code.Trim(), Name = i.Name.Trim(), Unit = i.Unit ?? "hr", RatePerHour = i.RatePerHour, IsActive = i.IsActive };
+            var code = i.Code.Trim();
+            if (await db.EquipmentResources.AnyAsync(r => r.Code == code)) return Dup(code);
+            var e = new EquipmentResource { Code = code, Name = i.Name.Trim(), Unit = i.Unit ?? "hr", RatePerHour = i.RatePerHour, IsActive = i.IsActive };
             db.EquipmentResources.Add(e); await db.SaveChangesAsync();
             return Results.Created($"/api/resources/equipment/{e.Id}", new EquipmentDto(e.Id, e.Code, e.Name, e.Unit, e.RatePerHour, e.IsActive));
         });
@@ -144,8 +147,9 @@ public static class ResourceEndpoints
         sub.MapPost("/", async (SubcontractorInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db) =>
         {
             var g = await Guard(me, perm, ModuleAction.Add); if (g is not null) return g;
-            if (await db.Subcontractors.AnyAsync(r => r.Code == i.Code)) return Dup(i.Code);
-            var e = new Subcontractor { Code = i.Code.Trim(), Name = i.Name.Trim(), Unit = i.Unit, UnitRate = i.UnitRate, IsActive = i.IsActive };
+            var code = i.Code.Trim();
+            if (await db.Subcontractors.AnyAsync(r => r.Code == code)) return Dup(code);
+            var e = new Subcontractor { Code = code, Name = i.Name.Trim(), Unit = i.Unit, UnitRate = i.UnitRate, IsActive = i.IsActive };
             db.Subcontractors.Add(e); await db.SaveChangesAsync();
             return Results.Created($"/api/resources/subcontractors/{e.Id}", new SubcontractorDto(e.Id, e.Code, e.Name, e.Unit, e.UnitRate, e.IsActive));
         });

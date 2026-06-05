@@ -294,11 +294,15 @@ public static class EstimateEndpoints
             try { await using var s = file.OpenReadStream(); parsed = import.ParseBoq(s); }
             catch (ImportException ex) { return Bad(ex.Message); }
 
-            // Resolve any assembly codes the sheet references (tenant-scoped).
+            // Resolve any assembly codes the sheet references (tenant-scoped). Matched
+            // case-insensitively so a sheet listing "asm-rc-foot" resolves the library's
+            // "ASM-RC-FOOT" instead of being rejected as unknown.
             var codes = parsed.SelectMany(x => x.Items).Where(i => i.AssemblyCode != null)
                               .Select(i => i.AssemblyCode!).Distinct().ToList();
-            var assemblies = await db.Assemblies.Where(a => codes.Contains(a.Code)).ToDictionaryAsync(a => a.Code, a => a.Id);
-            var missing = codes.Where(c => !assemblies.ContainsKey(c)).ToList();
+            var upper = codes.Select(c => c.ToUpperInvariant()).ToHashSet();
+            var assemblies = (await db.Assemblies.Where(a => upper.Contains(a.Code.ToUpper())).ToListAsync())
+                              .ToDictionary(a => a.Code.ToUpperInvariant(), a => a.Id);
+            var missing = codes.Where(c => !assemblies.ContainsKey(c.ToUpperInvariant())).ToList();
             if (missing.Count > 0) return Bad($"Unknown assembly code(s): {string.Join(", ", missing)}");
 
             // Append below any existing sections; build the graph and persist atomically.
@@ -310,7 +314,7 @@ public static class EstimateEndpoints
                 int itemSort = 0;
                 foreach (var it in sec.Items)
                 {
-                    var asmId = it.AssemblyCode != null ? (int?)assemblies[it.AssemblyCode] : null;
+                    var asmId = it.AssemblyCode != null ? (int?)assemblies[it.AssemblyCode.ToUpperInvariant()] : null;
                     section.Items.Add(new BoqItem
                     {
                         ItemCode = it.ItemCode, Description = it.Description, Unit = it.Unit,
@@ -362,7 +366,13 @@ public static class EstimateEndpoints
             if (i.Quantity < 0) return Bad("Quantity cannot be negative");
             if (i.AssemblyId is not null && !await db.Assemblies.AnyAsync(a => a.Id == i.AssemblyId)) return Bad("Assembly not found");
             var compErr = await ValidateComponents(db, i.Components); if (compErr is not null) return compErr;
-            if (i.AreaId is not null && !await db.Areas.AnyAsync(a => a.Id == i.AreaId)) return Bad("Area not found");
+            if (i.AreaId is not null)
+            {
+                // Areas are project-scoped — an item may only be tagged with an area of its
+                // OWN project, else the area roll-up silently mis-buckets it as Unassigned.
+                var areaProjectId = await db.Estimates.Where(e => e.Id == id).Select(e => e.ProjectId).FirstAsync();
+                if (!await db.Areas.AnyAsync(a => a.Id == i.AreaId && a.ProjectId == areaProjectId)) return Bad("Area not found");
+            }
             var hasComps = i.Components is { Count: > 0 };
             var item = new BoqItem
             {
@@ -385,7 +395,13 @@ public static class EstimateEndpoints
             if (i.Quantity < 0) return Bad("Quantity cannot be negative");
             if (i.AssemblyId is not null && !await db.Assemblies.AnyAsync(a => a.Id == i.AssemblyId)) return Bad("Assembly not found");
             var compErr = await ValidateComponents(db, i.Components); if (compErr is not null) return compErr;
-            if (i.AreaId is not null && !await db.Areas.AnyAsync(a => a.Id == i.AreaId)) return Bad("Area not found");
+            if (i.AreaId is not null)
+            {
+                // Areas are project-scoped — an item may only be tagged with an area of its
+                // OWN project, else the area roll-up silently mis-buckets it as Unassigned.
+                var areaProjectId = await db.Estimates.Where(e => e.Id == id).Select(e => e.ProjectId).FirstAsync();
+                if (!await db.Areas.AnyAsync(a => a.Id == i.AreaId && a.ProjectId == areaProjectId)) return Bad("Area not found");
+            }
             item.ItemCode = i.ItemCode ?? ""; item.Description = i.Description.Trim(); item.Unit = i.Unit ?? "";
             item.Quantity = i.Quantity; item.AssemblyId = i.AssemblyId; item.AreaId = i.AreaId; item.SortOrder = i.SortOrder;
 

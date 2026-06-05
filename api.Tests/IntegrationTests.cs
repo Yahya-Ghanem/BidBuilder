@@ -1283,3 +1283,101 @@ public class PlatformTests(ApiFixture fx)
         Assert.Equal(HttpStatusCode.Unauthorized, (await fx.Client().GetAsync("/api/platform/tenants")).StatusCode);
     }
 }
+
+// ── Hardening: robustness fixes (suspension kill-switch, area scoping, input guards) ──
+[Collection("api")]
+public class HardeningTests(ApiFixture fx)
+{
+    // Suspending a tenant must kill ALREADY-ISSUED tokens immediately (not just new logins).
+    [Fact]
+    public async Task Suspended_tenant_blocks_an_already_issued_token()
+    {
+        var super = await fx.PlatformAdminClientAsync();
+        Assert.Equal(HttpStatusCode.Created, (await super.PostAsJsonAsync("/api/platform/tenants", new
+        {
+            slug = "harden-susp", name = "Harden Susp",
+            adminName = "H Admin", adminEmail = "admin@harden-susp.local", adminPassword = "Pw@123456",
+        })).StatusCode);
+
+        // Get a live token BEFORE suspension and prove it works.
+        var admin = await fx.AuthedClientAsync("admin@harden-susp.local", "Pw@123456", "harden-susp");
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/api/projects")).StatusCode);
+
+        var id = (await super.GetFromJsonAsync<JsonElement>("/api/platform/tenants"))
+            .EnumerateArray().First(t => t.GetProperty("slug").GetString() == "harden-susp").GetProperty("id").GetGuid();
+        await super.PostAsync($"/api/platform/tenants/{id}/suspend", null);
+
+        // The SAME token (no re-login) is now rejected mid-session.
+        Assert.Equal(HttpStatusCode.Forbidden, (await admin.GetAsync("/api/projects")).StatusCode);
+
+        // Re-activate → the same token works again.
+        await super.PostAsync($"/api/platform/tenants/{id}/activate", null);
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/api/projects")).StatusCode);
+    }
+
+    // A BOQ item may only reference an area of its OWN project, not another project's.
+    [Fact]
+    public async Task BOQ_item_rejects_a_foreign_projects_area()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.NewEstimateAsync(c, pid, "areascope");
+        var sid = await Api.AddSectionAsync(c, eid, "AS");
+
+        // A second project with its own area.
+        var p2 = (await (await c.PostAsJsonAsync("/api/projects", new { code = ("AS2-" + System.Guid.NewGuid().ToString("N"))[..12], name = "Other Proj", currency = "AED" })).Json()).GetProperty("id").GetInt32();
+        var foreignArea = (await (await c.PostAsJsonAsync($"/api/projects/{p2}/areas",
+            new { name = "Foreign", code = "FN", kind = "Area", parentAreaId = (int?)null, sortOrder = 0, quantity = 0m, unit = (string?)null })).Json()).GetProperty("id").GetInt32();
+
+        // Tagging this estimate's item with the OTHER project's area is rejected.
+        var bad = await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items",
+            new { description = "x", unit = "no", quantity = 1, assemblyId = (int?)null, unitRate = 1, sortOrder = 0, components = (object?)null, areaId = foreignArea });
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+
+        // An area of THIS project is accepted.
+        var ownArea = (await (await c.PostAsJsonAsync($"/api/projects/{pid}/areas",
+            new { name = "Own", code = ("OWN" + System.Guid.NewGuid().ToString("N"))[..6], kind = "Area", parentAreaId = (int?)null, sortOrder = 0, quantity = 0m, unit = (string?)null })).Json()).GetProperty("id").GetInt32();
+        var ok = await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items",
+            new { description = "y", unit = "no", quantity = 1, assemblyId = (int?)null, unitRate = 1, sortOrder = 1, components = (object?)null, areaId = ownArea });
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+    }
+
+    // A mislabeled (fake content-type) logo upload is rejected, so it can't 500 exports later.
+    [Fact]
+    public async Task Logo_upload_rejects_non_image_bytes()
+    {
+        var c = await fx.AdminClientAsync();
+        var form = new MultipartFormDataContent();
+        var content = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes("this is definitely not a PNG"));
+        content.Headers.ContentType = new MediaTypeHeaderValue("image/png");   // lies about the type
+        form.Add(content, "file", "evil.png");
+        var resp = await c.PostAsync("/api/settings/logo", form);
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    // A duplicate code differing only by surrounding whitespace yields a clean 409, not a 500.
+    [Fact]
+    public async Task Duplicate_resource_code_with_whitespace_is_409_not_500()
+    {
+        var c = await fx.AdminClientAsync();
+        var code = ("HRD" + System.Guid.NewGuid().ToString("N"))[..8];
+        Assert.Equal(HttpStatusCode.Created,
+            (await c.PostAsJsonAsync("/api/resources/labor", new { code, name = "A", unit = "hr", ratePerHour = 10m, isActive = true })).StatusCode);
+        var dup = await c.PostAsJsonAsync("/api/resources/labor", new { code = code + "  ", name = "B", unit = "hr", ratePerHour = 10m, isActive = true });
+        Assert.Equal(HttpStatusCode.Conflict, dup.StatusCode);
+    }
+
+    // Settings input is validated → clean 400, never a varchar(3) 500 or negative-markup corruption.
+    [Fact]
+    public async Task Settings_rejects_bad_base_currency_and_negative_percentages()
+    {
+        var c = await fx.AdminClientAsync();
+        var badCcy = await c.PutAsJsonAsync("/api/settings",
+            new { baseCurrency = "DOLLAR", defaultOverheadPct = 8m, defaultProfitPct = 12m, defaultContingencyPct = 5m });
+        Assert.Equal(HttpStatusCode.BadRequest, badCcy.StatusCode);
+
+        var badPct = await c.PutAsJsonAsync("/api/settings",
+            new { baseCurrency = "AED", defaultOverheadPct = -1m, defaultProfitPct = 12m, defaultContingencyPct = 5m });
+        Assert.Equal(HttpStatusCode.BadRequest, badPct.StatusCode);
+    }
+}

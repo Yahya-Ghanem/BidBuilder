@@ -44,13 +44,26 @@ public static class SettingsEndpoints
             if (!me.IsAdmin())
                 return Results.Json(new { error = "Only a tenant admin can edit settings" }, statusCode: 403);
 
+            // Validate before any write — a bad base currency would otherwise hit the
+            // varchar(3) column and throw a 500 instead of a clean 400, and negative
+            // default percentages would silently corrupt every new estimate's markups.
+            string? baseCurrency = null;
+            if (!string.IsNullOrWhiteSpace(i.BaseCurrency))
+            {
+                baseCurrency = i.BaseCurrency!.Trim().ToUpperInvariant();
+                if (baseCurrency.Length != 3 || !baseCurrency.All(char.IsLetter))
+                    return Bad("Base currency must be a 3-letter ISO-4217 code.");
+            }
+            if (i.DefaultOverheadPct < 0 || i.DefaultProfitPct < 0 || i.DefaultContingencyPct < 0)
+                return Bad("Default percentages cannot be negative.");
+
             var s = await db.TenantSettings.FirstOrDefaultAsync();
             if (s is null) { s = new TenantSettings(); db.TenantSettings.Add(s); }   // TenantId auto-stamped on save
 
             s.Website = Trim(i.Website); s.ContactEmail = Trim(i.ContactEmail); s.Phone = Trim(i.Phone);
             s.Address = Trim(i.Address); s.City = Trim(i.City); s.Country = Trim(i.Country);
             if (!string.IsNullOrWhiteSpace(i.Timezone)) s.Timezone = i.Timezone!.Trim();
-            if (!string.IsNullOrWhiteSpace(i.BaseCurrency)) s.BaseCurrency = i.BaseCurrency!.Trim();
+            if (baseCurrency is not null) s.BaseCurrency = baseCurrency;
             s.DefaultOverheadPct = i.DefaultOverheadPct;
             s.DefaultProfitPct = i.DefaultProfitPct;
             s.DefaultContingencyPct = i.DefaultContingencyPct;
@@ -76,10 +89,17 @@ public static class SettingsEndpoints
 
             using var ms = new MemoryStream();
             await file.CopyToAsync(ms);
+            var bytes = ms.ToArray();
+
+            // The content-type header is client-controlled — verify the actual bytes are
+            // a real PNG/JPEG so a mislabeled/garbage file can't be stored and then 500
+            // every branded export when the image decoder chokes on it.
+            if (!LooksLikeImage(bytes))
+                return Results.Json(new { error = "Logo must be a valid PNG or JPEG image." }, statusCode: 400);
 
             var s = await db.TenantSettings.FirstOrDefaultAsync();
             if (s is null) { s = new TenantSettings(); db.TenantSettings.Add(s); }
-            s.LogoBytes = ms.ToArray();
+            s.LogoBytes = bytes;
             s.LogoContentType = ct;
             s.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
@@ -149,7 +169,20 @@ public static class SettingsEndpoints
         });
     }
 
+    private static IResult Bad(string msg) => Results.Json(new { error = msg }, statusCode: 400);
+
     private static string? Trim(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+
+    /// <summary>True if the bytes start with a PNG or JPEG magic-number signature.</summary>
+    private static bool LooksLikeImage(byte[] b)
+    {
+        // PNG: 89 50 4E 47 0D 0A 1A 0A
+        if (b.Length >= 8 && b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47
+            && b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A) return true;
+        // JPEG: FF D8 FF
+        if (b.Length >= 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF) return true;
+        return false;
+    }
 
     private static SettingsDto ToDto(string companyName, TenantSettings? s) => new(
         companyName, s?.Website, s?.ContactEmail, s?.Phone, s?.Address, s?.City, s?.Country,
