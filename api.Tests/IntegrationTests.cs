@@ -336,6 +336,48 @@ public class ExportTests(ApiFixture fx)
         Assert.Equal(mime, r.Content.Headers.ContentType?.MediaType);
         Assert.Equal(filename, r.Content.Headers.ContentDisposition?.FileNameStar ?? r.Content.Headers.ContentDisposition?.FileName);
     }
+
+    // The Activities-by-Unit group rows must show the rolled-up Material / Manpower / Total
+    // of the activities beneath them — not blank (the bug shown in the report screenshot).
+    [Fact]
+    public async Task Activities_group_rows_show_rolled_up_subtotals()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.NewEstimateAsync(c, pid, "actsub");
+        var sid = await Api.AddSectionAsync(c, eid, "ACT");
+        var mat = await Api.TypeIdAsync(c, "MAT");
+        var lab = await Api.TypeIdAsync(c, "LAB");
+
+        var areaName = "Unit-" + System.Guid.NewGuid().ToString("N")[..6];
+        var area = await (await c.PostAsJsonAsync($"/api/projects/{pid}/areas", new
+        {
+            name = areaName, code = "U1", kind = "Unit", parentAreaId = (int?)null, sortOrder = 0, quantity = 0m, unit = (string?)null,
+        })).Json();
+        int aid = area.GetProperty("id").GetInt32();
+
+        // Two activities: MAT 1000 + LAB 300 (total 1300), MAT 500 + LAB 200 (total 700).
+        await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items", new
+        {
+            description = "Plastering", unit = "m2", quantity = 1, assemblyId = (int?)null, unitRate = 0, sortOrder = 0,
+            components = new object[] { new { typeId = mat, value = 1000 }, new { typeId = lab, value = 300 } }, areaId = aid,
+        });
+        await c.PostAsJsonAsync($"/api/estimates/{eid}/sections/{sid}/items", new
+        {
+            description = "Painting", unit = "m2", quantity = 1, assemblyId = (int?)null, unitRate = 0, sortOrder = 1,
+            components = new object[] { new { typeId = mat, value = 500 }, new { typeId = lab, value = 200 } }, areaId = aid,
+        });
+
+        var bytes = await (await c.GetAsync($"/api/estimates/{eid}/activities.xlsx")).Content.ReadAsByteArrayAsync();
+        using var wb = new XLWorkbook(new MemoryStream(bytes));
+        var ws = wb.Worksheets.First(w => w.CellsUsed().Any(x => x.GetString() == "Area / Activity"));
+        var groupRow = ws.RowsUsed().First(row =>
+            row.Cell(1).GetString().Contains(areaName) && row.Cell(1).GetString().Contains("(Unit)"));
+
+        Assert.Equal(1500m, groupRow.Cell(2).GetValue<decimal>());   // Material:  1000 + 500
+        Assert.Equal(500m, groupRow.Cell(3).GetValue<decimal>());    // Manpower:   300 + 200
+        Assert.Equal(2000m, groupRow.Cell(4).GetValue<decimal>());   // Total:     1300 + 700
+    }
 }
 
 [Collection("api")]
