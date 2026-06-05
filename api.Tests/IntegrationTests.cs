@@ -466,6 +466,60 @@ public class ActivityCatalogTests(ApiFixture fx)
 }
 
 [Collection("api")]
+public class ProjectTypeCatalogTests(ApiFixture fx)
+{
+    [Fact]
+    public async Task Builtin_project_types_are_seeded()
+    {
+        var c = await fx.AdminClientAsync();
+        var arr = await c.GetFromJsonAsync<JsonElement>("/api/project-types");
+        var names = arr.EnumerateArray().Select(a => a.GetProperty("name").GetString()).ToList();
+        Assert.Contains("Civil", names);
+        Assert.Contains("Mechanical", names);
+        Assert.Contains("Electrical", names);
+    }
+
+    [Fact]
+    public async Task Create_type_assign_to_project_then_flows_back_and_guards()
+    {
+        var c = await fx.AdminClientAsync();
+
+        // add a user type
+        var created = await (await c.PostAsJsonAsync("/api/project-types", new { name = "Marine works", sortOrder = 0, isActive = true })).Json();
+        int typeId = created.GetProperty("id").GetInt32();
+        Assert.False(created.GetProperty("builtin").GetBoolean());
+
+        // duplicate name (case-insensitive) → 409
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await c.PostAsJsonAsync("/api/project-types", new { name = "marine works", sortOrder = 0, isActive = true })).StatusCode);
+
+        // create a project carrying the type → name flows back
+        var proj = await (await c.PostAsJsonAsync("/api/projects", new { name = "Typed Project", projectTypeId = typeId })).Json();
+        Assert.Equal(typeId, proj.GetProperty("projectTypeId").GetInt32());
+        Assert.Equal("Marine works", proj.GetProperty("projectTypeName").GetString());
+        int projectId = proj.GetProperty("id").GetInt32();
+
+        // type in use → delete blocked (409)
+        Assert.Equal(HttpStatusCode.Conflict, (await c.DeleteAsync($"/api/project-types/{typeId}")).StatusCode);
+
+        // built-in cannot be deleted → 409
+        var arr = await c.GetFromJsonAsync<JsonElement>("/api/project-types");
+        int builtinId = arr.EnumerateArray().First(a => a.GetProperty("builtin").GetBoolean()).GetProperty("id").GetInt32();
+        Assert.Equal(HttpStatusCode.Conflict, (await c.DeleteAsync($"/api/project-types/{builtinId}")).StatusCode);
+
+        // detach from the project, then the user type deletes cleanly (restore baseline)
+        Assert.Equal(HttpStatusCode.OK, (await c.PutAsJsonAsync($"/api/projects/{projectId}", new { name = "Typed Project", projectTypeId = (int?)null })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await c.DeleteAsync($"/api/project-types/{typeId}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Project_types_require_authentication()
+    {
+        Assert.Equal(HttpStatusCode.Unauthorized, (await fx.Client().GetAsync("/api/project-types")).StatusCode);
+    }
+}
+
+[Collection("api")]
 public class UserManagementTests(ApiFixture fx)
 {
     [Fact]

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { Plus, Trash2, SlidersHorizontal, RotateCcw, Copy, Upload, FileDown, FolderInput, Pencil } from "lucide-react"
 import { toast } from "sonner"
 import { fetchApi, downloadFile, uploadFile, ApiError } from "@/lib/api"
-import type { Project, EstimateSummary, EstimateBreakdown, SectionBreakdown, ItemBreakdown, AssemblyRow, ProjectTeam, GroupOption, MarkupBreakdown, WhatIfResult, ImportResult, CurrencyRates, CostComponentType, ActivityType, Area, AreaRollup, AreaRollupRow } from "@/lib/types"
+import type { Project, EstimateSummary, EstimateBreakdown, SectionBreakdown, ItemBreakdown, AssemblyRow, ProjectTeam, GroupOption, MarkupBreakdown, WhatIfResult, ImportResult, CurrencyRates, CostComponentType, ActivityType, ProjectType, Area, AreaRollup, AreaRollupRow } from "@/lib/types"
 import { AppShell } from "@/components/app-shell"
 import { useAuth } from "@/lib/auth"
 import { usePermissions } from "@/lib/permissions"
@@ -39,7 +39,7 @@ function Detail({ projectId }: { projectId: number }) {
       <Card className="p-5">
         <div className="flex items-start justify-between">
           <div>
-            <span className="font-mono text-xs text-slate-400">{p.code}</span>
+            <span className="font-mono text-xs text-slate-400">{p.code}{p.projectTypeName ? ` · ${p.projectTypeName}` : ""}</span>
             <h2 className="text-xl font-bold text-slate-800">{p.name}</h2>
             <p className="text-sm text-slate-500">{p.clientName ?? "—"} · {p.location ?? "—"}</p>
           </div>
@@ -68,6 +68,8 @@ function Detail({ projectId }: { projectId: number }) {
 
 function EditProjectModal({ project, onClose }: { project: Project; onClose: () => void }) {
   const qc = useQueryClient()
+  const { data: projectTypes } = useQuery({ queryKey: ["project-types"], queryFn: () => fetchApi<ProjectType[]>("/api/project-types") })
+  const typeOptions = (projectTypes ?? []).filter((t) => t.isActive || t.id === project.projectTypeId)
   const [f, setF] = useState({
     name: project.name,
     clientName: project.clientName ?? "",
@@ -76,6 +78,7 @@ function EditProjectModal({ project, onClose }: { project: Project; onClose: () 
     durationMonths: project.durationMonths != null ? String(project.durationMonths) : "",
     status: project.status,
     tenderDueAt: project.tenderDueAt ? project.tenderDueAt.slice(0, 10) : "",
+    projectTypeId: project.projectTypeId != null ? String(project.projectTypeId) : "",
   })
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value })
   const save = useMutation({
@@ -86,6 +89,7 @@ function EditProjectModal({ project, onClose }: { project: Project; onClose: () 
         durationMonths: f.durationMonths ? Number(f.durationMonths) : null,
         tenderDueAt: f.tenderDueAt ? new Date(f.tenderDueAt).toISOString() : null,
         status: f.status,
+        projectTypeId: f.projectTypeId ? Number(f.projectTypeId) : null,
       }),
     }),
     onSuccess: () => {
@@ -103,7 +107,15 @@ function EditProjectModal({ project, onClose }: { project: Project; onClose: () 
     <Modal open onClose={onClose} title={`Edit ${project.code}`}>
       <form id="edit-project" onSubmit={(e) => { e.preventDefault(); if (f.name.trim()) save.mutate() }} className="space-y-3">
         <Field label="Name *"><Input value={f.name} onChange={set("name")} required /></Field>
-        <Field label="Client"><Input value={f.clientName} onChange={set("clientName")} /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Client"><Input value={f.clientName} onChange={set("clientName")} /></Field>
+          <Field label="Project type">
+            <Select value={f.projectTypeId} onChange={set("projectTypeId")}>
+              <option value="">— none —</option>
+              {typeOptions.map((t) => <option key={t.id} value={t.id}>{t.name}{t.isActive ? "" : " (inactive)"}</option>)}
+            </Select>
+          </Field>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Location"><Input value={f.location} onChange={set("location")} /></Field>
           <Field label="Currency"><Input value={f.currency} onChange={set("currency")} maxLength={3} /></Field>

@@ -53,6 +53,15 @@ public static class DbInitializer
         "HVAC works", "Fire fighting", "Sanitary fixtures", "Cleaning & handover",
     ];
 
+    // Common project types seeded as built-ins; offered when creating a project.
+    // Tenants add their own and the list can grow.
+    private static readonly string[] DefaultProjectTypes =
+    [
+        "Civil", "Structural", "Architectural", "Mechanical", "Electrical",
+        "Plumbing", "HVAC", "Fire Fighting", "Infrastructure", "Fit-out",
+        "Landscaping", "MEP",
+    ];
+
     public static async Task RunAsync(IServiceProvider services)
     {
         using var scope = services.CreateScope();
@@ -123,6 +132,16 @@ public static class DbInitializer
             var name = DefaultActivities[i];
             if (activityNames.Contains(name)) continue;
             db.ActivityTypes.Add(new ActivityType { TenantId = t.Id, Name = name, SortOrder = i, IsActive = true, Builtin = true });
+        }
+        await db.SaveChangesAsync();
+
+        // ── Default project types (idempotent — also backfills existing tenants) ──
+        var projectTypeNames = await db.ProjectTypes.Select(a => a.Name).ToListAsync();
+        for (int i = 0; i < DefaultProjectTypes.Length; i++)
+        {
+            var name = DefaultProjectTypes[i];
+            if (projectTypeNames.Contains(name)) continue;
+            db.ProjectTypes.Add(new ProjectType { TenantId = t.Id, Name = name, SortOrder = i, IsActive = true, Builtin = true });
         }
         await db.SaveChangesAsync();
 
