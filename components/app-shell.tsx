@@ -10,7 +10,7 @@ import { ProjectsTreeProvider, ProjectsSidebarTree } from "@/components/projects
 import type { ReactNode } from "react"
 
 const NAV = [
-  { href: "/projects", label: "Projects", icon: FolderKanban, module: "projects" },
+  { href: "/projects", label: "BidBuilder", icon: FolderKanban, module: "projects" },
   { href: "/resources", label: "Resource Library", icon: Library, module: "resource-library" },
   { href: "/assemblies", label: "Assemblies", icon: Boxes, module: "assemblies" },
   { href: "/benchmarks", label: "Benchmarks", icon: BarChart3, module: "reports" },
