@@ -64,8 +64,7 @@ function Row({
     <div
       className={`flex items-center gap-1.5 rounded px-1 py-1 text-sm select-none ${onToggle ? "cursor-pointer" : ""} ${selected ? "bg-[var(--brand)]/10 text-[var(--brand)]" : "hover:bg-slate-100 text-slate-700"}`}
       style={{ paddingLeft: depth * 14 + 4 }}
-      onDoubleClick={onToggle}
-      title={onToggle ? "Double-click to expand" : undefined}
+      onClick={onToggle}
     >
       {hasChildren
         ? <span className="shrink-0 text-slate-400">{open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}</span>
@@ -162,7 +161,7 @@ export function ProjectsDetailPane() {
               <span className="font-semibold text-slate-800">{selected.sectionLabel}</span>
             </nav>
           ) : (
-            <p className="text-sm text-slate-500">Double-click a section node in the sidebar to display its data here.</p>
+            <p className="text-sm text-slate-500">Click a section node in the sidebar to display its data here.</p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
