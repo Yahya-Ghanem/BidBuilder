@@ -85,7 +85,7 @@ export function ProjectsSidebarTree() {
   const [open, setOpen] = useState(true)
   return (
     <div className="mt-1">
-      <Row depth={1} open={open} hasChildren icon={<Building2 className="h-3.5 w-3.5" />} label="BidBuilder" hint="(root)"
+      <Row depth={1} open={open} hasChildren icon={<Building2 className="h-3.5 w-3.5" />} label="Projects" hint="(root)"
         onToggle={() => setOpen((o) => !o)} />
       {open && <ProjectsBranch depth={2} />}
     </div>
