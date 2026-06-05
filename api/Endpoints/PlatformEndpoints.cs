@@ -84,9 +84,10 @@ public static class PlatformEndpoints
                 if ((i.AdminPassword ?? "").Length < MinPasswordLength)
                     return Bad($"Admin password must be at least {MinPasswordLength} characters.");
                 // Email is unique per tenant; a brand-new tenant can't collide, but guard
-                // against a platform-wide reuse that would confuse later logins.
-                if (await db.Users.IgnoreQueryFilters().AnyAsync(u => u.Email == adminEmail && u.TenantId != null))
-                    return Conflict("A user with that email already exists in another tenant.");
+                // against any platform-wide reuse (including a SuperAdmin's) that would
+                // confuse later logins and audit trails.
+                if (await db.Users.IgnoreQueryFilters().AnyAsync(u => u.Email == adminEmail))
+                    return Conflict("A user with that email already exists.");
             }
 
             var t = new Tenant { Id = Guid.NewGuid(), Slug = slug, Name = name, DefaultLocale = locale };
