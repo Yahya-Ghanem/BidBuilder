@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
-  Plus, ChevronRight, ChevronDown, Building2, Folder, FolderOpen, FileText, ExternalLink, Maximize2, LayoutGrid,
+  Plus, ChevronRight, ChevronDown, Building2, Folder, FolderOpen, FileText, ExternalLink, Maximize2, LayoutGrid, Tag,
 } from "lucide-react"
 import { toast } from "sonner"
 import { fetchApi } from "@/lib/api"
@@ -86,12 +86,34 @@ export function ProjectsSidebarTree() {
   )
 }
 
+const UNTYPED = "Untyped"
+
 function ProjectsBranch({ depth }: { depth: number }) {
   const { data, isLoading, error } = useQuery({ queryKey: ["projects"], queryFn: () => fetchApi<Project[]>("/api/projects") })
   if (isLoading) return <Message depth={depth}>Loading…</Message>
   if (error) return <Message depth={depth} tone="error">{(error as Error).message}</Message>
   if (!data?.length) return <Message depth={depth}>No projects.</Message>
-  return <>{data.map((p) => <ProjectBranch key={p.id} project={p} depth={depth} />)}</>
+  // Group projects by their type; "Untyped" sorts last, the rest alphabetically.
+  const groups = new Map<string, Project[]>()
+  for (const p of data) {
+    const key = p.projectTypeName ?? UNTYPED
+    ;(groups.get(key) ?? groups.set(key, []).get(key)!).push(p)
+  }
+  const entries = [...groups.entries()].sort((a, b) =>
+    a[0] === UNTYPED ? 1 : b[0] === UNTYPED ? -1 : a[0].localeCompare(b[0]))
+  return <>{entries.map(([type, projects]) => <ProjectTypeGroup key={type} type={type} projects={projects} depth={depth} />)}</>
+}
+
+function ProjectTypeGroup({ type, projects, depth }: { type: string; projects: Project[]; depth: number }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div>
+      <Row depth={depth} open={open} hasChildren icon={<Tag className="h-3.5 w-3.5" />}
+        label={type} hint={`${projects.length} project${projects.length > 1 ? "s" : ""}`}
+        onToggle={() => setOpen((o) => !o)} />
+      {open && projects.map((p) => <ProjectBranch key={p.id} project={p} depth={depth + 1} />)}
+    </div>
+  )
 }
 
 function ProjectBranch({ project, depth }: { project: Project; depth: number }) {
@@ -101,7 +123,7 @@ function ProjectBranch({ project, depth }: { project: Project; depth: number }) 
     <div>
       <Row depth={depth} open={open} hasChildren={has}
         icon={open && has ? <FolderOpen className="h-3.5 w-3.5" /> : <Folder className="h-3.5 w-3.5" />}
-        label={project.name} hint={`${project.code}${project.projectTypeName ? ` · ${project.projectTypeName}` : ""}`}
+        label={project.name} hint={project.code}
         onToggle={has ? () => setOpen((o) => !o) : undefined} />
       {open && has && <EstimatesBranch projectId={project.id} projectName={project.name} depth={depth + 1} />}
     </div>
