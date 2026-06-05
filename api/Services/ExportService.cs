@@ -370,15 +370,25 @@ public class ExportService
         StyleHeader(ws.Range(r, 1, r, 4));
         ws.Range(r, 2, r, 4).Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Right);
         int header = r; r++;
-        int firstData = r;
+
+        // Roll Material/Manpower up the area tree so each group row carries the subtotal
+        // of every activity beneath it (units roll into sub-areas, sub-areas into areas).
+        var rolled = RollupMatLab(m.AreaRollup?.Areas ?? new(), items);
+        var detailBlocks = new List<(int From, int To)>();   // contiguous activity rows, for data bars
+
         if (m.AreaRollup is { Areas.Count: > 0 })
             foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas))
             {
+                var (mat, lab) = rolled.GetValueOrDefault(node.Id);
                 ws.Cell(r, 1).Value = new string(' ', depth * 4) + node.Name + "  (" + node.Kind + ")";
+                ws.Cell(r, 2).Value = mat;              ws.Cell(r, 2).Style.NumberFormat.Format = "#,##0.00";
+                ws.Cell(r, 3).Value = lab;              ws.Cell(r, 3).Style.NumberFormat.Format = "#,##0.00";
+                ws.Cell(r, 4).Value = node.RollupTotal; ws.Cell(r, 4).Style.NumberFormat.Format = "#,##0.00";
                 var gr = ws.Range(r, 1, r, 4);
                 gr.Style.Font.SetBold(); gr.Style.Fill.SetBackgroundColor(GroupFill);
-                ws.Cell(r, 1).Style.Font.SetFontColor(BrandDark);
+                gr.Style.Font.SetFontColor(BrandDark);
                 r++;
+                int blockStart = r;
                 bool band = false;
                 foreach (var i in items.Where(x => x.AreaId == node.Id))
                 {
@@ -391,15 +401,18 @@ public class ExportService
                     band = !band;
                     r++;
                 }
+                if (r > blockStart) detailBlocks.Add((blockStart, r - 1));
             }
         int lastData = r - 1;
-        if (lastData >= firstData)
+        // Data bars cover the activity (detail) rows only — the group subtotals would
+        // otherwise dominate the scale and flatten the activity bars.
+        foreach (var (from, to) in detailBlocks)
         {
-            ws.Range(firstData, 2, lastData, 2).AddConditionalFormat().DataBar(MatColor).LowestValue().HighestValue();
-            ws.Range(firstData, 3, lastData, 3).AddConditionalFormat().DataBar(ManColor).LowestValue().HighestValue();
-            ws.Range(firstData, 4, lastData, 4).AddConditionalFormat().DataBar(Brand).LowestValue().HighestValue();
-            Box(ws.Range(header, 1, lastData, 4));
+            ws.Range(from, 2, to, 2).AddConditionalFormat().DataBar(MatColor).LowestValue().HighestValue();
+            ws.Range(from, 3, to, 3).AddConditionalFormat().DataBar(ManColor).LowestValue().HighestValue();
+            ws.Range(from, 4, to, 4).AddConditionalFormat().DataBar(Brand).LowestValue().HighestValue();
         }
+        if (lastData > header) Box(ws.Range(header, 1, lastData, 4));
         ws.SheetView.FreezeRows(header);
         ws.Columns().AdjustToContents();
     }
@@ -429,6 +442,7 @@ public class ExportService
         var e = m.Estimate;
         var items = e.Sections.SelectMany(s => s.Items).Where(i => i.AreaId != null).ToList();
         decimal Comp(ItemBreakdown i, string code) => i.Components.FirstOrDefault(c => c.Code == code)?.Amount ?? 0;
+        var rolled = RollupMatLab(m.AreaRollup?.Areas ?? new(), items);
 
         var doc = Document.Create(container => container.Page(page =>
         {
@@ -447,7 +461,11 @@ public class ExportService
                 if (m.AreaRollup is { Areas.Count: > 0 })
                     foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas))
                     {
-                        table.Cell().ColumnSpan(4).Background(Colors.Grey.Lighten4).PaddingLeft(depth * 12).Padding(3).Text($"{node.Name} ({node.Kind})").SemiBold();
+                        var (gMat, gLab) = rolled.GetValueOrDefault(node.Id);
+                        table.Cell().Background(Colors.Grey.Lighten4).PaddingLeft(depth * 12).Padding(3).Text($"{node.Name} ({node.Kind})").SemiBold();
+                        table.Cell().Background(Colors.Grey.Lighten4).Padding(3).AlignRight().Text($"{gMat:#,##0.00}").SemiBold();
+                        table.Cell().Background(Colors.Grey.Lighten4).Padding(3).AlignRight().Text($"{gLab:#,##0.00}").SemiBold();
+                        table.Cell().Background(Colors.Grey.Lighten4).Padding(3).AlignRight().Text($"{node.RollupTotal:#,##0.00}").SemiBold();
                         foreach (var i in items.Where(x => x.AreaId == node.Id))
                         {
                             table.Cell().PaddingLeft(depth * 12 + 8).Padding(3).Text(i.Description);
@@ -624,6 +642,40 @@ public class ExportService
     }
 
     /// <summary>Depth-first flatten of the area roll-up into (node, depth) in tree order.</summary>
+    /// <summary>
+    /// Material + Manpower totals per area, rolled UP the tree (each area carries the sum
+    /// of its own activities plus every descendant's), keyed by area id. Mirrors how
+    /// AreaRollupRow.RollupTotal aggregates the grand total, so a group row can show a
+    /// Material / Manpower / Total subtotal for everything beneath it.
+    /// </summary>
+    private static Dictionary<int, (decimal Mat, decimal Lab)> RollupMatLab(
+        List<AreaRollupRow> areas, List<ItemBreakdown> items)
+    {
+        decimal Comp(ItemBreakdown i, string code) => i.Components.FirstOrDefault(c => c.Code == code)?.Amount ?? 0;
+        var directMat = new Dictionary<int, decimal>();
+        var directLab = new Dictionary<int, decimal>();
+        foreach (var i in items.Where(x => x.AreaId != null))
+        {
+            int aid = i.AreaId!.Value;
+            directMat[aid] = directMat.GetValueOrDefault(aid) + Comp(i, "MAT");
+            directLab[aid] = directLab.GetValueOrDefault(aid) + Comp(i, "LAB");
+        }
+        var childrenOf = areas.Where(a => a.ParentAreaId is not null)
+            .GroupBy(a => a.ParentAreaId!.Value).ToDictionary(g => g.Key, g => g.Select(x => x.Id).ToList());
+        var memo = new Dictionary<int, (decimal, decimal)>();
+        (decimal Mat, decimal Lab) Roll(int id)
+        {
+            if (memo.TryGetValue(id, out var cached)) return cached;
+            var mat = directMat.GetValueOrDefault(id);
+            var lab = directLab.GetValueOrDefault(id);
+            if (childrenOf.TryGetValue(id, out var kids))
+                foreach (var k in kids) { var (cm, cl) = Roll(k); mat += cm; lab += cl; }
+            return memo[id] = (mat, lab);
+        }
+        foreach (var a in areas) Roll(a.Id);
+        return memo;
+    }
+
     private static List<(AreaRollupRow Node, int Depth)> FlattenAreas(List<AreaRollupRow> areas)
     {
         var result = new List<(AreaRollupRow, int)>();
