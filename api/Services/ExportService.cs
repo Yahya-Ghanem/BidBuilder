@@ -320,6 +320,223 @@ public class ExportService
         return doc.GeneratePdf();
     }
 
+    // ── Activities by unit (standalone) ─────────────────────────────────────
+    public byte[] BuildActivitiesExcel(ExportModel m)
+    {
+        var e = m.Estimate;
+        var items = e.Sections.SelectMany(s => s.Items).Where(i => i.AreaId != null).ToList();
+        decimal Comp(ItemBreakdown i, string code) => i.Components.FirstOrDefault(c => c.Code == code)?.Amount ?? 0;
+
+        using var wb = new XLWorkbook();
+        var ws = wb.AddWorksheet("Activities by Unit");
+        var r = ExcelHeader(ws, m, "Activities by Unit");
+        ws.Cell(r, 1).Value = "Area / Activity"; ws.Cell(r, 2).Value = "Material"; ws.Cell(r, 3).Value = "Manpower"; ws.Cell(r, 4).Value = "Total";
+        ws.Row(r).Style.Font.SetBold().Fill.SetBackgroundColor(XLColor.LightGray); r++;
+        if (m.AreaRollup is { Areas.Count: > 0 })
+            foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas))
+            {
+                ws.Cell(r, 1).Value = new string(' ', depth * 4) + node.Name + "  (" + node.Kind + ")";
+                ws.Cell(r, 1).Style.Font.SetBold(); r++;
+                foreach (var i in items.Where(x => x.AreaId == node.Id))
+                {
+                    ws.Cell(r, 1).Value = new string(' ', depth * 4 + 4) + i.Description;
+                    ws.Cell(r, 2).Value = Comp(i, "MAT"); ws.Cell(r, 2).Style.NumberFormat.Format = "#,##0.00";
+                    ws.Cell(r, 3).Value = Comp(i, "LAB"); ws.Cell(r, 3).Style.NumberFormat.Format = "#,##0.00";
+                    ws.Cell(r, 4).Value = i.LineTotal;    ws.Cell(r, 4).Style.NumberFormat.Format = "#,##0.00";
+                    r++;
+                }
+            }
+        ws.Columns().AdjustToContents();
+        using var ms = new MemoryStream(); wb.SaveAs(ms); return ms.ToArray();
+    }
+
+    public byte[] BuildActivitiesCsv(ExportModel m)
+    {
+        var e = m.Estimate; var ci = CultureInfo.InvariantCulture;
+        var items = e.Sections.SelectMany(s => s.Items).Where(i => i.AreaId != null).ToList();
+        decimal Comp(ItemBreakdown i, string code) => i.Components.FirstOrDefault(c => c.Code == code)?.Amount ?? 0;
+        var sb = new StringBuilder(); sb.Append('﻿');
+        sb.Append("Area,Level,Activity,Material,Manpower,Total,Currency\r\n");
+        if (m.AreaRollup is { Areas.Count: > 0 })
+            foreach (var (node, _) in FlattenAreas(m.AreaRollup.Areas))
+                foreach (var i in items.Where(x => x.AreaId == node.Id))
+                    sb.Append(CsvEsc(node.Name)).Append(',')
+                      .Append(CsvEsc(node.Kind)).Append(',')
+                      .Append(CsvEsc(i.Description)).Append(',')
+                      .Append(Comp(i, "MAT").ToString("0.00", ci)).Append(',')
+                      .Append(Comp(i, "LAB").ToString("0.00", ci)).Append(',')
+                      .Append(i.LineTotal.ToString("0.00", ci)).Append(',')
+                      .Append(CsvEsc(e.Currency)).Append("\r\n");
+        return Encoding.UTF8.GetBytes(sb.ToString());
+    }
+
+    public byte[] BuildActivitiesPdf(ExportModel m)
+    {
+        var e = m.Estimate;
+        var items = e.Sections.SelectMany(s => s.Items).Where(i => i.AreaId != null).ToList();
+        decimal Comp(ItemBreakdown i, string code) => i.Components.FirstOrDefault(c => c.Code == code)?.Amount ?? 0;
+
+        var doc = Document.Create(container => container.Page(page =>
+        {
+            page.Margin(36); page.Size(PageSizes.A4); page.DefaultTextStyle(x => x.FontSize(9));
+            PdfHeader(page, m, "Activities by Unit");
+            page.Content().PaddingVertical(8).Table(table =>
+            {
+                table.ColumnsDefinition(c => { c.RelativeColumn(3); c.ConstantColumn(70); c.ConstantColumn(70); c.ConstantColumn(80); });
+                table.Header(hd =>
+                {
+                    hd.Cell().Background(Colors.Grey.Lighten2).Padding(3).Text("Area / Activity").Bold();
+                    hd.Cell().Background(Colors.Grey.Lighten2).Padding(3).AlignRight().Text("Material").Bold();
+                    hd.Cell().Background(Colors.Grey.Lighten2).Padding(3).AlignRight().Text("Manpower").Bold();
+                    hd.Cell().Background(Colors.Grey.Lighten2).Padding(3).AlignRight().Text("Total").Bold();
+                });
+                if (m.AreaRollup is { Areas.Count: > 0 })
+                    foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas))
+                    {
+                        table.Cell().ColumnSpan(4).Background(Colors.Grey.Lighten4).PaddingLeft(depth * 12).Padding(3).Text($"{node.Name} ({node.Kind})").SemiBold();
+                        foreach (var i in items.Where(x => x.AreaId == node.Id))
+                        {
+                            table.Cell().PaddingLeft(depth * 12 + 8).Padding(3).Text(i.Description);
+                            table.Cell().Padding(3).AlignRight().Text($"{Comp(i, "MAT"):#,##0.00}");
+                            table.Cell().Padding(3).AlignRight().Text($"{Comp(i, "LAB"):#,##0.00}");
+                            table.Cell().Padding(3).AlignRight().Text($"{i.LineTotal:#,##0.00}");
+                        }
+                    }
+            });
+            page.Footer().AlignCenter().Text(x => { x.Span("BidBuilder · "); x.CurrentPageNumber(); x.Span(" / "); x.TotalPages(); });
+        }));
+        return doc.GeneratePdf();
+    }
+
+    // ── Cost by area (standalone) ───────────────────────────────────────────
+    public byte[] BuildCostByAreaExcel(ExportModel m)
+    {
+        using var wb = new XLWorkbook();
+        var ws = wb.AddWorksheet("Cost by Area");
+        var r = ExcelHeader(ws, m, "Cost by Area");
+        ws.Cell(r, 1).Value = "Area"; ws.Cell(r, 2).Value = "Level"; ws.Cell(r, 3).Value = "Items";
+        ws.Cell(r, 4).Value = "Total"; ws.Cell(r, 5).Value = "Measure"; ws.Cell(r, 6).Value = "Cost / unit";
+        ws.Row(r).Style.Font.SetBold().Fill.SetBackgroundColor(XLColor.LightGray); r++;
+        var rollup = m.AreaRollup;
+        if (rollup is { Areas.Count: > 0 })
+        {
+            foreach (var (node, depth) in FlattenAreas(rollup.Areas))
+            {
+                ws.Cell(r, 1).Value = new string(' ', depth * 4) + node.Name;
+                ws.Cell(r, 2).Value = node.Kind;
+                ws.Cell(r, 3).Value = node.ItemCount;
+                ws.Cell(r, 4).Value = node.RollupTotal; ws.Cell(r, 4).Style.NumberFormat.Format = "#,##0.00";
+                if (node.Quantity > 0)
+                {
+                    ws.Cell(r, 5).Value = $"{node.Quantity:0.####} {node.Unit}".Trim();
+                    if (node.CostPerUnit is decimal cpu) { ws.Cell(r, 6).Value = cpu; ws.Cell(r, 6).Style.NumberFormat.Format = "#,##0.00"; }
+                }
+                r++;
+            }
+            ws.Cell(r, 1).Value = "Assigned to areas"; ws.Cell(r, 1).Style.Font.SetBold();
+            ws.Cell(r, 4).Value = rollup.AssignedTotal; ws.Cell(r, 4).Style.NumberFormat.Format = "#,##0.00"; ws.Cell(r, 4).Style.Font.SetBold(); r++;
+            if (rollup.UnassignedTotal > 0)
+            {
+                ws.Cell(r, 1).Value = "Unassigned";
+                ws.Cell(r, 4).Value = rollup.UnassignedTotal; ws.Cell(r, 4).Style.NumberFormat.Format = "#,##0.00"; r++;
+            }
+        }
+        ws.Columns().AdjustToContents();
+        using var ms = new MemoryStream(); wb.SaveAs(ms); return ms.ToArray();
+    }
+
+    public byte[] BuildCostByAreaCsv(ExportModel m)
+    {
+        var ci = CultureInfo.InvariantCulture;
+        var sb = new StringBuilder(); sb.Append('﻿');
+        sb.Append("Area,Level,Items,Total,Measure,Cost per unit,Currency\r\n");
+        if (m.AreaRollup is { Areas.Count: > 0 })
+            foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas))
+                sb.Append(CsvEsc(new string(' ', depth * 2) + node.Name)).Append(',')
+                  .Append(CsvEsc(node.Kind)).Append(',')
+                  .Append(node.ItemCount.ToString(ci)).Append(',')
+                  .Append(node.RollupTotal.ToString("0.00", ci)).Append(',')
+                  .Append(CsvEsc(node.Quantity > 0 ? $"{node.Quantity.ToString("0.####", ci)} {node.Unit}".Trim() : "")).Append(',')
+                  .Append(node.CostPerUnit is decimal cpu ? cpu.ToString("0.00", ci) : "").Append(',')
+                  .Append(CsvEsc(m.Estimate.Currency)).Append("\r\n");
+        return Encoding.UTF8.GetBytes(sb.ToString());
+    }
+
+    public byte[] BuildCostByAreaPdf(ExportModel m)
+    {
+        var e = m.Estimate;
+        string Money(decimal v) => $"{e.Currency} {v:#,##0.00}";
+        var doc = Document.Create(container => container.Page(page =>
+        {
+            page.Margin(36); page.Size(PageSizes.A4); page.DefaultTextStyle(x => x.FontSize(9));
+            PdfHeader(page, m, "Cost by Area");
+            page.Content().PaddingVertical(8).Column(col =>
+            {
+                if (m.AreaRollup is { Areas.Count: > 0 })
+                {
+                    foreach (var (node, depth) in FlattenAreas(m.AreaRollup.Areas))
+                        col.Item().Row(rr =>
+                        {
+                            var measure = node.Quantity > 0 ? $", {node.Quantity:0.####} {node.Unit}".TrimEnd() : "";
+                            rr.RelativeItem().PaddingLeft(depth * 12)
+                              .Text($"{node.Name}  ({node.Kind}{(node.ItemCount > 0 ? $", {node.ItemCount} item(s)" : "")}{measure})").FontSize(8);
+                            rr.ConstantItem(150).AlignRight().Text(
+                                node.CostPerUnit is decimal cpu ? $"{Money(node.RollupTotal)}  ({Money(cpu)}/{node.Unit ?? "unit"})" : Money(node.RollupTotal)).FontSize(8);
+                        });
+                    col.Item().PaddingTop(6).LineHorizontal(1).LineColor(Colors.Grey.Lighten1);
+                    col.Item().Row(rr => { rr.RelativeItem().Text("Assigned to areas").Bold(); rr.ConstantItem(150).AlignRight().Text(Money(m.AreaRollup.AssignedTotal)).Bold(); });
+                    if (m.AreaRollup.UnassignedTotal > 0)
+                        col.Item().Row(rr => { rr.RelativeItem().Text("Unassigned").FontColor(Colors.Grey.Darken1); rr.ConstantItem(150).AlignRight().Text(Money(m.AreaRollup.UnassignedTotal)); });
+                }
+            });
+            page.Footer().AlignCenter().Text(x => { x.Span("BidBuilder · "); x.CurrentPageNumber(); x.Span(" / "); x.TotalPages(); });
+        }));
+        return doc.GeneratePdf();
+    }
+
+    /// <summary>Compact document header (company + project + title) for a standalone Excel sheet.</summary>
+    private static int ExcelHeader(IXLWorksheet ws, ExportModel m, string title)
+    {
+        ws.Cell("A1").Value = m.CompanyName; ws.Cell("A1").Style.Font.SetBold().Font.FontSize = 14;
+        int h = 2;
+        ws.Cell(h++, 1).Value = $"{title} — {m.ProjectCode}";
+        ws.Cell(h, 1).Value = m.ProjectName; ws.Cell(h, 1).Style.Font.SetBold(); h++;
+        ws.Cell(h++, 1).Value = $"Client: {m.Client ?? "—"}    Location: {m.Location ?? "—"}";
+        ws.Cell(h++, 1).Value = $"Generated: {m.GeneratedOn}    Currency: {m.Estimate.Currency}";
+        return h + 1; // leave a spacer row before the table
+    }
+
+    /// <summary>Compact PDF document header (company + project + title).</summary>
+    private static void PdfHeader(PageDescriptor page, ExportModel m, string title)
+    {
+        page.Header().Column(col =>
+        {
+            col.Item().Row(top =>
+            {
+                top.RelativeItem().Column(left =>
+                {
+                    left.Item().Text(m.CompanyName).FontSize(16).Bold();
+                    if (!string.IsNullOrWhiteSpace(m.CompanyContact))
+                        left.Item().Text(m.CompanyContact).FontSize(8).FontColor(Colors.Grey.Darken1);
+                });
+                if (m.LogoBytes is { Length: > 0 })
+                    top.ConstantItem(140).MaxHeight(50).AlignRight().AlignTop().Image(m.LogoBytes).FitArea();
+            });
+            col.Item().PaddingTop(2).Text($"{title} — {m.ProjectCode}").FontSize(11).FontColor(Colors.Grey.Darken2);
+            col.Item().Text(m.ProjectName).Bold();
+            col.Item().Text($"Client: {m.Client ?? "—"}   Location: {m.Location ?? "—"}   Generated: {m.GeneratedOn}").FontSize(8).FontColor(Colors.Grey.Darken1);
+            col.Item().PaddingTop(6).LineHorizontal(1).LineColor(Colors.Grey.Lighten1);
+        });
+    }
+
+    private static string CsvEsc(string? v)
+    {
+        v ??= "";
+        if (v.IndexOfAny(new[] { ',', '"', '\n', '\r' }) >= 0 || (v.Length > 0 && (v[0] == ' ' || v[^1] == ' ')))
+            return "\"" + v.Replace("\"", "\"\"") + "\"";
+        return v;
+    }
+
     /// <summary>Depth-first flatten of the area roll-up into (node, depth) in tree order.</summary>
     private static List<(AreaRollupRow Node, int Depth)> FlattenAreas(List<AreaRollupRow> areas)
     {

@@ -39,7 +39,35 @@ public static class ExportEndpoints
                 var bytes = export.BuildCsv(m);
                 return Results.File(bytes, "text/csv", $"{m.ProjectCode}-boq.csv");
             }));
+
+        // ── Activities by unit ──────────────────────────────────────────────
+        grp.MapGet("/{id:int}/activities.xlsx", (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
+            Export(id, me, access, perm, db, calc, rollup, tc, async m =>
+                Results.File(export.BuildActivitiesExcel(m), Xlsx, "ActivitiesByUnit.xlsx")));
+
+        grp.MapGet("/{id:int}/activities.csv", (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
+            Export(id, me, access, perm, db, calc, rollup, tc, async m =>
+                Results.File(export.BuildActivitiesCsv(m), "text/csv", "ActivitiesByUnit.csv")));
+
+        grp.MapGet("/{id:int}/activities.pdf", (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
+            Export(id, me, access, perm, db, calc, rollup, tc, async m =>
+                Results.File(export.BuildActivitiesPdf(m), "application/pdf", "ActivitiesByUnit.pdf")));
+
+        // ── Cost by area ────────────────────────────────────────────────────
+        grp.MapGet("/{id:int}/cost-by-area.xlsx", (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
+            Export(id, me, access, perm, db, calc, rollup, tc, async m =>
+                Results.File(export.BuildCostByAreaExcel(m), Xlsx, "CostByArea.xlsx")));
+
+        grp.MapGet("/{id:int}/cost-by-area.csv", (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
+            Export(id, me, access, perm, db, calc, rollup, tc, async m =>
+                Results.File(export.BuildCostByAreaCsv(m), "text/csv", "CostByArea.csv")));
+
+        grp.MapGet("/{id:int}/cost-by-area.pdf", (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
+            Export(id, me, access, perm, db, calc, rollup, tc, async m =>
+                Results.File(export.BuildCostByAreaPdf(m), "application/pdf", "CostByArea.pdf")));
     }
+
+    private const string Xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     private static async Task<IResult> Export(
         int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm,
