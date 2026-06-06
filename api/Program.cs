@@ -196,6 +196,15 @@ builder.Services.AddAuthorization();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
+    // Pinned Info block so the emitted spec is stable across builds and consumers
+    // (the generated TS client embeds this metadata) — bump Version when the contract
+    // changes in a way that affects external consumers.
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title       = "BidBuilder API",
+        Version     = "v1",
+        Description = "Multi-tenant construction bid-estimating API. The generated TS client (lib/api-generated.d.ts) is produced from this spec; a runtime-vs-checked-in diff in CI fails the build on contract drift (19.5).",
+    });
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "JWT Authorization header. Example: \"Bearer {token}\"",
@@ -272,9 +281,12 @@ app.UseExceptionHandler();
 // failing request is findable in the logs by its trace id.
 app.UseSerilogRequestLogging();
 
+// Serve the OpenAPI JSON document in EVERY environment — the generated TS client
+// reads it, and CI gates on it (a runtime-vs-checked-in diff fails the build). The
+// interactive UI stays Dev-only; production gets no /swagger HTML page.
+app.UseSwagger();
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
     app.UseSwaggerUI();
 }
 

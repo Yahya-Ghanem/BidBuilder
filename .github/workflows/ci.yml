@@ -63,6 +63,18 @@ jobs:
       # --legacy-peer-deps mirrors the web Dockerfile: React 19 / Next 16 are ahead of
       # some packages' peer ranges (eslint tooling included).
       - run: npm ci --legacy-peer-deps
+      # 19.5: regenerate the OpenAPI TS client from the checked-in spec snapshot and
+      # fail on any drift. The backend job ALSO has a contract-drift test that asserts
+      # the live spec matches api-spec/openapi.json — together they prove the spec, the
+      # client and the running API agree.
+      - name: Regenerate OpenAPI client (drift gate)
+        run: |
+          npm run gen:api
+          if ! git diff --exit-code lib/api-generated.d.ts; then
+            echo "::error::lib/api-generated.d.ts is out of sync with api-spec/openapi.json."
+            echo "Run 'npm run gen:api' locally and commit the result."
+            exit 1
+          fi
       - name: Type-check
         run: npx tsc --noEmit
       - name: Lint
