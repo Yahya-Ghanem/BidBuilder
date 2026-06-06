@@ -40,6 +40,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<BoqItem>     BoqItems      => Set<BoqItem>();
     public DbSet<Preliminary> Preliminaries => Set<Preliminary>();
     public DbSet<Markup>      Markups       => Set<Markup>();
+    // Risk register (19.2) — per-estimate rows whose Expected Value sums to a
+    // suggested contingency the estimator can apply to the Contingency markup.
+    public DbSet<RiskItem>    RiskItems     => Set<RiskItem>();
 
     // ── Resource library + assemblies ─────────────────────────────────────────
     public DbSet<LaborResource>     LaborResources     => Set<LaborResource>();
@@ -290,6 +293,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.HasOne(m => m.Estimate).WithMany(e => e.Markups)
              .HasForeignKey(m => m.EstimateId).OnDelete(DeleteBehavior.Cascade);
             b.HasQueryFilter(m => m.TenantId == _tenant.TenantId);
+        });
+
+        // ── RiskItem (19.2 risk register) ─────────────────────────────────────
+        mb.Entity<RiskItem>(b =>
+        {
+            b.HasIndex(r => r.EstimateId);
+            b.HasIndex(r => r.TenantId);
+            b.Property(r => r.Title).HasMaxLength(200).IsRequired();
+            b.Property(r => r.Category).HasConversion<string>().HasMaxLength(16);
+            b.Property(r => r.ProbabilityPct).HasColumnType("numeric(9,4)");
+            b.Property(r => r.ImpactAmount).HasColumnType("numeric(18,2)");
+            b.Property(r => r.Note).HasMaxLength(1000);
+            // Risks cascade with the estimate — when an estimate is deleted, its
+            // register goes with it (just like preliminaries and markups).
+            b.HasOne<Estimate>().WithMany(e => e.Risks).HasForeignKey(r => r.EstimateId).OnDelete(DeleteBehavior.Cascade);
+            b.HasQueryFilter(r => r.TenantId == _tenant.TenantId);
         });
 
         // ── Resource library ──────────────────────────────────────────────────

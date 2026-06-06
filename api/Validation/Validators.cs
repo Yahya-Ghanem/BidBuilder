@@ -92,6 +92,19 @@ public sealed class RateHistoryInputValidator : AbstractValidator<RateHistoryInp
     }
 }
 
+public sealed class RiskItemInputValidator : AbstractValidator<RiskItemInput>
+{
+    public RiskItemInputValidator()
+    {
+        RuleFor(x => x.Title).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.ProbabilityPct).InclusiveBetween(0m, 100m)
+            .WithMessage("Probability % must be between 0 and 100.");
+        RuleFor(x => x.ImpactAmount).GreaterThanOrEqualTo(0m)
+            .WithMessage("Impact amount cannot be negative.");
+        RuleFor(x => x.Note).MaximumLength(1000).When(x => !string.IsNullOrEmpty(x.Note));
+    }
+}
+
 public sealed class QuoteInputValidator : AbstractValidator<QuoteInput>
 {
     public QuoteInputValidator()

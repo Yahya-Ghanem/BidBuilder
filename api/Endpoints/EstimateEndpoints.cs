@@ -24,6 +24,10 @@ public record ItemInput(string? ItemCode, string Description, string Unit, decim
 public record ItemCostComponentInput(int TypeId, decimal Value, decimal? Quantity = null, decimal? Rate = null);
 public record CloneRoomInput(string? Name);
 public record PrelimInput(string Description, string Kind, decimal Amount, int SortOrder);
+/// <summary>Input for the risk register (19.2). Probability in 0–100, impact in
+/// the estimate currency, category one of the <see cref="RiskCategory"/> names.</summary>
+public record RiskItemInput(string Title, string? Category, decimal ProbabilityPct,
+    decimal ImpactAmount, string? Note, int SortOrder);
 public record MarkupInput(string Type, string? Label, decimal Percentage, int ApplyOrder);
 public record WhatIfRequest(List<MarkupInput> Markups);
 public record TargetRequest(decimal? TargetPrice, decimal? TargetMarginPct, decimal? Adjustment, bool Apply = false);
@@ -99,6 +103,7 @@ public static class EstimateEndpoints
                 .Include(e => e.Sections).ThenInclude(s => s.Items).ThenInclude(i => i.CostComponents)
                 .Include(e => e.Preliminaries)
                 .Include(e => e.Markups)
+                .Include(e => e.Risks)
                 .FirstOrDefaultAsync(e => e.Id == id && e.ProjectId == projectId);
             if (src is null) return NotFound();
 
@@ -124,6 +129,7 @@ public static class EstimateEndpoints
                 .Include(e => e.Sections).ThenInclude(s => s.Items).ThenInclude(i => i.CostComponents)
                 .Include(e => e.Preliminaries)
                 .Include(e => e.Markups)
+                .Include(e => e.Risks)
                 .FirstOrDefaultAsync(e => e.Id == id && e.ProjectId == projectId);
             if (src is null) return NotFound();
 
@@ -602,6 +608,76 @@ public static class EstimateEndpoints
             return Results.Ok(await calc.RecomputeAsync(id));
         });
 
+        // ── Risk register (19.2) ─────────────────────────────────────────────
+        // Same module + permissions as the preliminaries/markups surface — risks
+        // are estimating reasoning, not BOQ content. POST/PUT/DELETE recompute the
+        // breakdown so the SuggestedContingency stat reflects the new state.
+        grp.MapPost("/{id:int}/risks", async (int id, RiskItemInput i, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc) =>
+        {
+            var g = await Guard(me, id, Prelims, ModuleAction.Add, access, perm); if (g is not null) return g;
+            var cat = ParseCategory(i.Category) ?? RiskCategory.Other;
+            db.RiskItems.Add(new RiskItem
+            {
+                EstimateId = id, Title = i.Title.Trim(), Category = cat,
+                ProbabilityPct = i.ProbabilityPct, ImpactAmount = i.ImpactAmount,
+                Note = i.Note?.Trim(), SortOrder = i.SortOrder,
+            });
+            await db.SaveChangesAsync();
+            return Results.Ok(await calc.RecomputeAsync(id));
+        }).AddEndpointFilter<BidBuilder.Api.Validation.ValidationFilter<RiskItemInput>>();
+
+        grp.MapPut("/{id:int}/risks/{rid:int}", async (int id, int rid, RiskItemInput i, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc) =>
+        {
+            var g = await Guard(me, id, Prelims, ModuleAction.Edit, access, perm); if (g is not null) return g;
+            var r = await db.RiskItems.FirstOrDefaultAsync(x => x.Id == rid && x.EstimateId == id); if (r is null) return NotFound();
+            var cat = ParseCategory(i.Category) ?? r.Category;
+            r.Title = i.Title.Trim(); r.Category = cat;
+            r.ProbabilityPct = i.ProbabilityPct; r.ImpactAmount = i.ImpactAmount;
+            r.Note = i.Note?.Trim(); r.SortOrder = i.SortOrder;
+            r.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return Results.Ok(await calc.RecomputeAsync(id));
+        }).AddEndpointFilter<BidBuilder.Api.Validation.ValidationFilter<RiskItemInput>>();
+
+        grp.MapDelete("/{id:int}/risks/{rid:int}", async (int id, int rid, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc) =>
+        {
+            var g = await Guard(me, id, Prelims, ModuleAction.Delete, access, perm); if (g is not null) return g;
+            var r = await db.RiskItems.FirstOrDefaultAsync(x => x.Id == rid && x.EstimateId == id); if (r is null) return NotFound();
+            db.RiskItems.Remove(r); await db.SaveChangesAsync();
+            return Results.Ok(await calc.RecomputeAsync(id));
+        });
+
+        // POST /risks/apply-as-contingency — take the suggested contingency % and
+        // write it onto the Contingency markup (creating one if absent). Returns the
+        // recomputed breakdown so the UI can show the new bid price in one round-trip.
+        grp.MapPost("/{id:int}/risks/apply-as-contingency", async (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AuditService audit) =>
+        {
+            var g = await Guard(me, id, Prelims, ModuleAction.Edit, access, perm); if (g is not null) return g;
+            // Read the suggestion from a fresh breakdown so the user sees the same number
+            // they were looking at when they clicked. This is a single tracked write at the end.
+            var bd = await calc.GetAsync(id); if (bd is null) return NotFound();
+            var pct = bd.SuggestedContingencyPct;
+            var contingency = await db.Markups.FirstOrDefaultAsync(m => m.EstimateId == id && m.Type == MarkupType.Contingency);
+            if (contingency is null)
+            {
+                contingency = new Markup
+                {
+                    EstimateId = id, Type = MarkupType.Contingency, Label = "Risk-weighted contingency",
+                    Percentage = pct,
+                    ApplyOrder = (await db.Markups.Where(m => m.EstimateId == id).Select(m => (int?)m.ApplyOrder).MaxAsync()) + 1 ?? 1,
+                };
+                db.Markups.Add(contingency);
+            }
+            else
+            {
+                contingency.Percentage = pct;
+            }
+            await db.SaveChangesAsync();
+            await audit.LogAsync(me, "estimate.risk-apply", "Estimate", id.ToString(),
+                $"applied {pct}% risk-weighted contingency from register");
+            return Results.Ok(await calc.RecomputeAsync(id));
+        });
+
         // ── Markups (module: prelims-markups) ────────────────────────────────
         grp.MapPost("/{id:int}/markups", async (int id, MarkupInput i, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc) =>
         {
@@ -705,6 +781,12 @@ public static class EstimateEndpoints
             db.Preliminaries.Add(new Preliminary { EstimateId = clone.Id, Description = p.Description, Kind = p.Kind, Amount = p.Amount, SortOrder = p.SortOrder });
         foreach (var m in src.Markups.OrderBy(x => x.ApplyOrder))
             db.Markups.Add(new Markup { EstimateId = clone.Id, Type = m.Type, Label = m.Label, Percentage = m.Percentage, ApplyOrder = m.ApplyOrder });
+        // 19.2: risk register travels with the clone — registers are reasoning and
+        // should follow the same revision they belong to.
+        foreach (var r in src.Risks.OrderBy(x => x.SortOrder))
+            db.RiskItems.Add(new RiskItem { EstimateId = clone.Id, Title = r.Title, Category = r.Category,
+                ProbabilityPct = r.ProbabilityPct, ImpactAmount = r.ImpactAmount,
+                Note = r.Note, SortOrder = r.SortOrder });
 
         await db.SaveChangesAsync();
         await calc.RecomputeAsync(clone.Id);
@@ -725,6 +807,14 @@ public static class EstimateEndpoints
     {
         if (string.IsNullOrWhiteSpace(s)) { kind = BoqItemKind.Normal; return true; }
         return Enum.TryParse(s, true, out kind);
+    }
+
+    /// <summary>Parse a risk category (case-insensitive). Null/empty → null so the
+    /// PUT preserves the existing value; the POST defaults to <see cref="RiskCategory.Other"/>.</summary>
+    private static RiskCategory? ParseCategory(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return null;
+        return Enum.TryParse<RiskCategory>(s, true, out var c) ? c : null;
     }
 
     /// <summary>Endpoint metadata marker: this estimate write stays available even when the

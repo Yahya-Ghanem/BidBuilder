@@ -146,6 +146,13 @@ export interface FxView {
   frozen: boolean
   frozenAt: string | null
 }
+export interface RiskBreakdown {
+  id: number; title: string; category: string; probabilityPct: number; impactAmount: number
+  expectedValue: number; note: string | null; sortOrder: number
+}
+export interface CashFlowMonth { month: number; spend: number; cumulative: number }
+export interface CashFlowProjection { durationMonths: number; total: number; monthly: CashFlowMonth[] }
+
 export interface EstimateBreakdown {
   id: number; projectId: number; revision: number; title: string; status: string; currency: string
   directCost: number; indirectCost: number; markupCost: number; bidPrice: number
@@ -153,6 +160,11 @@ export interface EstimateBreakdown {
   /** ISO date (yyyy-mm-dd). When set, the engine resolved rates via ResourceRateHistory. */
   pricingDate: string | null
   sections: SectionBreakdown[]; preliminaries: PrelimBreakdown[]; markups: MarkupBreakdown[]
+  /** 19.2 — risk register; sum of EVs feeds suggestedContingency*. */
+  risks: RiskBreakdown[]
+  suggestedContingencyAmount: number
+  suggestedContingencyPct: number
+  cashFlow: CashFlowProjection
   rowVersion: string
   fx: FxView | null
 }
