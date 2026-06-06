@@ -12,10 +12,14 @@ using Serilog.Formatting.Compact;
 using Hangfire;
 using Hangfire.PostgreSql;
 using FluentValidation;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using BidBuilder.Api.Auth;
 using BidBuilder.Api.Data;
 using BidBuilder.Api.Endpoints;
 using BidBuilder.Api.Tenancy;
+using BidBuilder.Api.Telemetry;
 
 // Keep JWT claim names exactly as issued ("sub", "role", "tenant_slug" …) — no
 // remap to long WS-* URIs. CurrentUser + TenantResolutionMiddleware rely on this.
@@ -135,6 +139,61 @@ else
 // container healthcheck uses /healthz, so a transient Postgres outage doesn't get
 // a perfectly healthy API killed and restarted.
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>("db", tags: new[] { "ready" });
+
+// ── OpenTelemetry traces + metrics (19.3) ────────────────────────────────────
+// Two-sided observability:
+//   • Traces — auto from ASP.NET Core, HttpClient, EF Core (+ Npgsql via EF),
+//     PLUS our own ActivitySource for the Hangfire cascade job. A failed
+//     request can be followed through every DB call.
+//   • Metrics — auto runtime + http.server.* + our domain counters
+//     (estimates.published, cascade.runs, cascade.failures).
+// OTLP exporter is OPT-IN: set OpenTelemetry:Otlp:Endpoint (or the standard
+// OTEL_EXPORTER_OTLP_ENDPOINT env var) and traces+metrics ship there. Without
+// an endpoint, OTel still records in-process so the Prometheus scrape endpoint
+// (/metrics) and the in-process MeterListener in tests both work. Disable
+// entirely with OpenTelemetry:Enabled=false (test fixture does this so the
+// background OTel collection threads don't outlive the test host).
+var otelEnabled = builder.Configuration.GetValue("OpenTelemetry:Enabled", true);
+var otlpEndpoint = builder.Configuration["OpenTelemetry:Otlp:Endpoint"]
+                   ?? Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT");
+if (otelEnabled)
+{
+    var serviceName = builder.Configuration["OpenTelemetry:ServiceName"] ?? "bidbuilder-api";
+    var serviceVersion = typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+    var resourceBuilder = ResourceBuilder.CreateDefault()
+        .AddService(serviceName, serviceVersion: serviceVersion)
+        .AddAttributes(new KeyValuePair<string, object>[]
+        {
+            new("deployment.environment", builder.Environment.EnvironmentName),
+        });
+
+    builder.Services.AddOpenTelemetry()
+        .WithTracing(t =>
+        {
+            t.SetResourceBuilder(resourceBuilder)
+             .AddSource(BidBuilderTelemetry.SourceName)
+             .AddAspNetCoreInstrumentation(o =>
+             {
+                 // Drop the health/ready probes — they fire constantly and only add noise.
+                 o.Filter = ctx => ctx.Request.Path != "/healthz" && ctx.Request.Path != "/readyz";
+                 o.RecordException = true;
+             })
+             .AddHttpClientInstrumentation()
+             .AddEntityFrameworkCoreInstrumentation(o => o.SetDbStatementForText = false);
+            if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+                t.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
+        })
+        .WithMetrics(m =>
+        {
+            m.SetResourceBuilder(resourceBuilder)
+             .AddMeter(BidBuilderTelemetry.MeterName)
+             .AddAspNetCoreInstrumentation()
+             .AddHttpClientInstrumentation()
+             .AddPrometheusExporter();
+            if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+                m.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
+        });
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 // A strong, non-default signing key is mandatory outside Development; refuse to
@@ -327,6 +386,18 @@ if (hangfireEnabled)
 app.MapHealthChecks("/healthz", new HealthCheckOptions { Predicate = _ => false });
 // Readiness: the app can actually serve traffic — includes the DB probe.
 app.MapHealthChecks("/readyz", new HealthCheckOptions { Predicate = c => c.Tags.Contains("ready") });
+
+// Prometheus scrape (19.3). Gated by TenantAdmin: the metrics surface includes
+// per-tenant labels (publish counts, cascade activity) and per-endpoint latency
+// histograms — useful operational data but not for anonymous consumption. A
+// Prometheus server pulling this endpoint must present a TenantAdmin bearer
+// (typically a long-lived service-account token), the same trust boundary the
+// Hangfire dashboard sits behind.
+if (otelEnabled)
+{
+    app.MapPrometheusScrapingEndpoint("/metrics")
+       .RequireAuthorization(p => p.RequireRole("TenantAdmin", "SuperAdmin"));
+}
 
 // Authenticated-only diagnostic. /healthz (above) is the anonymous liveness probe;
 // ping requires auth so it can't be used to enumerate tenant slugs while anonymous.

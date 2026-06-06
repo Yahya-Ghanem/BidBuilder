@@ -47,6 +47,19 @@
          and returns RFC-7807 ProblemDetails with field-level errors. -->
     <PackageReference Include="FluentValidation" Version="11.10.0" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.10.0" />
+
+    <!-- OpenTelemetry (19.3). Traces + metrics from ASP.NET Core, HttpClient and
+         EF Core / Npgsql. OTLP exports to any compatible collector (Grafana/Tempo,
+         Prometheus, Honeycomb, hosted APM) when OpenTelemetry:Otlp:Endpoint is set;
+         a /metrics endpoint speaks Prometheus directly. Domain counters
+         (estimates.published, cascade.runs/failures) and the cascade-job Activity
+         live in BidBuilder.Api.Telemetry.BidBuilderTelemetry. -->
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.10.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.10.1" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.10.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.0.0-beta.12" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.10.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.10.0-beta.1" />
   </ItemGroup>
 
 </Project>
