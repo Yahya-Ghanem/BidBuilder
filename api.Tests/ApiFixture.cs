@@ -160,6 +160,18 @@ public sealed class ApiFixture : IAsyncLifetime
         return c;
     }
 
+    /// <summary>Run an action against a fresh DI-scoped <see cref="AppDbContext"/> with the
+    /// given tenant resolved. Lets hardening tests probe DB-level constraints (e.g. the tenant
+    /// foreign keys) directly, below the HTTP/application layer.</summary>
+    public async Task WithTenantDbAsync(string slug, Func<AppDbContext, Tenant, Task> action)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var tenant = await db.Tenants.FirstAsync(t => t.Slug == slug);
+        scope.ServiceProvider.GetRequiredService<ITenantContext>().Set(tenant.Id, tenant.Slug);
+        await action(db, tenant);
+    }
+
     private sealed record LoginResponse(string Token);
 
     public async Task DisposeAsync()

@@ -445,6 +445,11 @@ public static class EstimateEndpoints
             var childrenByParent = all.Where(a => a.ParentAreaId != null)
                 .GroupBy(a => a.ParentAreaId!.Value).ToDictionary(grp2 => grp2.Key, grp2 => grp2.ToList());
 
+            // All-or-nothing: cloning the subtree spans many level-by-level SaveChanges
+            // calls plus the activity duplication. One transaction means a mid-clone
+            // failure can't leave a malformed half-built area subtree behind.
+            await using var tx = await db.Database.BeginTransactionAsync();
+
             var map = new Dictionary<int, int>();
             var root = new Area
             {
@@ -492,7 +497,9 @@ public static class EstimateEndpoints
                         .Select(c => new ItemCostComponent { CostComponentTypeId = c.CostComponentTypeId, Value = c.Value, Quantity = c.Quantity, Rate = c.Rate }).ToList(),
                 });
             await db.SaveChangesAsync();
-            return Results.Ok(await calc.RecomputeAsync(id));
+            var result = await calc.RecomputeAsync(id);
+            await tx.CommitAsync();
+            return Results.Ok(result);
         });
 
         // ── Preliminaries (module: prelims-markups) ──────────────────────────
@@ -572,6 +579,11 @@ public static class EstimateEndpoints
     /// can be remapped via an old→new id map; then items, prelims and markups.</summary>
     private static async Task<Estimate> DeepCopyEstimateAsync(AppDbContext db, EstimateCalculator calc, Estimate src, int targetProjectId, string? title)
     {
+        // All-or-nothing: the clone spans many SaveChanges calls (estimate, then each
+        // section, then items/prelims/markups, then recompute). One transaction means a
+        // failure partway can never leave an orphaned half-copied Draft behind.
+        await using var tx = await db.Database.BeginTransactionAsync();
+
         var nextRev = ((await db.Estimates.Where(e => e.ProjectId == targetProjectId).MaxAsync(e => (int?)e.Revision)) ?? 0) + 1;
         var clone = new Estimate
         {
@@ -617,6 +629,7 @@ public static class EstimateEndpoints
 
         await db.SaveChangesAsync();
         await calc.RecomputeAsync(clone.Id);
+        await tx.CommitAsync();
         return clone;
     }
 

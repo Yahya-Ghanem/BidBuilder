@@ -377,6 +377,38 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
              .HasForeignKey(c => c.AssemblyId).OnDelete(DeleteBehavior.Cascade);
             b.HasQueryFilter(c => c.TenantId == _tenant.TenantId);
         });
+
+        // ── DB-level tenant foreign keys (defense in depth) ──────────────────────
+        // Application code already scopes every IHasTenant entity (global query filter
+        // + TenantId auto-stamp in SaveChangesAsync), but that is the ONLY guard. Add
+        // real FK constraints so the database itself refuses an orphaned or cross-tenant
+        // TenantId — the last line of defense if a future IgnoreQueryFilters() slip or
+        // raw SQL ever bypasses the application layer. RESTRICT because tenants are never
+        // hard-deleted (suspend/activate only); a stray tenant delete must fail loudly
+        // rather than silently cascade-wipe a workspace.
+        //   • TenantSettings already owns an explicit 1:1 FK to Tenant — skip (no double FK).
+        //   • AuditEvent may be written pre-auth with an empty tenant (e.g. failed logins),
+        //     so it stays FK-free by design — see SaveChangesAsync.
+        foreach (var et in mb.Model.GetEntityTypes())
+        {
+            var clr = et.ClrType;
+            if (!typeof(IHasTenant).IsAssignableFrom(clr)) continue;
+            if (clr == typeof(TenantSettings) || clr == typeof(AuditEvent)) continue;
+            mb.Entity(clr)
+              .HasOne(typeof(Tenant))
+              .WithMany()
+              .HasForeignKey(nameof(IHasTenant.TenantId))
+              .OnDelete(DeleteBehavior.Restrict);
+        }
+
+        // User is not IHasTenant (TenantId is nullable — SuperAdmins are tenant-less),
+        // so it needs its own nullable FK. A null TenantId (SuperAdmin) is exempt from the
+        // constraint; any non-null value must point at a real tenant.
+        mb.Entity<User>()
+          .HasOne<Tenant>()
+          .WithMany()
+          .HasForeignKey(u => u.TenantId)
+          .OnDelete(DeleteBehavior.Restrict);
     }
 
     /// <summary>Shared config for the four simple resource tables: code unique
