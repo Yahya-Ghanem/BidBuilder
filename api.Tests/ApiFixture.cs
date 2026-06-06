@@ -92,8 +92,18 @@ public sealed class ApiFixture : IAsyncLifetime
     /// <summary>An unauthenticated client carrying an arbitrary X-Tenant-Id header.</summary>
     public HttpClient ClientForTenant(string slug)
     {
-        var c = _factory.CreateClient();
+        var c = NewClient();
         c.DefaultRequestHeaders.Add("X-Tenant-Id", slug);
+        return c;
+    }
+
+    /// <summary>Create a client with a UNIQUE forwarded client IP so the login
+    /// rate-limiter (partitioned on X-Forwarded-For) buckets each test independently —
+    /// one test's logins never deplete another's allowance.</summary>
+    private HttpClient NewClient()
+    {
+        var c = _factory.CreateClient();
+        c.DefaultRequestHeaders.Add("X-Forwarded-For", $"203.0.113.{Guid.NewGuid().GetHashCode() & 0xFF}.{Environment.CurrentManagedThreadId}");
         return c;
     }
 
@@ -104,7 +114,7 @@ public sealed class ApiFixture : IAsyncLifetime
     /// and return a Bearer-authenticated client.</summary>
     public async Task<HttpClient> AuthedClientAsync(string email, string password, string tenantSlug = "default")
     {
-        var c = _factory.CreateClient();
+        var c = NewClient();
         c.DefaultRequestHeaders.Add("X-Tenant-Id", tenantSlug);
         var resp = await c.PostAsJsonAsync("/api/auth/login", new { email, password });
         resp.EnsureSuccessStatusCode();
@@ -152,7 +162,7 @@ public sealed class ApiFixture : IAsyncLifetime
     public async Task<HttpClient> PlatformAdminClientAsync(
         string email = "superadmin@bidbuilder.local", string password = "Super@12345")
     {
-        var c = _factory.CreateClient();   // deliberately no X-Tenant-Id header
+        var c = NewClient();   // deliberately no X-Tenant-Id header
         var resp = await c.PostAsJsonAsync("/api/auth/platform-login", new { email, password });
         resp.EnsureSuccessStatusCode();
         var body = await resp.Content.ReadFromJsonAsync<LoginResponse>();

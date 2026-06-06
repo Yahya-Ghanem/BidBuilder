@@ -26,6 +26,12 @@ public class User
     public UserRole Role         { get; set; } = UserRole.TenantUser;
     public bool     IsActive     { get; set; } = true;
 
+    // Monotonic token-version stamp. Issued JWTs carry the value current at sign-in
+    // (the "tv" claim); every authenticated request re-checks it against this column.
+    // Bumping it (on deactivation, role change, or password reset) instantly
+    // invalidates ALL outstanding tokens for the user — stateless-JWT revocation.
+    public int      TokenVersion { get; set; }
+
     public DateTime  CreatedAt    { get; set; } = DateTime.UtcNow;
     public DateTime? LastLoginAt  { get; set; }
 

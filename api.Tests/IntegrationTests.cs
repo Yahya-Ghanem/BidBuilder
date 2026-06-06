@@ -1616,6 +1616,59 @@ public class HardeningTests(ApiFixture fx)
         });
     }
 
+    // Login is throttled: a burst of attempts from one client trips a 429 (brute-force guard).
+    [Fact]
+    public async Task Login_is_rate_limited()
+    {
+        var c = fx.Client();   // unique forwarded IP → its own rate-limit bucket
+        var sawTooMany = false;
+        for (var i = 0; i < 14; i++)
+        {
+            var r = await c.PostAsJsonAsync("/api/auth/login", new { email = "nobody@bidbuilder.local", password = "wrong-password" });
+            if (r.StatusCode == HttpStatusCode.TooManyRequests) { sawTooMany = true; break; }
+        }
+        Assert.True(sawTooMany, "Expected a 429 after exceeding the login attempt limit.");
+    }
+
+    // Resetting a user's password must invalidate their already-issued tokens (token-version bump).
+    [Fact]
+    public async Task Password_reset_invalidates_existing_tokens()
+    {
+        var admin = await fx.AdminClientAsync();
+        var email = $"rev-{Guid.NewGuid():N}"[..16] + "@bidbuilder.local";
+        var uid = (await (await admin.PostAsJsonAsync("/api/admin/users",
+            new { name = "Rev User", email, password = "Pw@123456", role = "TenantUser", groupIds = Array.Empty<int>() })).Json())
+            .GetProperty("id").GetInt32();
+
+        var user = await fx.AuthedClientAsync(email, "Pw@123456");   // token A
+        Assert.Equal(HttpStatusCode.OK, (await user.GetAsync("/api/projects")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await admin.PostAsJsonAsync($"/api/admin/users/{uid}/reset-password", new { password = "NewPw@123456" })).StatusCode);
+
+        // The SAME token (no re-login) is now rejected.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await user.GetAsync("/api/projects")).StatusCode);
+    }
+
+    // Deactivating a user must immediately kill their outstanding tokens, not just block new logins.
+    [Fact]
+    public async Task Deactivating_a_user_invalidates_existing_tokens()
+    {
+        var admin = await fx.AdminClientAsync();
+        var email = $"deact-{Guid.NewGuid():N}"[..16] + "@bidbuilder.local";
+        var uid = (await (await admin.PostAsJsonAsync("/api/admin/users",
+            new { name = "Deact User", email, password = "Pw@123456", role = "TenantUser", groupIds = Array.Empty<int>() })).Json())
+            .GetProperty("id").GetInt32();
+
+        var user = await fx.AuthedClientAsync(email, "Pw@123456");   // token A
+        Assert.Equal(HttpStatusCode.OK, (await user.GetAsync("/api/projects")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, (await admin.PutAsJsonAsync($"/api/admin/users/{uid}",
+            new { name = "Deact User", email, role = "TenantUser", isActive = false, groupIds = Array.Empty<int>() })).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await user.GetAsync("/api/projects")).StatusCode);
+    }
+
     // A BOQ item may only reference an area of its OWN project, not another project's.
     [Fact]
     public async Task BOQ_item_rejects_a_foreign_projects_area()

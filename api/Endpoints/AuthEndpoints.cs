@@ -45,7 +45,8 @@ public static class AuthEndpoints
                 token, expires,
                 new UserDto(user.Id, user.Name, user.Email, user.Role.ToString())));
         })
-        .AllowAnonymous();
+        .AllowAnonymous()
+        .RequireRateLimiting("login");
 
         // POST /api/auth/platform-login — SuperAdmin sign-in. SuperAdmins have no tenant,
         // so this needs no X-Tenant-Id and is exempt from tenant resolution in the
@@ -70,7 +71,8 @@ public static class AuthEndpoints
                 token, expires,
                 new UserDto(user.Id, user.Name, user.Email, user.Role.ToString())));
         })
-        .AllowAnonymous();
+        .AllowAnonymous()
+        .RequireRateLimiting("login");
 
         // GET /api/auth/permissions — the caller's effective module permissions, so
         // the UI can hide affordances the API would reject anyway. Admins get every
