@@ -381,6 +381,20 @@ export interface AssemblyDetail {
   id: number; code: string; name: string; unit: string; computedRate: number; isActive: boolean; components: ComponentRow[]
 }
 
+/** 20.10 — AI-assisted rate suggestion returned by GET /api/ai/rate-suggestion. */
+export interface ComparableRate {
+  name: string
+  unit: string
+  rate: number
+  source: string
+}
+export interface RateSuggestion {
+  suggestedRate: number
+  confidence: "high" | "medium" | "low"
+  basis: "historical" | "benchmark"
+  comparables: ComparableRate[]
+}
+
 /** 20.8b — tenant SAML SSO configuration (admin view; the certificate is write-only,
  * never returned, so only its presence is exposed). The SP-side URLs are computed by
  * the API for the admin to register with their IdP. */

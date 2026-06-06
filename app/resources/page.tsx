@@ -2,10 +2,10 @@
 
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Plus, Pencil, Trash2, Power, PowerOff } from "lucide-react"
+import { Plus, Pencil, Trash2, Power, PowerOff, Sparkles, Check } from "lucide-react"
 import { toast } from "sonner"
 import { fetchApi } from "@/lib/api"
-import type { ResourceRow, BulkResourceResult } from "@/lib/types"
+import type { ResourceRow, BulkResourceResult, RateSuggestion } from "@/lib/types"
 import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input, TableScroll } from "@/components/ui"
@@ -13,13 +13,15 @@ import { Modal, Field } from "@/components/form"
 import { money } from "@/lib/utils"
 
 type Kind = "labor" | "materials" | "equipment" | "subcontractors"
-interface TabCfg { key: Kind; label: string; path: string; rateField: "ratePerHour" | "unitPrice" | "unitRate"; rateLabel: string; material?: boolean }
+/** API enum value sent in the rate-suggestion query (matches C# ResourceType). */
+type ResourceApiType = "Labor" | "Material" | "Equipment" | "Subcontractor"
+interface TabCfg { key: Kind; label: string; path: string; rateField: "ratePerHour" | "unitPrice" | "unitRate"; rateLabel: string; material?: boolean; apiType: ResourceApiType }
 
 const TABS: TabCfg[] = [
-  { key: "labor",          label: "Labor",          path: "/api/resources/labor",          rateField: "ratePerHour", rateLabel: "Rate / hour" },
-  { key: "materials",      label: "Materials",      path: "/api/resources/materials",      rateField: "unitPrice",   rateLabel: "Unit price", material: true },
-  { key: "equipment",      label: "Equipment",      path: "/api/resources/equipment",      rateField: "ratePerHour", rateLabel: "Rate / hour" },
-  { key: "subcontractors", label: "Subcontractors", path: "/api/resources/subcontractors", rateField: "unitRate",    rateLabel: "Unit rate" },
+  { key: "labor",          label: "Labor",          path: "/api/resources/labor",          rateField: "ratePerHour", rateLabel: "Rate / hour", apiType: "Labor"         },
+  { key: "materials",      label: "Materials",      path: "/api/resources/materials",      rateField: "unitPrice",   rateLabel: "Unit price",   material: true, apiType: "Material"  },
+  { key: "equipment",      label: "Equipment",      path: "/api/resources/equipment",      rateField: "ratePerHour", rateLabel: "Rate / hour", apiType: "Equipment"     },
+  { key: "subcontractors", label: "Subcontractors", path: "/api/resources/subcontractors", rateField: "unitRate",    rateLabel: "Unit rate",    apiType: "Subcontractor" },
 ]
 
 export default function ResourcesPage() {
@@ -151,6 +153,29 @@ function ResourceEditor({ cfg, row, onClose }: { cfg: TabCfg; row: ResourceRow |
   })
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value })
 
+  // ── AI rate suggestion state ──────────────────────────────────────────────
+  const [suggestion, setSuggestion] = useState<{ loading: boolean; data: RateSuggestion | null; error: string | null } | null>(null)
+
+  async function fetchSuggestion() {
+    const name = f.name.trim()
+    const unit = (f.unit || cfg.rateField === "ratePerHour" ? "hr" : "unit").trim()
+    if (!name) { toast.error("Enter a resource name first"); return }
+    setSuggestion({ loading: true, data: null, error: null })
+    try {
+      const params = new URLSearchParams({ name, unit, type: cfg.apiType })
+      const data = await fetchApi<RateSuggestion>(`/api/ai/rate-suggestion?${params}`)
+      setSuggestion({ loading: false, data, error: null })
+    } catch (e) {
+      setSuggestion({ loading: false, data: null, error: (e as Error).message })
+    }
+  }
+
+  function applyRate(rate: number) {
+    setF((prev) => ({ ...prev, rate: String(rate) }))
+    setSuggestion(null)
+    toast.success("Rate applied")
+  }
+
   const mut = useMutation({
     mutationFn: () => {
       const body: Record<string, unknown> = { code: f.code, name: f.name, unit: f.unit, isActive: f.isActive }
@@ -165,6 +190,11 @@ function ResourceEditor({ cfg, row, onClose }: { cfg: TabCfg; row: ResourceRow |
     onError: (e) => toast.error((e as Error).message),
   })
 
+  const confidenceChip = (c: string) => {
+    const cls = c === "high" ? "bg-emerald-100 text-emerald-700" : c === "medium" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"
+    return <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${cls}`}>{c}</span>
+  }
+
   return (
     <Modal open onClose={onClose} title={`${editing ? "Edit" : "Add"} ${cfg.label.replace(/s$/, "")}`}>
       <form id="res-form" onSubmit={(e) => { e.preventDefault(); mut.mutate() }} className="space-y-3">
@@ -174,9 +204,74 @@ function ResourceEditor({ cfg, row, onClose }: { cfg: TabCfg; row: ResourceRow |
         </div>
         <Field label="Name *"><Input value={f.name} onChange={set("name")} required /></Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label={`${cfg.rateLabel} *`}><Input type="number" step="0.0001" min={0} value={f.rate} onChange={set("rate")} required /></Field>
+          <Field label={`${cfg.rateLabel} *`}>
+            {/* Rate input row with AI suggest button */}
+            <div className="flex items-center gap-2">
+              <Input type="number" step="0.0001" min={0} value={f.rate} onChange={set("rate")} required className="flex-1" />
+              <button
+                type="button"
+                title="AI rate suggestion — get a benchmark or historical rate for this resource"
+                disabled={suggestion?.loading}
+                onClick={fetchSuggestion}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border)] text-slate-400 transition hover:border-[var(--brand)] hover:text-[var(--brand)] disabled:opacity-40"
+              >
+                <Sparkles className="h-4 w-4" />
+              </button>
+            </div>
+          </Field>
           {cfg.material && <Field label="Wastage %"><Input type="number" step="0.01" min={0} value={f.wastagePct} onChange={set("wastagePct")} /></Field>}
         </div>
+
+        {/* AI suggestion panel — shown after the button is clicked */}
+        {suggestion !== null && (
+          <div className="rounded-md border border-[var(--border)] bg-slate-50 p-3 text-xs">
+            {suggestion.loading && (
+              <p className="flex items-center gap-2 text-slate-500">
+                <Sparkles className="h-3.5 w-3.5 animate-pulse text-[var(--brand)]" /> Fetching suggestion…
+              </p>
+            )}
+            {suggestion.error && <p className="text-rose-600">{suggestion.error}</p>}
+            {suggestion.data && (() => {
+              const s = suggestion.data
+              return (
+                <>
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="font-medium text-slate-700">
+                      Suggested: <span className="font-mono">{money(s.suggestedRate)}</span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {confidenceChip(s.confidence)}
+                      <span className="text-slate-400">{s.basis}</span>
+                    </div>
+                  </div>
+                  {s.comparables.length > 0 && (
+                    <ul className="mb-2 space-y-0.5">
+                      {s.comparables.slice(0, 5).map((c, i) => (
+                        <li key={i} className="flex items-center justify-between text-slate-500">
+                          <span className="truncate max-w-[55%]">{c.name}</span>
+                          <span className="font-mono text-slate-700">{money(c.rate)}/{c.unit}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {s.suggestedRate > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => applyRate(s.suggestedRate)}
+                      className="flex items-center gap-1 rounded-md bg-[var(--brand)] px-2.5 py-1 text-white hover:opacity-90"
+                    >
+                      <Check className="h-3 w-3" /> Apply {money(s.suggestedRate)}
+                    </button>
+                  )}
+                  {s.suggestedRate === 0 && (
+                    <p className="text-slate-400">No suggestion available for this resource name. Try a more specific name (e.g. "Mason", "Concrete C30", "Excavator 20t").</p>
+                  )}
+                </>
+              )
+            })()}
+          </div>
+        )}
+
         {cfg.material && <Field label="Supplier"><Input value={f.supplier} onChange={set("supplier")} /></Field>}
       </form>
       <div className="mt-4 flex justify-end gap-2">
