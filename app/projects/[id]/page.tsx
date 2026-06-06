@@ -624,9 +624,13 @@ function WhatIfPanel({ estimateId, markups, currency, canEdit }: {
     onError: (err) => toast.error((err as Error).message),
   })
 
-  // Re-price whenever a percentage changes.
+  // Re-price whenever a percentage changes — debounced so typing "12.5" sends one
+  // request after the user pauses, not four mid-keystroke.
   useEffect(() => {
-    preview.mutate({ markups: lines.map((l) => ({ type: l.type, label: l.label, percentage: l.percentage, applyOrder: l.applyOrder })) })
+    const t = setTimeout(() => {
+      preview.mutate({ markups: lines.map((l) => ({ type: l.type, label: l.label, percentage: l.percentage, applyOrder: l.applyOrder })) })
+    }, 250)
+    return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey])
 

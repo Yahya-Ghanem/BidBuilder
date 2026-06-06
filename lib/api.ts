@@ -4,19 +4,38 @@
  * Throws ApiError on non-2xx; a 401 clears the session.
  */
 
+import type { AuthUser } from "@/lib/types"
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8081"
 
 const TOKEN_KEY = "bb_token"
 const TENANT_KEY = "bb_tenant"
 const USER_KEY = "bb_user"
 
+/** Narrow an untrusted localStorage payload to a well-formed AuthUser. */
+function isAuthUser(u: unknown): u is AuthUser {
+  return !!u && typeof u === "object"
+    && typeof (u as AuthUser).id === "number"
+    && typeof (u as AuthUser).name === "string"
+    && typeof (u as AuthUser).email === "string"
+    && typeof (u as AuthUser).role === "string"
+}
+
 export const session = {
   getToken: () => (typeof window === "undefined" ? null : localStorage.getItem(TOKEN_KEY)),
   getTenant: () => (typeof window === "undefined" ? "default" : localStorage.getItem(TENANT_KEY) ?? "default"),
-  getUser: () => {
+  getUser: (): AuthUser | null => {
     if (typeof window === "undefined") return null
     const raw = localStorage.getItem(USER_KEY)
-    return raw ? JSON.parse(raw) : null
+    if (!raw) return null
+    // Validate at this trust boundary: a malformed or legacy payload must not
+    // propagate as a bad AuthUser — drop it and fail closed to signed-out.
+    try {
+      const parsed: unknown = JSON.parse(raw)
+      if (isAuthUser(parsed)) return parsed
+    } catch { /* corrupt JSON */ }
+    localStorage.removeItem(USER_KEY)
+    return null
   },
   set: (token: string, tenant: string, user: unknown) => {
     localStorage.setItem(TOKEN_KEY, token)

@@ -2,12 +2,12 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutGrid, FolderKanban, Library, Boxes, LogOut, Settings, ScrollText, Users, BarChart3 } from "lucide-react"
+import { LayoutGrid, FolderKanban, Library, Boxes, LogOut, Settings, ScrollText, Users, BarChart3, Menu, X } from "lucide-react"
 import { useAuth, useRequireAuth } from "@/lib/auth"
 import { usePermissions } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { ProjectsTreeProvider, ProjectsSidebarTree } from "@/components/projects-tree"
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 
 const NAV = [
   { href: "/projects", label: "BidBuilder", icon: FolderKanban, module: "projects" },
@@ -22,6 +22,8 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
   const { user, logout } = useAuth()
   const { can, isAdmin } = usePermissions()
   const pathname = usePathname()
+  // Below md the sidebar is an off-canvas drawer toggled by the header hamburger.
+  const [navOpen, setNavOpen] = useState(false)
 
   if (isLoading || !isAuthenticated) {
     return <div className="grid min-h-screen place-items-center text-slate-400">Loading…</div>
@@ -38,11 +40,26 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
 
   return (
     <ProjectsTreeProvider>
-    <div className="grid min-h-screen grid-cols-[280px_1fr]">
-      <aside className="flex max-h-screen flex-col border-r border-[var(--border)] bg-white">
-        <div className="flex items-center gap-2 px-5 py-4 text-lg font-bold">
-          <LayoutGrid className="h-5 w-5 text-[var(--brand)]" />
-          BidBuilder
+    <div className="grid min-h-screen md:grid-cols-[280px_1fr]">
+      {/* Backdrop behind the mobile drawer. */}
+      {navOpen && (
+        <div className="fixed inset-0 z-30 bg-black/40 md:hidden" aria-hidden="true" onClick={() => setNavOpen(false)} />
+      )}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 flex max-h-screen w-[280px] transform flex-col border-r border-[var(--border)] bg-white transition-transform",
+          "md:static md:z-auto md:w-auto md:translate-x-0",
+          navOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        <div className="flex items-center justify-between px-5 py-4 text-lg font-bold">
+          <span className="flex items-center gap-2">
+            <LayoutGrid className="h-5 w-5 text-[var(--brand)]" />
+            BidBuilder
+          </span>
+          <button onClick={() => setNavOpen(false)} aria-label="Close menu" className="rounded p-1 text-slate-400 hover:bg-slate-100 md:hidden">
+            <X className="h-5 w-5" />
+          </button>
         </div>
         <nav className="flex-1 space-y-1 overflow-auto px-3">
           {nav.map(({ href, label, icon: Icon }) => {
@@ -51,6 +68,7 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
               <div key={href}>
                 <Link
                   href={href}
+                  onClick={() => setNavOpen(false)}
                   className={cn(
                     "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition",
                     active ? "bg-[var(--brand)]/10 text-[var(--brand)]" : "text-slate-600 hover:bg-slate-100",
@@ -78,9 +96,12 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
         </div>
       </aside>
 
-      <div className="flex flex-col">
-        <header className="flex h-14 items-center border-b border-[var(--border)] bg-white px-6">
-          <h1 className="text-lg font-semibold">{title}</h1>
+      <div className="flex min-w-0 flex-col">
+        <header className="flex h-14 items-center gap-3 border-b border-[var(--border)] bg-white px-4 md:px-6">
+          <button onClick={() => setNavOpen(true)} aria-label="Open menu" className="rounded p-1 text-slate-600 hover:bg-slate-100 md:hidden">
+            <Menu className="h-5 w-5" />
+          </button>
+          <h1 className="truncate text-lg font-semibold">{title}</h1>
         </header>
         <main className="flex-1 overflow-auto p-6">{children}</main>
       </div>
