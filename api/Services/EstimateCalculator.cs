@@ -8,7 +8,7 @@ namespace BidBuilder.Api.Services;
 public record EstimateBreakdown(
     int Id, int ProjectId, int Revision, string Title, string Status, string Currency,
     decimal DirectCost, decimal IndirectCost, decimal MarkupCost, decimal BidPrice,
-    decimal? TaxRatePct, decimal TaxAmount, decimal BidPriceInclTax,
+    decimal? TaxRatePct, decimal TaxAmount, decimal BidPriceInclTax, decimal AlternatesTotal,
     List<SectionBreakdown> Sections, List<PrelimBreakdown> Preliminaries, List<MarkupBreakdown> Markups,
     string RowVersion, FxView? Fx);
 
@@ -18,7 +18,7 @@ public record FxView(string SecondaryCurrency, decimal Rate, decimal ConvertedBi
 
 public record SectionBreakdown(int Id, string Code, string Title, int SortOrder, decimal SectionTotal, List<ItemBreakdown> Items);
 public record ItemBreakdown(int Id, string ItemCode, string Description, string Unit, decimal Quantity, int? AssemblyId, decimal UnitRate, decimal LineTotal, int SortOrder,
-    List<ItemCostComponentBreakdown> Components, int? AreaId);
+    List<ItemCostComponentBreakdown> Components, int? AreaId, string Kind);
 /// <summary>One cost-component line of an item's unit-rate build-up.
 /// <c>Value</c> is the entered figure (money for Amount, % for Percent);
 /// <c>Amount</c> is its money contribution to the unit rate.</summary>
@@ -108,9 +108,14 @@ public class EstimateCalculator(AppDbContext db)
                                        .ToDictionaryAsync(a => a.Id, a => a.ComputedRate);
         var typeMap = await db.CostComponentTypes.AsNoTracking().ToDictionaryAsync(t => t.Id, t => t);
 
-        // ── Direct cost: items → sections ────────────────────────────────────
+        // ── Direct cost: items → sections, bucketed by line kind ─────────────
         // Rate precedence: cost-component build-up → assembly rate → ad-hoc rate.
-        decimal direct = 0m;
+        //   markupable : Normal + Daywork — priced work the markups apply to
+        //   excluded   : Provisional + PC sums — in the bid at net, NOT marked up
+        //   alternates : Alternate — carried for the client's option, OUT of the bid
+        // Section totals reflect the bid lines (markupable + excluded); alternates
+        // are summed separately so they never inflate a section or the tender sum.
+        decimal markupableDirect = 0m, excludedDirect = 0m, alternates = 0m;
         foreach (var s in e.Sections)
         {
             decimal sectionTotal = 0m;
@@ -121,11 +126,25 @@ public class EstimateCalculator(AppDbContext db)
                 else if (i.AssemblyId is not null && rates.TryGetValue(i.AssemblyId.Value, out var rate))
                     i.UnitRate = rate;                       // assembly-priced: rate is derived
                 i.LineTotal = EstimateMath.LineTotal(i.Quantity, i.UnitRate);
-                sectionTotal += i.LineTotal;
+                switch (i.Kind)
+                {
+                    case BoqItemKind.Alternate:
+                        alternates += i.LineTotal;           // excluded from the bid
+                        break;
+                    case BoqItemKind.ProvisionalSum:
+                    case BoqItemKind.PcSum:
+                        excludedDirect += i.LineTotal;       // in the bid, not marked up
+                        sectionTotal   += i.LineTotal;
+                        break;
+                    default:                                  // Normal, Daywork
+                        markupableDirect += i.LineTotal;
+                        sectionTotal     += i.LineTotal;
+                        break;
+                }
             }
             s.SectionTotal = EstimateMath.Round2(sectionTotal);
-            direct += s.SectionTotal;
         }
+        var direct = markupableDirect + excludedDirect;      // bid direct cost (excludes alternates)
 
         // ── Indirect cost: preliminaries ─────────────────────────────────────
         var durationMonths = e.Project.DurationMonths ?? 1;
@@ -137,18 +156,22 @@ public class EstimateCalculator(AppDbContext db)
         }
 
         // ── Markups: compounding in ApplyOrder ───────────────────────────────
+        // Markups compound only on the markupable direct cost + indirect — provisional/PC
+        // sums pass through at net, so they are NOT in the markup base.
         var ordered = e.Markups.OrderBy(m => m.ApplyOrder).ToList();
         var (amounts, markupTotal, _) = EstimateMath.ApplyMarkups(
-            direct + indirect, ordered.Select(m => m.Percentage).ToList());
+            markupableDirect + indirect, ordered.Select(m => m.Percentage).ToList());
         for (int k = 0; k < ordered.Count; k++) ordered[k].ComputedAmount = amounts[k];
 
-        e.DirectCost   = EstimateMath.Round2(direct);
-        e.IndirectCost = EstimateMath.Round2(indirect);
-        e.MarkupCost   = EstimateMath.Round2(markupTotal);
-        e.BidPrice     = EstimateMath.Round2(direct + indirect + markupTotal);
+        e.DirectCost      = EstimateMath.Round2(direct);
+        e.IndirectCost    = EstimateMath.Round2(indirect);
+        e.MarkupCost      = EstimateMath.Round2(markupTotal);
+        // Bid = markupable + excluded (provisional/PC pass-through) + indirect + markups.
+        e.BidPrice        = EstimateMath.Round2(direct + indirect + markupTotal);
+        e.AlternatesTotal = EstimateMath.Round2(alternates);
         // Tax sits OUTSIDE the markup cascade — computed on the finished (pre-tax) bid price.
-        e.TaxAmount    = EstimateMath.Tax(e.BidPrice, e.TaxRatePct);
-        e.UpdatedAt    = DateTime.UtcNow;
+        e.TaxAmount       = EstimateMath.Tax(e.BidPrice, e.TaxRatePct);
+        e.UpdatedAt       = DateTime.UtcNow;
 
         return (ordered, typeMap);
     }
@@ -293,13 +316,13 @@ public class EstimateCalculator(AppDbContext db)
         IReadOnlyDictionary<int, CostComponentType> typeMap) => new(
         e.Id, e.ProjectId, e.Revision, e.Title, e.Status.ToString(), e.Currency,
         e.DirectCost, e.IndirectCost, e.MarkupCost, e.BidPrice,
-        e.TaxRatePct, e.TaxAmount, EstimateMath.Round2(e.BidPrice + e.TaxAmount),
+        e.TaxRatePct, e.TaxAmount, EstimateMath.Round2(e.BidPrice + e.TaxAmount), e.AlternatesTotal,
         e.Sections.OrderBy(s => s.SortOrder).Select(s => new SectionBreakdown(
             s.Id, s.Code, s.Title, s.SortOrder, s.SectionTotal,
             s.Items.OrderBy(i => i.SortOrder).Select(i => new ItemBreakdown(
                 i.Id, i.ItemCode, i.Description, i.Unit, i.Quantity, i.AssemblyId,
                 i.UnitRate, i.LineTotal, i.SortOrder,
-                BuildItemRate(i.CostComponents, typeMap).Lines, i.AreaId)).ToList())).ToList(),
+                BuildItemRate(i.CostComponents, typeMap).Lines, i.AreaId, i.Kind.ToString())).ToList())).ToList(),
         e.Preliminaries.OrderBy(p => p.SortOrder).Select(p => new PrelimBreakdown(
             p.Id, p.Description, p.Kind.ToString(), p.Amount, p.ComputedTotal, p.SortOrder)).ToList(),
         orderedMarkups.Select(m => new MarkupBreakdown(

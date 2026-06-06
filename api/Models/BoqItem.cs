@@ -17,6 +17,11 @@ public class BoqItem : IHasTenant
     public decimal Quantity    { get; set; }          // numeric(18,4)
     public int     SortOrder   { get; set; }
 
+    /// <summary>How this line participates in the bid: priced work (marked up),
+    /// a provisional/PC sum (in the bid, not marked up), or an alternate (excluded
+    /// from the base tender). See <see cref="BoqItemKind"/>.</summary>
+    public BoqItemKind Kind   { get; set; } = BoqItemKind.Normal;
+
     /// <summary>When set, the unit rate is built from this reusable assembly.
     /// When null, <see cref="UnitRate"/> is entered/overridden directly.</summary>
     public int?    AssemblyId  { get; set; }

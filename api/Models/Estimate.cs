@@ -42,6 +42,10 @@ public class Estimate : IHasTenant
     public decimal MarkupCost      { get; set; }   // sum of applied markups
     public decimal BidPrice        { get; set; }   // final tender sum (EXCLUDING tax)
 
+    /// <summary>Cached sum of Alternate BOQ lines — carried for the client's option
+    /// but EXCLUDED from BidPrice/markups/tax (numeric(18,2)).</summary>
+    public decimal AlternatesTotal { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? PublishedAt { get; set; }

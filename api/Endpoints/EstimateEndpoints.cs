@@ -13,7 +13,7 @@ public record CreateEstimateRequest(string? Title);
 public record UpdateEstimateRequest(string? Title, string? Status, string? SecondaryCurrency, decimal? TaxRatePct);
 public record CopyEstimateRequest(int TargetProjectId, string? Title);
 public record SectionInput(string Code, string Title, int SortOrder, int? ParentSectionId);
-public record ItemInput(string? ItemCode, string Description, string Unit, decimal Quantity, int? AssemblyId, decimal UnitRate, int SortOrder, List<ItemCostComponentInput>? Components, int? AreaId);
+public record ItemInput(string? ItemCode, string Description, string Unit, decimal Quantity, int? AssemblyId, decimal UnitRate, int SortOrder, List<ItemCostComponentInput>? Components, int? AreaId, string? Kind = null);
 public record ItemCostComponentInput(int TypeId, decimal Value, decimal? Quantity = null, decimal? Rate = null);
 public record CloneRoomInput(string? Name);
 public record PrelimInput(string Description, string Kind, decimal Amount, int SortOrder);
@@ -399,11 +399,12 @@ public static class EstimateEndpoints
             if (i.AssemblyId is not null && !await db.Assemblies.AnyAsync(a => a.Id == i.AssemblyId)) return Bad("Assembly not found");
             var compErr = await ValidateComponents(db, i.Components); if (compErr is not null) return compErr;
             var areaErr = await ValidateAreaAsync(db, id, i.AreaId); if (areaErr is not null) return areaErr;
+            if (!ParseKind(i.Kind, out var kind)) return Bad($"Invalid item kind '{i.Kind}'");
             var hasComps = i.Components is { Count: > 0 };
             var item = new BoqItem
             {
                 SectionId = sid, ItemCode = i.ItemCode ?? "", Description = i.Description.Trim(),
-                Unit = i.Unit ?? "", Quantity = i.Quantity, AssemblyId = i.AssemblyId, AreaId = i.AreaId,
+                Unit = i.Unit ?? "", Quantity = i.Quantity, AssemblyId = i.AssemblyId, AreaId = i.AreaId, Kind = kind,
                 // Component build-up or assembly → rate is engine-derived; else ad-hoc.
                 UnitRate = hasComps || i.AssemblyId is not null ? 0m : i.UnitRate, SortOrder = i.SortOrder,
             };
@@ -422,6 +423,13 @@ public static class EstimateEndpoints
             if (i.AssemblyId is not null && !await db.Assemblies.AnyAsync(a => a.Id == i.AssemblyId)) return Bad("Assembly not found");
             var compErr = await ValidateComponents(db, i.Components); if (compErr is not null) return compErr;
             var areaErr = await ValidateAreaAsync(db, id, i.AreaId); if (areaErr is not null) return areaErr;
+            // Kind absent (null) = keep the current kind — so editors that don't surface it
+            // (e.g. the activities panel) can't silently reset a provisional/alternate line.
+            if (i.Kind is not null)
+            {
+                if (!ParseKind(i.Kind, out var k)) return Bad($"Invalid item kind '{i.Kind}'");
+                item.Kind = k;
+            }
             item.ItemCode = i.ItemCode ?? ""; item.Description = i.Description.Trim(); item.Unit = i.Unit ?? "";
             item.Quantity = i.Quantity; item.AssemblyId = i.AssemblyId; item.AreaId = i.AreaId; item.SortOrder = i.SortOrder;
 
@@ -515,7 +523,7 @@ public static class EstimateEndpoints
                 db.BoqItems.Add(new BoqItem
                 {
                     SectionId = it.SectionId, ItemCode = it.ItemCode, Description = it.Description, Unit = it.Unit,
-                    Quantity = it.Quantity, AssemblyId = it.AssemblyId, UnitRate = it.UnitRate,
+                    Quantity = it.Quantity, AssemblyId = it.AssemblyId, UnitRate = it.UnitRate, Kind = it.Kind,
                     AreaId = map[it.AreaId!.Value], SortOrder = it.SortOrder,
                     CostComponents = it.CostComponents
                         .Select(c => new ItemCostComponent { CostComponentTypeId = c.CostComponentTypeId, Value = c.Value, Quantity = c.Quantity, Rate = c.Rate }).ToList(),
@@ -640,7 +648,7 @@ public static class EstimateEndpoints
                 db.BoqItems.Add(new BoqItem
                 {
                     SectionId = ns.Id, ItemCode = it.ItemCode, Description = it.Description, Unit = it.Unit,
-                    Quantity = it.Quantity, SortOrder = it.SortOrder, AssemblyId = it.AssemblyId, UnitRate = it.UnitRate,
+                    Quantity = it.Quantity, SortOrder = it.SortOrder, AssemblyId = it.AssemblyId, UnitRate = it.UnitRate, Kind = it.Kind,
                     // Areas are project-scoped: keep the tag for a same-project duplicate, drop it on cross-project copy.
                     AreaId = targetProjectId == src.ProjectId ? it.AreaId : null,
                     CostComponents = it.CostComponents
@@ -671,6 +679,14 @@ public static class EstimateEndpoints
 
     private static IResult Bad(string msg) => Results.BadRequest(new { error = msg });
     private static IResult NotFound() => Results.NotFound(new { error = "Not found" });
+
+    /// <summary>Parse a BOQ line kind (case-insensitive). Null/empty → Normal (the
+    /// default, so existing clients that omit the field are unaffected).</summary>
+    private static bool ParseKind(string? s, out BoqItemKind kind)
+    {
+        if (string.IsNullOrWhiteSpace(s)) { kind = BoqItemKind.Normal; return true; }
+        return Enum.TryParse(s, true, out kind);
+    }
 
     /// <summary>Endpoint metadata marker: this estimate write stays available even when the
     /// revision is Published/Superseded. The status-lock filter is fail-closed, so only routes
