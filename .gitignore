@@ -27,3 +27,7 @@ next-env.d.ts
 test-results/
 playwright-report/
 playwright/.cache/
+
+# Local verification artifacts (workflow byproducts, ad-hoc test logs)
+*.log
+test-output.log
