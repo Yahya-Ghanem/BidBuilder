@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using BidBuilder.Api.Auth;
 using BidBuilder.Api.Data;
 using BidBuilder.Api.Models;
+using BidBuilder.Api.Validation;
 
 namespace BidBuilder.Api.Endpoints;
 
@@ -221,6 +222,8 @@ public static class AnalyticsEndpoints
             return Results.Ok(new {
                 p.Id, p.SubmittedBidValue, p.AwardedValue, p.FinalCost, p.DecisionAt, p.WinLossNote
             });
-        }).RequireAuthorization();
+        })
+        .AddEndpointFilter<ValidationFilter<BidOutcomeRequest>>()
+        .RequireAuthorization();
     }
 }
