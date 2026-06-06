@@ -90,6 +90,17 @@ public class HealthAndAuthTests(ApiFixture fx)
         Assert.Equal(HttpStatusCode.OK, r.StatusCode);
     }
 
+    // Liveness (/healthz) and readiness (/readyz) are split: /healthz has no
+    // dependency checks (process-up only) so a DB blip can't trip the container
+    // healthcheck; /readyz includes the DB probe and is healthy here.
+    [Fact]
+    public async Task Readyz_includes_the_database_probe_and_is_healthy()
+    {
+        var r = await fx.Client().GetAsync("/readyz");
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.Equal("Healthy", (await r.Content.ReadAsStringAsync()).Trim());
+    }
+
     [Fact]
     public async Task Projects_require_authentication()
     {

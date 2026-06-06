@@ -447,7 +447,11 @@ public static class EstimateEndpoints
 
             // All-or-nothing: cloning the subtree spans many level-by-level SaveChanges
             // calls plus the activity duplication. One transaction means a mid-clone
-            // failure can't leave a malformed half-built area subtree behind.
+            // failure can't leave a malformed half-built area subtree behind. Run through
+            // the execution strategy so the unit retries together on a transient fault.
+            var strategy = db.Database.CreateExecutionStrategy();
+            var result = await strategy.ExecuteAsync(async () =>
+            {
             await using var tx = await db.Database.BeginTransactionAsync();
 
             var map = new Dictionary<int, int>();
@@ -497,8 +501,10 @@ public static class EstimateEndpoints
                         .Select(c => new ItemCostComponent { CostComponentTypeId = c.CostComponentTypeId, Value = c.Value, Quantity = c.Quantity, Rate = c.Rate }).ToList(),
                 });
             await db.SaveChangesAsync();
-            var result = await calc.RecomputeAsync(id);
+            var bd = await calc.RecomputeAsync(id);
             await tx.CommitAsync();
+            return bd;
+            });
             return Results.Ok(result);
         });
 
@@ -581,7 +587,12 @@ public static class EstimateEndpoints
     {
         // All-or-nothing: the clone spans many SaveChanges calls (estimate, then each
         // section, then items/prelims/markups, then recompute). One transaction means a
-        // failure partway can never leave an orphaned half-copied Draft behind.
+        // failure partway can never leave an orphaned half-copied Draft behind. Run through
+        // the execution strategy so the whole unit retries together on a transient fault
+        // (required because the DbContext has retry-on-failure enabled).
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
         await using var tx = await db.Database.BeginTransactionAsync();
 
         var nextRev = ((await db.Estimates.Where(e => e.ProjectId == targetProjectId).MaxAsync(e => (int?)e.Revision)) ?? 0) + 1;
@@ -631,6 +642,7 @@ public static class EstimateEndpoints
         await calc.RecomputeAsync(clone.Id);
         await tx.CommitAsync();
         return clone;
+        });
     }
 
     private static EstimateSummaryDto Summ(Estimate e) =>
