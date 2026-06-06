@@ -143,8 +143,28 @@ public sealed class ApiFixture : IAsyncLifetime
         return c;
     }
 
+    /// <summary>An unauthenticated client (no Bearer token). Used to verify 401 responses.</summary>
+    public HttpClient AnonClient() => NewClient();
+
     /// <summary>A client authenticated as the seeded tenant admin.</summary>
     public Task<HttpClient> AdminClientAsync() => AuthedClientAsync("admin@bidbuilder.local", "Admin@12345");
+
+    /// <summary>Alias for <see cref="SecondTenantAdminClientAsync"/> used by isolation tests.</summary>
+    public Task<HttpClient> SecondAdminClientAsync() => SecondTenantAdminClientAsync();
+
+    /// <summary>
+    /// Returns a DI scope for the default tenant. Useful for service-level tests that need
+    /// to instantiate services with a real DB + tenant context. The caller is responsible for
+    /// disposing the scope (use <c>await using</c>).
+    /// </summary>
+    public async ValueTask<IServiceScope> CreateScope(string tenantSlug = "default")
+    {
+        var scope = _factory.Services.CreateScope();
+        var db     = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var tenant = await db.Tenants.FirstAsync(t => t.Slug == tenantSlug);
+        scope.ServiceProvider.GetRequiredService<ITenantContext>().Set(tenant.Id, tenant.Slug);
+        return scope;
+    }
 
     /// <summary>Log in as an arbitrary existing user (default tenant unless overridden)
     /// and return a Bearer-authenticated client.</summary>
