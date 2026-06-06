@@ -63,14 +63,22 @@ public class ExportService
 
         if (m.LogoBytes is { Length: > 0 })
         {
-            // NOT disposed here on purpose: ClosedXML reads the picture stream lazily
-            // at SaveAs, so the stream must outlive this block (MemoryStream has no
-            // unmanaged resources to leak).
-            var logoStream = new MemoryStream(m.LogoBytes);
-            var pic = sum.AddPicture(logoStream, "logo");
-            const double maxH = 64; // px — keep the header compact, preserve aspect ratio
-            if (pic.OriginalHeight > maxH) pic.Scale(maxH / pic.OriginalHeight);
-            pic.MoveTo(sum.Cell("E1"));
+            // Embedding the branding logo must never take down the whole export — a
+            // bad/edge-case image just gets skipped.
+            try
+            {
+                // NOT disposed here on purpose: ClosedXML reads the picture stream lazily
+                // at SaveAs, so the stream must outlive this block (MemoryStream has no
+                // unmanaged resources to leak).
+                var logoStream = new MemoryStream(m.LogoBytes);
+                var pic = sum.AddPicture(logoStream, "logo");
+                // MoveTo first: ClosedXML only allows resizing once the picture has a
+                // Move placement — scaling before this throws ("placement should be …Move").
+                pic.MoveTo(sum.Cell("E1"));
+                const double maxH = 64; // px — keep the header compact, preserve aspect ratio
+                if (pic.OriginalHeight > maxH) pic.Scale(maxH / pic.OriginalHeight);
+            }
+            catch { /* skip the logo, keep the document */ }
         }
         int h = 2;
         if (!string.IsNullOrWhiteSpace(m.CompanyAddress)) { sum.Cell(h, 1).Value = m.CompanyAddress; sum.Cell(h, 1).Style.Font.FontColor = XLColor.Gray; h++; }
