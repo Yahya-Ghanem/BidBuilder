@@ -149,7 +149,7 @@ export interface FxView {
 export interface EstimateBreakdown {
   id: number; projectId: number; revision: number; title: string; status: string; currency: string
   directCost: number; indirectCost: number; markupCost: number; bidPrice: number
-  taxRatePct: number | null; taxAmount: number; bidPriceInclTax: number; alternatesTotal: number
+  taxRatePct: number | null; taxAmount: number; bidPriceInclTax: number; alternatesTotal: number; marginOnPricePct: number
   sections: SectionBreakdown[]; preliminaries: PrelimBreakdown[]; markups: MarkupBreakdown[]
   rowVersion: string
   fx: FxView | null
