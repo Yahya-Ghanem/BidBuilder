@@ -67,10 +67,11 @@ function SettingsForm() {
           <Field label="Base currency"><Input value={f.baseCurrency} onChange={set("baseCurrency")} disabled={ro} maxLength={3} /></Field>
           <Field label="Timezone"><Input value={f.timezone} onChange={set("timezone")} disabled={ro} /></Field>
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-3">
           <Field label="Overhead %"><Input type="number" step="0.01" min={0} value={f.defaultOverheadPct} onChange={setNum("defaultOverheadPct")} disabled={ro} /></Field>
           <Field label="Profit %"><Input type="number" step="0.01" min={0} value={f.defaultProfitPct} onChange={setNum("defaultProfitPct")} disabled={ro} /></Field>
           <Field label="Contingency %"><Input type="number" step="0.01" min={0} value={f.defaultContingencyPct} onChange={setNum("defaultContingencyPct")} disabled={ro} /></Field>
+          <Field label="VAT / tax %"><Input type="number" step="0.01" min={0} max={100} value={f.defaultTaxRatePct} onChange={setNum("defaultTaxRatePct")} disabled={ro} /></Field>
         </div>
       </Card>
 

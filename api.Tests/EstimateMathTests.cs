@@ -46,6 +46,22 @@ public class EstimateMathTests
         Assert.Equal(127_008.00m, final);
     }
 
+    // ── Tax / VAT (applied after markups, outside the cascade) ─────────────────
+    [Theory]
+    [InlineData(100_000, 5, 5_000.00)]
+    [InlineData(73_853.44, 5, 3_692.67)]   // half-away rounding of 3,692.672
+    [InlineData(1_000, 0, 0.00)]
+    public void Tax_applies_rate_to_bid_price(decimal bid, decimal rate, decimal expected)
+        => Assert.Equal(expected, EstimateMath.Tax(bid, rate));
+
+    [Fact]
+    public void Tax_is_zero_for_null_or_nonpositive_rate()
+    {
+        Assert.Equal(0m, EstimateMath.Tax(1_000m, null));
+        Assert.Equal(0m, EstimateMath.Tax(1_000m, 0m));
+        Assert.Equal(0m, EstimateMath.Tax(1_000m, -5m));
+    }
+
     [Fact]
     public void No_markups_leaves_base_untouched()
     {

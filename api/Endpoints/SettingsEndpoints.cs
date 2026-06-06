@@ -11,11 +11,12 @@ public record SettingsDto(
     string CompanyName, string? Website, string? ContactEmail, string? Phone,
     string? Address, string? City, string? Country, string Timezone,
     string BaseCurrency, decimal DefaultOverheadPct, decimal DefaultProfitPct, decimal DefaultContingencyPct,
-    bool HasLogo);
+    decimal DefaultTaxRatePct, bool HasLogo);
 
 public record SettingsInput(
     string? Website, string? ContactEmail, string? Phone, string? Address, string? City, string? Country,
-    string? Timezone, string? BaseCurrency, decimal DefaultOverheadPct, decimal DefaultProfitPct, decimal DefaultContingencyPct);
+    string? Timezone, string? BaseCurrency, decimal DefaultOverheadPct, decimal DefaultProfitPct, decimal DefaultContingencyPct,
+    decimal DefaultTaxRatePct);
 
 public record CurrencyRateDto(string Code, decimal RateToBase, DateTime UpdatedAt);
 public record CurrencyRatesDto(string BaseCurrency, List<CurrencyRateDto> Rates);
@@ -56,6 +57,8 @@ public static class SettingsEndpoints
             }
             if (i.DefaultOverheadPct < 0 || i.DefaultProfitPct < 0 || i.DefaultContingencyPct < 0)
                 return Bad("Default percentages cannot be negative.");
+            if (i.DefaultTaxRatePct < 0 || i.DefaultTaxRatePct > 100)
+                return Bad("Default tax rate must be between 0 and 100.");
 
             var s = await db.TenantSettings.FirstOrDefaultAsync();
             if (s is null) { s = new TenantSettings(); db.TenantSettings.Add(s); }   // TenantId auto-stamped on save
@@ -67,6 +70,7 @@ public static class SettingsEndpoints
             s.DefaultOverheadPct = i.DefaultOverheadPct;
             s.DefaultProfitPct = i.DefaultProfitPct;
             s.DefaultContingencyPct = i.DefaultContingencyPct;
+            s.DefaultTaxRatePct = i.DefaultTaxRatePct;
             s.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
@@ -188,5 +192,6 @@ public static class SettingsEndpoints
         companyName, s?.Website, s?.ContactEmail, s?.Phone, s?.Address, s?.City, s?.Country,
         s?.Timezone ?? "UTC", s?.BaseCurrency ?? "AED",
         s?.DefaultOverheadPct ?? 0, s?.DefaultProfitPct ?? 0, s?.DefaultContingencyPct ?? 0,
+        s?.DefaultTaxRatePct ?? 0,
         s?.LogoBytes is { Length: > 0 });
 }

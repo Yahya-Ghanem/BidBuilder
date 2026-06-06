@@ -111,13 +111,20 @@ public class ExportService
         Line("Direct cost", e.DirectCost);
         Line("Indirect (preliminaries)", e.IndirectCost);
         Line("Markups", e.MarkupCost);
-        // BID PRICE — the headline figure, reversed out on the brand colour.
-        sum.Cell(r, 1).Value = "BID PRICE";
+        // BID PRICE — the headline figure, reversed out on the brand colour. When a tax
+        // line applies this is the pre-tax tender sum; VAT and the inclusive total follow.
+        sum.Cell(r, 1).Value = e.TaxAmount > 0m ? "BID PRICE (excl. tax)" : "BID PRICE";
         sum.Cell(r, 2).Value = e.BidPrice; sum.Cell(r, 2).Style.NumberFormat.Format = "#,##0.00";
         var bidRange = sum.Range(r, 1, r, 2);
         bidRange.Style.Font.SetBold().Font.SetFontColor(XLColor.White).Font.SetFontSize(12);
         bidRange.Style.Fill.SetBackgroundColor(Brand);
         int sumLast = r; r++;
+        if (e.TaxAmount > 0m)
+        {
+            Line($"VAT ({e.TaxRatePct:#,##0.##}%)", e.TaxAmount);
+            Line("TOTAL incl. tax", e.BidPriceInclTax, bold: true);
+            sumLast = r - 1;
+        }
         if (e.Fx is not null)
         {
             sum.Cell(r, 1).Value = $"≈ in {e.Fx.SecondaryCurrency}  (1 {e.Currency} = {e.Fx.Rate:#,##0.######} {e.Fx.SecondaryCurrency}{(e.Fx.Frozen ? ", frozen" : "")})";
@@ -337,7 +344,13 @@ public class ExportService
                         t.Item().Text($"Direct cost: {Money(e.DirectCost)}");
                         t.Item().Text($"Indirect (prelims): {Money(e.IndirectCost)}");
                         t.Item().Text($"Markups: {Money(e.MarkupCost)}");
-                        t.Item().PaddingTop(3).Text($"BID PRICE: {Money(e.BidPrice)}").FontSize(13).Bold().FontColor(Colors.Teal.Darken2);
+                        var bidLabel = e.TaxAmount > 0m ? "BID PRICE (excl. tax)" : "BID PRICE";
+                        t.Item().PaddingTop(3).Text($"{bidLabel}: {Money(e.BidPrice)}").FontSize(13).Bold().FontColor(Colors.Teal.Darken2);
+                        if (e.TaxAmount > 0m)
+                        {
+                            t.Item().Text($"VAT ({e.TaxRatePct:#,##0.##}%): {Money(e.TaxAmount)}");
+                            t.Item().Text($"TOTAL incl. tax: {Money(e.BidPriceInclTax)}").FontSize(13).Bold().FontColor(Colors.Teal.Darken2);
+                        }
                         if (e.Fx is not null)
                             t.Item().Text($"≈ {e.Fx.SecondaryCurrency} {e.Fx.ConvertedBidPrice:#,##0.00}  (1 {e.Currency} = {e.Fx.Rate:#,##0.######} {e.Fx.SecondaryCurrency}{(e.Fx.Frozen ? ", frozen" : "")})")
                                 .FontSize(8).FontColor(Colors.Grey.Darken1);
@@ -774,8 +787,13 @@ public class ExportService
         var validity    = o.ValidityDays is > 0 ? o.ValidityDays.Value : 90;
         var reference   = Clean(o.Reference) ?? m.ProjectCode;
         var signatory   = Clean(o.Signatory) ?? "____________________";
-        var amount      = $"{e.Currency} {e.BidPrice:#,##0.00}";
-        var amountWords = MoneyInWords.Money(e.BidPrice, e.Currency);
+        // The letter states the amount PAYABLE — inclusive of VAT/tax when it applies
+        // (TaxAmount is 0 for a no-tax estimate, so this is unchanged in that case).
+        var tenderSum   = e.BidPriceInclTax;
+        var amount      = e.TaxAmount > 0m
+            ? $"{e.Currency} {tenderSum:#,##0.00} (incl. {e.TaxRatePct:#,##0.##}% VAT)"
+            : $"{e.Currency} {tenderSum:#,##0.00}";
+        var amountWords = MoneyInWords.Money(tenderSum, e.Currency);
 
         var doc = Document.Create(container => container.Page(page =>
         {

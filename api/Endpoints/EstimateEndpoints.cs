@@ -10,7 +10,7 @@ namespace BidBuilder.Api.Endpoints;
 
 public record EstimateSummaryDto(int Id, int Revision, string Title, string Status, string Currency, decimal BidPrice, DateTime UpdatedAt);
 public record CreateEstimateRequest(string? Title);
-public record UpdateEstimateRequest(string? Title, string? Status, string? SecondaryCurrency);
+public record UpdateEstimateRequest(string? Title, string? Status, string? SecondaryCurrency, decimal? TaxRatePct);
 public record CopyEstimateRequest(int TargetProjectId, string? Title);
 public record SectionInput(string Code, string Title, int SortOrder, int? ParentSectionId);
 public record ItemInput(string? ItemCode, string Description, string Unit, decimal Quantity, int? AssemblyId, decimal UnitRate, int SortOrder, List<ItemCostComponentInput>? Components, int? AreaId);
@@ -61,6 +61,8 @@ public static class EstimateEndpoints
             if (project is null) return NotFound();
 
             var nextRev = ((await db.Estimates.Where(e => e.ProjectId == projectId).MaxAsync(e => (int?)e.Revision)) ?? 0) + 1;
+            // Pre-fill the VAT/tax rate from the tenant default (null when none configured).
+            var defaultTax = await db.TenantSettings.Select(s => s.DefaultTaxRatePct).FirstOrDefaultAsync();
             var est = new Estimate
             {
                 ProjectId = projectId,
@@ -68,6 +70,7 @@ public static class EstimateEndpoints
                 Title     = string.IsNullOrWhiteSpace(req.Title) ? $"Revision {nextRev}" : req.Title!.Trim(),
                 Status    = EstimateStatus.Draft,
                 Currency  = project.Currency,
+                TaxRatePct = defaultTax > 0m ? defaultTax : null,
             };
             db.Estimates.Add(est);
             await db.SaveChangesAsync();
@@ -245,6 +248,14 @@ public static class EstimateEndpoints
                 e.Status = st;
                 if (st == EstimateStatus.Published) e.PublishedAt ??= DateTime.UtcNow;
             }
+            // Tax/VAT rate: null = unchanged; 0 = no tax line; else the % (0–100).
+            var taxChanged = false;
+            if (req.TaxRatePct is { } tr)
+            {
+                if (tr < 0m || tr > 100m) return Bad("Tax rate must be between 0 and 100.");
+                var normalized = tr > 0m ? tr : (decimal?)null;
+                if (e.TaxRatePct != normalized) { e.TaxRatePct = normalized; taxChanged = true; }
+            }
             // SecondaryCurrency: null = unchanged, "" = clear, else set (3-letter ISO).
             if (req.SecondaryCurrency is not null)
             {
@@ -276,7 +287,8 @@ public static class EstimateEndpoints
             await db.SaveChangesAsync();
             await audit.LogAsync(me, oldStatus != e.Status ? "estimate.status" : "estimate.update", "Estimate", id.ToString(),
                 oldStatus != e.Status ? $"{oldStatus} → {e.Status}" : $"edited (status {e.Status})");
-            return Results.Ok(await calc.GetAsync(id));
+            // A tax-rate change shifts TaxAmount/total — recompute; otherwise the cached breakdown stands.
+            return Results.Ok(taxChanged ? await calc.RecomputeAsync(id) : await calc.GetAsync(id));
         }).AllowWhenFinalised();   // status/title change is the unlock path — must stay available when finalised
 
         // POST what-if — preview the bid price under a proposed markup set, no save.
@@ -612,6 +624,7 @@ public static class EstimateEndpoints
             Status    = EstimateStatus.Draft,
             Currency  = src.Currency,
             DefaultLaborRate = src.DefaultLaborRate,
+            TaxRatePct = src.TaxRatePct,
         };
         db.Estimates.Add(clone);
         await db.SaveChangesAsync();
