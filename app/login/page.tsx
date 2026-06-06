@@ -97,7 +97,7 @@ export default function LoginPage() {
               <span className="h-px flex-1 bg-[var(--border)]" /> or <span className="h-px flex-1 bg-[var(--border)]" />
             </div>
             <Button type="button" variant="outline" className="w-full" onClick={signInWithSso}>
-              <KeyRound className="h-4 w-4" /> Sign in with SSO
+              <KeyRound className="h-4 w-4" /> Continue with SSO
             </Button>
           </>
         ) : (
