@@ -6,7 +6,17 @@ import { toast } from "sonner"
 import type { LucideIcon } from "lucide-react"
 import { Trophy, TrendingUp, TrendingDown, Pencil } from "lucide-react"
 import { fetchApi } from "@/lib/api"
-import type { BidAnalyticsResult, BidAnalyticsBucket, BidRegisterRow } from "@/lib/types"
+// 19.5: BidAnalyticsResult / BidAnalyticsBucket / BidRegisterRow now flow from the
+// auto-generated OpenAPI client (lib/api-generated.d.ts). The hand-written shapes in
+// lib/types.ts are kept for the rest of the app and will be retired incrementally.
+import type { Schema, ApiResponse } from "@/lib/api-types"
+type BidAnalyticsResult = ApiResponse<"/api/analytics/bids", "get">
+type BidAnalyticsBucket = Schema<"BidAnalyticsBucket">
+type BidRegisterRow     = Schema<"BidRegisterRow">
+
+/** Default for the optional `overall` field on the analytics response — the
+ * generated types make every property optional, so a no-data render needs a fallback. */
+const EMPTY_BUCKET: BidAnalyticsBucket = { dimension: "overall", key: "All", total: 0, won: 0, lost: 0, hitRatePct: 0, avgBidVsAwardPct: null, awardedValueSum: 0, mixedCurrency: false }
 import { AppShell } from "@/components/app-shell"
 import { Card, Input } from "@/components/ui"
 import { Modal, Field, ModalActions } from "@/components/form"
@@ -47,16 +57,19 @@ export default function AnalyticsPage() {
 
         {data && (
           <>
-            <OverallStrip overall={data.overall} />
+            {/* All four collections are typed as optional by the generated client
+                (Swashbuckle marks every property as nullable). Coerce to safe defaults
+                so child components don't need to repeat the check. */}
+            <OverallStrip overall={data.overall ?? EMPTY_BUCKET} />
 
             <div className="grid gap-6 lg:grid-cols-2">
-              <BucketTable title="By project type" rows={data.byProjectType} />
-              <BucketTable title="By client"       rows={data.byClient} />
+              <BucketTable title="By project type" rows={data.byProjectType ?? []} />
+              <BucketTable title="By client"       rows={data.byClient ?? []} />
             </div>
 
-            <BucketTable title="By period (year-quarter)" rows={data.byPeriod} />
+            <BucketTable title="By period (year-quarter)" rows={data.byPeriod ?? []} />
 
-            <Register rows={data.register} onChanged={() => refetch()} />
+            <Register rows={data.register ?? []} onChanged={() => refetch()} />
           </>
         )}
       </div>
@@ -67,12 +80,12 @@ export default function AnalyticsPage() {
 function OverallStrip({ overall }: { overall: BidAnalyticsBucket }) {
   return (
     <Card className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-4">
-      <Stat label="Total decided" value={String(overall.total)} icon={Trophy} />
-      <Stat label="Hit rate" value={`${overall.hitRatePct.toFixed(2)}%`} sub={`${overall.won} won / ${overall.lost} lost`} icon={Trophy} accent />
-      <Stat label="Avg bid → award" value={overall.avgBidVsAwardPct === null ? "—" : `${overall.avgBidVsAwardPct.toFixed(2)}%`}
-            sub={overall.avgBidVsAwardPct === null ? "no completed pairs" : "weighted-average %"}
-            icon={overall.avgBidVsAwardPct !== null && overall.avgBidVsAwardPct >= 0 ? TrendingUp : TrendingDown} />
-      <Stat label="Awarded value (won)" value={money(overall.awardedValueSum)} sub={overall.mixedCurrency ? "mixed currencies" : ""} icon={Trophy} />
+      <Stat label="Total decided" value={String(overall.total ?? 0)} icon={Trophy} />
+      <Stat label="Hit rate" value={`${(overall.hitRatePct ?? 0).toFixed(2)}%`} sub={`${overall.won ?? 0} won / ${overall.lost ?? 0} lost`} icon={Trophy} accent />
+      <Stat label="Avg bid → award" value={overall.avgBidVsAwardPct == null ? "—" : `${overall.avgBidVsAwardPct.toFixed(2)}%`}
+            sub={overall.avgBidVsAwardPct == null ? "no completed pairs" : "weighted-average %"}
+            icon={overall.avgBidVsAwardPct != null && overall.avgBidVsAwardPct >= 0 ? TrendingUp : TrendingDown} />
+      <Stat label="Awarded value (won)" value={money(overall.awardedValueSum ?? 0)} sub={overall.mixedCurrency ? "mixed currencies" : ""} icon={Trophy} />
     </Card>
   )
 }
@@ -113,15 +126,15 @@ function BucketTable({ title, rows }: { title: string; rows: BidAnalyticsBucket[
                 <td className="px-4 py-2 text-right tabular-nums">{b.total}</td>
                 <td className="px-4 py-2 text-right tabular-nums text-emerald-700">{b.won}</td>
                 <td className="px-4 py-2 text-right tabular-nums text-rose-700">{b.lost}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{b.hitRatePct.toFixed(2)}%</td>
+                <td className="px-4 py-2 text-right tabular-nums">{(b.hitRatePct ?? 0).toFixed(2)}%</td>
                 <td className="px-4 py-2 text-right tabular-nums">
-                  {b.avgBidVsAwardPct === null ? <span className="text-slate-300">—</span>
+                  {b.avgBidVsAwardPct == null ? <span className="text-slate-300">—</span>
                     : <span className={b.avgBidVsAwardPct >= 0 ? "text-emerald-700" : "text-rose-700"}>
                         {b.avgBidVsAwardPct > 0 ? "+" : ""}{b.avgBidVsAwardPct.toFixed(2)}%
                       </span>}
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums">
-                  {money(b.awardedValueSum)}
+                  {money(b.awardedValueSum ?? 0)}
                   {b.mixedCurrency && <span className="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] uppercase text-amber-800" title="Aggregated across multiple project currencies — see register below for the mix.">mixed</span>}
                 </td>
               </tr>
@@ -171,17 +184,19 @@ function Register({ rows, onChanged }: { rows: BidRegisterRow[]; onChanged: () =
                   <td className="px-4 py-2"><span className="font-mono text-xs">{r.code}</span> · {r.name}</td>
                   <td className="px-4 py-2 text-slate-600">{r.clientName ?? <span className="text-slate-300">—</span>}</td>
                   <td className="px-4 py-2 text-slate-600">{r.projectTypeName ?? <span className="text-slate-300">—</span>}</td>
-                  <td className="px-4 py-2"><StatusPill status={r.status} /></td>
+                  <td className="px-4 py-2"><StatusPill status={r.status ?? "(unknown)"} /></td>
                   <td className="px-4 py-2 text-slate-500">{r.decisionAt?.slice(0,10) ?? <span className="text-slate-300">—</span>}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{r.submittedBidValue === null ? <span className="text-slate-300">—</span> : money(r.submittedBidValue)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{r.awardedValue === null ? <span className="text-slate-300">—</span> : money(r.awardedValue)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{r.submittedBidValue == null ? <span className="text-slate-300">—</span> : money(r.submittedBidValue)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{r.awardedValue == null ? <span className="text-slate-300">—</span> : money(r.awardedValue)}</td>
                   <td className="px-4 py-2 text-right tabular-nums">
-                    {r.bidVsAwardPct === null ? <span className="text-slate-300">—</span>
+                    {/* Generated types make optional fields `undefined`-bearing, so `== null` (loose)
+                        is the right test — it catches both null and undefined in one check. */}
+                    {r.bidVsAwardPct == null ? <span className="text-slate-300">—</span>
                       : <span className={r.bidVsAwardPct >= 0 ? "text-emerald-700" : "text-rose-700"}>
                           {r.bidVsAwardPct > 0 ? "+" : ""}{r.bidVsAwardPct.toFixed(2)}%
                         </span>}
                   </td>
-                  <td className="px-4 py-2 text-right tabular-nums">{r.finalCost === null ? <span className="text-slate-300">—</span> : money(r.finalCost)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{r.finalCost == null ? <span className="text-slate-300">—</span> : money(r.finalCost)}</td>
                   <td className="px-2 py-2">
                     {canEdit && (
                       <button onClick={() => setEditing(r)} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Record outcome">

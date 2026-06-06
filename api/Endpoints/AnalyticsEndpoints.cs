@@ -172,7 +172,12 @@ public static class AnalyticsEndpoints
                 .OrderBy(b => b.Key).ToList();
 
             return Results.Ok(new BidAnalyticsResult(overall, byType, byClient, byPeriod, register));
-        });
+        })
+        // .Produces<T>() makes Swashbuckle emit the 200-response shape into the OpenAPI
+        // spec so the generated TS client picks it up as a typed return. Without this
+        // the response is just `unknown`. Older endpoints will get the same treatment as
+        // they're touched (incremental migration — drift test fails CI if the shape moves).
+        .Produces<BidAnalyticsResult>(StatusCodes.Status200OK);
 
         // PATCH /api/projects/{id}/bid-outcome — record/update outcome figures.
         // Gated by the projects module Edit permission AND project-team access (a user
