@@ -81,6 +81,12 @@ public sealed class ApiFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("Seed__DemoData", "true");
         // Seed a platform SuperAdmin so the platform/tenant-management tests have an operator.
         Environment.SetEnvironmentVariable("Seed__SuperAdminPassword", "Super@12345");
+        // Disable Hangfire in the test host so the cascade runs INLINE inside the request
+        // that triggered it. Tests assert the cascaded effect (assembly ComputedRate,
+        // estimate roll-ups) immediately after a resource mutation; if the cascade went to
+        // a Hangfire queue, the next assertion would race the background worker. The
+        // production Hangfire path is exercised separately by a smoke flow.
+        Environment.SetEnvironmentVariable("Hangfire__Enabled", "false");
         _factory = new Factory();
         _ = _factory.Services;   // force host build → runs DbInitializer (migrate + seed)
         return Task.CompletedTask;

@@ -35,6 +35,12 @@
     <!-- Exports: priced-BOQ / bid-summary as Excel + PDF -->
     <PackageReference Include="ClosedXML" Version="0.104.2" />
     <PackageReference Include="QuestPDF" Version="2024.12.3" />
+
+    <!-- Background-job queue on Postgres (18.4). Hangfire owns its own schema
+         ("hangfire") so EF migrations and Hangfire's install/upgrade SQL never
+         collide. The dashboard is mounted at /hangfire, gated by TenantAdmin. -->
+    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.14" />
+    <PackageReference Include="Hangfire.PostgreSql" Version="1.20.10" />
   </ItemGroup>
 
 </Project>
