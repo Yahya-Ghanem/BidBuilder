@@ -75,6 +75,22 @@ function SettingsForm() {
         </div>
       </Card>
 
+      {/* 20.2 — Approval workflow. Required-approvals=0 keeps the legacy
+          "anyone with permission can publish" behavior; any positive value
+          enforces N sign-offs before Draft→Published. */}
+      <Card className="space-y-4 p-5">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-600">Approval workflow</h3>
+          <p className="text-xs text-slate-400">
+            Number of TenantAdmin sign-offs required before an estimate can be Published.
+            Zero disables the workflow. Any BOQ / preliminaries / markups / risks edit invalidates existing sign-offs.
+          </p>
+        </div>
+        <div className="grid grid-cols-4 gap-3">
+          <Field label="Required approvals"><Input type="number" min={0} value={f.requiredApprovalsToPublish} onChange={setNum("requiredApprovalsToPublish")} disabled={ro} /></Field>
+        </div>
+      </Card>
+
       {isAdmin
         ? <Button disabled={save.isPending} onClick={() => save.mutate(f)}>{save.isPending ? "Saving…" : "Save settings"}</Button>
         : <p className="text-xs text-slate-400">Only a tenant admin can edit settings.</p>}

@@ -43,6 +43,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     // Risk register (19.2) — per-estimate rows whose Expected Value sums to a
     // suggested contingency the estimator can apply to the Contingency markup.
     public DbSet<RiskItem>    RiskItems     => Set<RiskItem>();
+    // Approval workflow (20.2) — sign-offs accumulated against an estimate;
+    // gate the Draft/UnderReview → Published transition.
+    public DbSet<EstimateApproval> EstimateApprovals => Set<EstimateApproval>();
 
     // ── Resource library + assemblies ─────────────────────────────────────────
     public DbSet<LaborResource>     LaborResources     => Set<LaborResource>();
@@ -311,6 +314,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.HasQueryFilter(r => r.TenantId == _tenant.TenantId);
         });
 
+        // ── EstimateApproval (20.2 sign-off ledger) ──────────────────────────
+        mb.Entity<EstimateApproval>(b =>
+        {
+            b.HasIndex(a => a.EstimateId);
+            b.HasIndex(a => a.TenantId);
+            // Idempotent: a single user may have at most one active approval per
+            // estimate. A re-approve is a no-op (the handler short-circuits).
+            b.HasIndex(a => new { a.EstimateId, a.ApproverUserId }).IsUnique();
+            b.Property(a => a.ApproverEmail).HasMaxLength(254).IsRequired();
+            b.Property(a => a.ApproverName).HasMaxLength(120).IsRequired();
+            b.Property(a => a.Note).HasMaxLength(1000);
+            // Cascade with the estimate (same lifetime as risks / preliminaries).
+            b.HasOne(a => a.Estimate).WithMany(e => e.Approvals).HasForeignKey(a => a.EstimateId).OnDelete(DeleteBehavior.Cascade);
+            b.HasQueryFilter(a => a.TenantId == _tenant.TenantId);
+        });
+
         // ── Resource library ──────────────────────────────────────────────────
         ConfigureResource<LaborResource>(mb, b =>
         {
@@ -489,6 +508,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     /// Auto-stamp TenantId on insert (never trust the client). AuditEvent may
     /// land with an empty tenant for pre-auth flows; everything else requires a
     /// resolved tenant.
+    ///
+    /// Also (20.2) invalidates pending approvals whenever an estimate's bid
+    /// content changes — a sign-off must be on the bid the approver SAW. See
+    /// <see cref="CollectEstimatesWithChangedContent"/> for the trigger set.
     /// </summary>
     public override async Task<int> SaveChangesAsync(CancellationToken ct = default)
     {
@@ -506,6 +529,61 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
                     "Was the request routed through TenantResolutionMiddleware?");
         }
 
+        // 20.2 — wipe approvals on any tracked bid-content change BEFORE the save.
+        // Doing it on the same SaveChanges as the content keeps both atomic: if the
+        // content write rolls back, the approvals also stay.
+        var affected = CollectEstimatesWithChangedContent();
+        if (affected.Count > 0)
+        {
+            // Bypass the query filter so a content-write that runs WITHOUT a tenant
+            // resolved (only AuditEvent does that, and it never touches estimates)
+            // would still scope correctly. Approvals carry TenantId.
+            await EstimateApprovals
+                .Where(a => affected.Contains(a.EstimateId))
+                .ExecuteDeleteAsync(ct);
+        }
+
         return await base.SaveChangesAsync(ct);
+    }
+
+    /// <summary>20.2 — Walk the ChangeTracker for any Added/Modified/Deleted
+    /// entity belonging to an estimate's BID CONTENT (BOQ tree, preliminaries,
+    /// markups, risks). Returns the distinct EstimateIds whose approvals
+    /// therefore need to be wiped. Does NOT trigger on:
+    ///   • Approvals themselves (they're the thing being invalidated)
+    ///   • The Estimate row (title / status / FX snapshot are meta, not bid content)
+    ///   • Project / Tenant / catalog rows
+    /// Keeps the trigger set narrow so a no-op recompute doesn't churn approvals.
+    ///
+    /// BoqItem and ItemCostComponent don't carry EstimateId directly — they hang
+    /// off BoqSection / BoqItem respectively. We resolve through the tracked
+    /// graph first (the handler usually loads the parent on the same scope), then
+    /// fall back to a single DB lookup per orphan.</summary>
+    private HashSet<int> CollectEstimatesWithChangedContent()
+    {
+        var ids = new HashSet<int>();
+        int? SectionEstimateId(int sectionId) =>
+            ChangeTracker.Entries<BoqSection>().FirstOrDefault(e => e.Entity.Id == sectionId)?.Entity.EstimateId
+            ?? BoqSections.IgnoreQueryFilters().Where(s => s.Id == sectionId).Select(s => (int?)s.EstimateId).FirstOrDefault();
+        int? ItemEstimateId(int itemId)
+        {
+            var item = ChangeTracker.Entries<BoqItem>().FirstOrDefault(e => e.Entity.Id == itemId)?.Entity;
+            var sid = item?.SectionId ?? BoqItems.IgnoreQueryFilters().Where(x => x.Id == itemId).Select(x => (int?)x.SectionId).FirstOrDefault();
+            return sid is { } s ? SectionEstimateId(s) : null;
+        }
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            if (entry.State is not (EntityState.Added or EntityState.Modified or EntityState.Deleted)) continue;
+            switch (entry.Entity)
+            {
+                case BoqSection s:           ids.Add(s.EstimateId); break;
+                case BoqItem i:              if (SectionEstimateId(i.SectionId) is { } eid) ids.Add(eid); break;
+                case ItemCostComponent c:    if (ItemEstimateId(c.BoqItemId) is { } eid2) ids.Add(eid2); break;
+                case Preliminary p:          ids.Add(p.EstimateId); break;
+                case Markup m:               ids.Add(m.EstimateId); break;
+                case RiskItem r:             ids.Add(r.EstimateId); break;
+            }
+        }
+        return ids;
     }
 }

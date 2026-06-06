@@ -29,6 +29,13 @@ public class TenantSettings : IHasTenant
     public decimal DefaultContingencyPct { get; set; }        // e.g. 5.00
     public decimal DefaultTaxRatePct     { get; set; }        // e.g. 5.00 (VAT) — pre-fills new estimates
 
+    /// <summary>20.2 — Number of <see cref="EstimateApproval"/> rows required
+    /// before an estimate revision may transition Draft/UnderReview → Published.
+    /// Zero (default) keeps the legacy "anyone with permission can publish"
+    /// behavior; a positive value enforces N-of-anyone sign-off. The status
+    /// PUT returns 409 with details if the threshold isn't met.</summary>
+    public int RequiredApprovalsToPublish { get; set; }
+
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // ── Navigation ─────────────────────────────────────────────────────────────
