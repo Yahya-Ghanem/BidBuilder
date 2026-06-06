@@ -29,6 +29,13 @@ public class Estimate : IHasTenant
     /// component does not pin its own rate. Tunable per estimate.</summary>
     public decimal        DefaultLaborRate { get; set; }
 
+    /// <summary>The date the estimate is priced "as at" — when set, the engine
+    /// resolves every assembly/resource rate against <see cref="ResourceRateHistory"/>
+    /// (most recent row with EffectiveFrom ≤ PricingDate, falling back to the live
+    /// rate). Null = price at the current live rate. Lets an estimator re-price a
+    /// tender as-of a known supplier date without disturbing the live library.</summary>
+    public DateOnly?      PricingDate { get; set; }
+
     // ── Tax / VAT ─────────────────────────────────────────────────────────────
     // Sales tax (e.g. UAE 5% VAT) applied to the bid price AFTER markups. Tax sits
     // OUTSIDE margin and is never part of the markup cascade, so the bid price stays

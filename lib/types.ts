@@ -150,9 +150,24 @@ export interface EstimateBreakdown {
   id: number; projectId: number; revision: number; title: string; status: string; currency: string
   directCost: number; indirectCost: number; markupCost: number; bidPrice: number
   taxRatePct: number | null; taxAmount: number; bidPriceInclTax: number; alternatesTotal: number; marginOnPricePct: number; commercialAdjustment: number
+  /** ISO date (yyyy-mm-dd). When set, the engine resolved rates via ResourceRateHistory. */
+  pricingDate: string | null
   sections: SectionBreakdown[]; preliminaries: PrelimBreakdown[]; markups: MarkupBreakdown[]
   rowVersion: string
   fx: FxView | null
+}
+
+// ── Dated resource rates + supplier quotes (18.3) ────────────────────────────
+export interface RateHistoryRow {
+  id: number; resourceType: string; resourceId: number
+  effectiveFrom: string  // ISO date
+  rate: number; source: string | null; createdAt: string
+}
+export interface SupplierQuote {
+  id: number; resourceType: string; resourceId: number | null
+  supplier: string; price: number; currency: string; unit: string
+  quotedOn: string; validUntil: string | null; isExpired: boolean
+  note: string | null; attachmentUrl: string | null; updatedAt: string
 }
 
 export interface CurrencyRate { code: string; rateToBase: number; updatedAt: string }

@@ -10,6 +10,7 @@ public record EstimateBreakdown(
     decimal DirectCost, decimal IndirectCost, decimal MarkupCost, decimal BidPrice,
     decimal? TaxRatePct, decimal TaxAmount, decimal BidPriceInclTax, decimal AlternatesTotal,
     decimal MarginOnPricePct, decimal CommercialAdjustment,
+    DateOnly? PricingDate,
     List<SectionBreakdown> Sections, List<PrelimBreakdown> Preliminaries, List<MarkupBreakdown> Markups,
     string RowVersion, FxView? Fx);
 
@@ -54,7 +55,7 @@ public record ReconcileResult(EstimateTotals Before, EstimateTotals After, bool 
 /// priced from an assembly takes that assembly's ComputedRate; otherwise its
 /// ad-hoc UnitRate stands.
 /// </summary>
-public class EstimateCalculator(AppDbContext db)
+public class EstimateCalculator(AppDbContext db, RateEngine engine)
 {
     public async Task<EstimateBreakdown?> RecomputeAsync(int estimateId)
     {
@@ -107,12 +108,26 @@ public class EstimateCalculator(AppDbContext db)
     /// </summary>
     private async Task<(List<Markup> Ordered, Dictionary<int, CostComponentType> TypeMap)> ComputeAsync(Estimate e)
     {
-        // Resolve assembly rates for any assembly-priced items in one query.
+        // Resolve assembly rates for any assembly-priced items in one query. When the
+        // estimate has a PricingDate set, recompute each used assembly's rate AS OF that
+        // date via the rate-engine (which consults ResourceRateHistory). The live
+        // Assembly.ComputedRate cache is left untouched — pricing-date is a per-estimate
+        // lens, not a library mutation.
         var assemblyIds = e.Sections.SelectMany(s => s.Items)
                                     .Where(i => i.AssemblyId is not null)
                                     .Select(i => i.AssemblyId!.Value).Distinct().ToList();
-        var rates = await db.Assemblies.Where(a => assemblyIds.Contains(a.Id))
+        Dictionary<int, decimal> rates;
+        if (e.PricingDate is { } pd)
+        {
+            rates = new Dictionary<int, decimal>();
+            foreach (var aid in assemblyIds)
+                rates[aid] = await engine.ComputeAssemblyRateAsAtAsync(aid, pd);
+        }
+        else
+        {
+            rates = await db.Assemblies.Where(a => assemblyIds.Contains(a.Id))
                                        .ToDictionaryAsync(a => a.Id, a => a.ComputedRate);
+        }
         var typeMap = await db.CostComponentTypes.AsNoTracking().ToDictionaryAsync(t => t.Id, t => t);
 
         // ── Direct cost: items → sections, bucketed by line kind ─────────────
@@ -359,6 +374,7 @@ public class EstimateCalculator(AppDbContext db)
         // adjustment. Surfacing it guards against the markup-on-cost vs margin-on-price error.
         e.BidPrice > 0m ? EstimateMath.Round2((e.BidPrice - e.DirectCost - e.IndirectCost) / e.BidPrice * 100m) : 0m,
         e.CommercialAdjustment,
+        e.PricingDate,
         e.Sections.OrderBy(s => s.SortOrder).Select(s => new SectionBreakdown(
             s.Id, s.Code, s.Title, s.SortOrder, s.SectionTotal,
             s.Items.OrderBy(i => i.SortOrder).Select(i => new ItemBreakdown(

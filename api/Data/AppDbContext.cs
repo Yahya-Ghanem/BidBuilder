@@ -52,6 +52,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     // ── FX (manual currency rates) ────────────────────────────────────────────
     public DbSet<CurrencyRate>      CurrencyRates      => Set<CurrencyRate>();
 
+    // ── Dated resource rates + supplier quotes (18.3) ─────────────────────────
+    public DbSet<ResourceRateHistory> ResourceRateHistory => Set<ResourceRateHistory>();
+    public DbSet<SupplierQuote>       SupplierQuotes      => Set<SupplierQuote>();
+
     // ── Cost-component build-up (extensible item pricing) ──────────────────────
     public DbSet<CostComponentType> CostComponentTypes => Set<CostComponentType>();
     public DbSet<ItemCostComponent> ItemCostComponents => Set<ItemCostComponent>();
@@ -324,6 +328,34 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.Property(r => r.Code).HasMaxLength(3).IsRequired();
             b.Property(r => r.RateToBase).HasColumnType("numeric(18,6)");
             b.HasQueryFilter(r => r.TenantId == _tenant.TenantId);
+        });
+
+        // ── ResourceRateHistory (dated rate points per library resource) ───────
+        mb.Entity<ResourceRateHistory>(b =>
+        {
+            // Pricing-date lookups filter by (type, id) and order by EffectiveFrom desc,
+            // so a composite index makes them index-only seeks.
+            b.HasIndex(h => new { h.TenantId, h.ResourceType, h.ResourceId, h.EffectiveFrom });
+            b.HasIndex(h => h.TenantId);
+            b.Property(h => h.ResourceType).HasConversion<string>().HasMaxLength(16);
+            b.Property(h => h.Rate).HasColumnType("numeric(18,4)");
+            b.Property(h => h.Source).HasMaxLength(200);
+            b.HasQueryFilter(h => h.TenantId == _tenant.TenantId);
+        });
+
+        // ── SupplierQuote (independent register, may reference a library resource) ──
+        mb.Entity<SupplierQuote>(b =>
+        {
+            b.HasIndex(q => new { q.TenantId, q.ResourceType, q.ResourceId });
+            b.HasIndex(q => q.TenantId);
+            b.Property(q => q.ResourceType).HasConversion<string>().HasMaxLength(16);
+            b.Property(q => q.Supplier).HasMaxLength(200).IsRequired();
+            b.Property(q => q.Price).HasColumnType("numeric(18,4)");
+            b.Property(q => q.Currency).HasMaxLength(3).IsRequired();
+            b.Property(q => q.Unit).HasMaxLength(16);
+            b.Property(q => q.Note).HasMaxLength(400);
+            b.Property(q => q.AttachmentUrl).HasMaxLength(500);
+            b.HasQueryFilter(q => q.TenantId == _tenant.TenantId);
         });
 
         // ── CostComponentType (tenant catalog) + ItemCostComponent (item line) ──
