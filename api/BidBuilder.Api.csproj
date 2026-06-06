@@ -25,6 +25,11 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.10" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.0.2" />
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <!-- SAML SSO (20.8b). First-party XML digital-signature primitives
+         (SignedXml) used to verify the IdP's assertion signature against the
+         tenant's configured X.509 cert. No third-party SAML stack — the hardened
+         validation lives in BidBuilder.Api.Auth.SamlService. -->
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="8.0.3" />
 
     <!-- OpenAPI / Swagger UI -->
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.8.1" />

@@ -69,6 +69,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     // ── Subcontractor quote portal (20.6) ─────────────────────────────────────
     public DbSet<SubcontractorQuote>  SubcontractorQuotes => Set<SubcontractorQuote>();
 
+    // ── SAML SSO config (20.8b) — 1:1 with Tenant ─────────────────────────────
+    public DbSet<TenantSamlConfig>    SamlConfigs         => Set<TenantSamlConfig>();
+
     // ── Cost-component build-up (extensible item pricing) ──────────────────────
     public DbSet<CostComponentType> CostComponentTypes => Set<CostComponentType>();
     public DbSet<ItemCostComponent> ItemCostComponents => Set<ItemCostComponent>();
@@ -460,6 +463,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.Property(q => q.SubmissionNotes).HasMaxLength(2000);
             b.Property(q => q.RespondentName).HasMaxLength(200);
             b.HasQueryFilter(q => q.TenantId == _tenant.TenantId);
+        });
+
+        // ── TenantSamlConfig (20.8b SAML SSO) — 1:1 with Tenant ───────────────
+        mb.Entity<TenantSamlConfig>(b =>
+        {
+            b.HasIndex(c => c.TenantId).IsUnique();   // one IdP config per tenant
+            b.Property(c => c.IdpEntityId).HasMaxLength(1024);
+            b.Property(c => c.IdpSsoUrl).HasMaxLength(2048);
+            b.Property(c => c.IdpCertificatePem).HasColumnType("text");
+            b.Property(c => c.EmailAttribute).HasMaxLength(256);
+            b.Property(c => c.NameAttribute).HasMaxLength(256);
+            b.HasQueryFilter(c => c.TenantId == _tenant.TenantId);
         });
 
         // ── CostComponentType (tenant catalog) + ItemCostComponent (item line) ──

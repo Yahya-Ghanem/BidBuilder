@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { LayoutGrid, ShieldCheck } from "lucide-react"
+import { LayoutGrid, ShieldCheck, KeyRound } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth"
+import { API_URL } from "@/lib/api"
 import { Button, Input, Card } from "@/components/ui"
 
 export default function LoginPage() {
@@ -23,6 +24,24 @@ export default function LoginPage() {
   useEffect(() => {
     if (!isLoading && isAuthenticated) router.replace("/projects")
   }, [isLoading, isAuthenticated, router])
+
+  // Surface an SSO failure handed back by the ACS endpoint (?ssoError=…), then
+  // strip it from the URL so a refresh doesn't re-toast it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const err = params.get("ssoError")
+    if (err) {
+      toast.error(err)
+      window.history.replaceState(null, "", "/login")
+    }
+  }, [])
+
+  // SP-initiated SSO: hand the browser to the API, which redirects to the tenant's
+  // IdP and (after auth) back to /login/sso with a session.
+  function signInWithSso() {
+    const slug = (tenant || "default").trim()
+    window.location.href = `${API_URL}/api/auth/sso/${encodeURIComponent(slug)}/login`
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -73,6 +92,13 @@ export default function LoginPage() {
                 {busy ? "Signing in…" : "Sign in"}
               </Button>
             </form>
+
+            <div className="my-4 flex items-center gap-3 text-xs text-slate-400">
+              <span className="h-px flex-1 bg-[var(--border)]" /> or <span className="h-px flex-1 bg-[var(--border)]" />
+            </div>
+            <Button type="button" variant="outline" className="w-full" onClick={signInWithSso}>
+              <KeyRound className="h-4 w-4" /> Sign in with SSO
+            </Button>
           </>
         ) : (
           <>

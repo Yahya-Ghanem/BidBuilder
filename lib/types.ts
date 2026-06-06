@@ -380,3 +380,20 @@ export interface ComponentRow {
 export interface AssemblyDetail {
   id: number; code: string; name: string; unit: string; computedRate: number; isActive: boolean; components: ComponentRow[]
 }
+
+/** 20.8b — tenant SAML SSO configuration (admin view; the certificate is write-only,
+ * never returned, so only its presence is exposed). The SP-side URLs are computed by
+ * the API for the admin to register with their IdP. */
+export interface SamlConfig {
+  enabled: boolean
+  idpEntityId: string
+  idpSsoUrl: string
+  hasCertificate: boolean
+  emailAttribute: string | null
+  nameAttribute: string | null
+  allowJitProvisioning: boolean
+  spEntityId: string
+  acsUrl: string
+  metadataUrl: string
+  loginUrl: string
+}

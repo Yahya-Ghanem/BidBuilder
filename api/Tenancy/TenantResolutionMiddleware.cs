@@ -48,6 +48,16 @@ public class TenantResolutionMiddleware(
             return;
         }
 
+        // SAML SSO flow (20.8b) is anonymous and carries no tenant claim/header — the
+        // tenant is identified by the {slug} in the path (/api/auth/sso/{slug}/...).
+        // The handlers resolve that slug to a tenant and set the context themselves
+        // (mirroring the public portal), so let the request through unresolved here.
+        if (path.StartsWith("/api/auth/sso", StringComparison.OrdinalIgnoreCase))
+        {
+            await next(ctx);
+            return;
+        }
+
         // SuperAdmins operate at the platform level with NO tenant scope. Their token
         // carries role=SuperAdmin and an empty tenant. Let them reach the /api/platform
         // endpoints with the tenant context deliberately unresolved (those endpoints

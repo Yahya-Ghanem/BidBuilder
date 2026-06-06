@@ -57,6 +57,10 @@ services:
       # Double-underscore maps to ConnectionStrings:Postgres in .NET config.
       ConnectionStrings__Postgres: Host=db;Port=5432;Database=${POSTGRES_DB:-bidbuilder};Username=${POSTGRES_USER:-bidbuilder};Password=${POSTGRES_PASSWORD};Maximum Pool Size=50;Timeout=15
       Jwt__SigningKey: ${JWT_SECRET:?JWT_SECRET must be set in .env (>= 32 chars)}
+      # 20.8b — where the SAML ACS redirects the browser back to with its session,
+      # and the public base the SP metadata/ACS URLs are built from.
+      App__WebBaseUrl:     http://localhost:3100
+      Saml__PublicBaseUrl: http://localhost:8081
     ports:
       - "8081:8080"
     # Liveness probe on /healthz (no DB dependency) so a hung-but-running API is
