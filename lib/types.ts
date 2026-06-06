@@ -163,6 +163,42 @@ export interface RateHistoryRow {
   effectiveFrom: string  // ISO date
   rate: number; source: string | null; createdAt: string
 }
+// ── Bid analytics + outcome register (19.1) ─────────────────────────────────
+export interface BidRegisterRow {
+  projectId: number
+  code: string
+  name: string
+  clientName: string | null
+  currency: string
+  projectTypeId: number | null
+  projectTypeName: string | null
+  status: string
+  tenderDueAt: string | null
+  decisionAt: string | null
+  submittedBidValue: number | null
+  awardedValue: number | null
+  finalCost: number | null
+  /** (award − bid) / bid × 100, 2dp. Null when either side is missing. */
+  bidVsAwardPct: number | null
+  winLossNote: string | null
+}
+export interface BidAnalyticsBucket {
+  dimension: "project-type" | "client" | "period" | "overall"
+  key: string
+  total: number; won: number; lost: number
+  hitRatePct: number
+  avgBidVsAwardPct: number | null
+  awardedValueSum: number
+  mixedCurrency: boolean
+}
+export interface BidAnalyticsResult {
+  overall: BidAnalyticsBucket
+  byProjectType: BidAnalyticsBucket[]
+  byClient: BidAnalyticsBucket[]
+  byPeriod: BidAnalyticsBucket[]
+  register: BidRegisterRow[]
+}
+
 export interface SupplierQuote {
   id: number; resourceType: string; resourceId: number | null
   supplier: string; price: number; currency: string; unit: string
