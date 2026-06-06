@@ -1669,6 +1669,35 @@ public class HardeningTests(ApiFixture fx)
         Assert.Equal(HttpStatusCode.Unauthorized, (await user.GetAsync("/api/projects")).StatusCode);
     }
 
+    // A token with a tampered signature must be rejected (signature validation works).
+    [Fact]
+    public async Task Tampered_token_signature_is_rejected()
+    {
+        var c = fx.Client();
+        var token = (await (await c.PostAsJsonAsync("/api/auth/login",
+            new { email = "admin@bidbuilder.local", password = "Admin@12345" })).Json())
+            .GetProperty("token").GetString()!;
+
+        // Flip the final character of the signature segment — the JWT still parses but
+        // its HMAC no longer matches, so validation must fail.
+        var tampered = token[..^1] + (token[^1] == 'A' ? 'B' : 'A');
+        var req = new HttpRequestMessage(HttpMethod.Get, "/api/projects");
+        req.Headers.Add("X-Tenant-Id", "default");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tampered);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await c.SendAsync(req)).StatusCode);
+    }
+
+    // A structurally-invalid bearer token is rejected, not 500'd.
+    [Fact]
+    public async Task Garbage_bearer_token_is_rejected()
+    {
+        var c = fx.Client();
+        var req = new HttpRequestMessage(HttpMethod.Get, "/api/projects");
+        req.Headers.Add("X-Tenant-Id", "default");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "not.a.jwt");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await c.SendAsync(req)).StatusCode);
+    }
+
     // A BOQ item may only reference an area of its OWN project, not another project's.
     [Fact]
     public async Task BOQ_item_rejects_a_foreign_projects_area()

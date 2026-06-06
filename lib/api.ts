@@ -13,7 +13,7 @@ const TENANT_KEY = "bb_tenant"
 const USER_KEY = "bb_user"
 
 /** Narrow an untrusted localStorage payload to a well-formed AuthUser. */
-function isAuthUser(u: unknown): u is AuthUser {
+export function isAuthUser(u: unknown): u is AuthUser {
   return !!u && typeof u === "object"
     && typeof (u as AuthUser).id === "number"
     && typeof (u as AuthUser).name === "string"

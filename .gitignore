@@ -6,6 +6,10 @@ bin/
 obj/
 *.user
 
+# Test coverage / results output
+coverage/
+TestResults/
+
 # EF design-time
 *.db
 
