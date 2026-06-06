@@ -211,6 +211,26 @@ public static class EstimateEndpoints
             return bd is null ? NotFound() : Results.Ok(bd);
         }).AllowWhenFinalised();
 
+        // POST reconcile — recompute and report whether the cached totals have drifted
+        // from a clean recomputation (the safety net for the denormalised money cache).
+        // Read-only by default; persists the corrected totals only with ?commit=true.
+        // A finalised (Published/Superseded) revision may be drift-CHECKED but never
+        // silently rewritten, so a commit is refused on it (revert to Draft to repair).
+        // estimate-admin View — a reconciliation/diagnostic tool.
+        grp.MapPost("/{id:int}/reconcile", async (int id, bool? commit, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc) =>
+        {
+            var g = await Guard(me, id, Admin, ModuleAction.View, access, perm); if (g is not null) return g;
+            var doCommit = commit ?? false;
+            if (doCommit)
+            {
+                var status = await db.Estimates.Where(e => e.Id == id).Select(e => (EstimateStatus?)e.Status).FirstOrDefaultAsync();
+                if (status is EstimateStatus.Published or EstimateStatus.Superseded)
+                    return Results.Json(new { error = $"This revision is {status} and locked; reconcile can report drift but cannot rewrite a finalised bid. Revert it to Draft to repair." }, statusCode: 409);
+            }
+            var r = await calc.ReconcileAsync(id, doCommit);
+            return r is null ? NotFound() : Results.Ok(r);
+        }).AllowWhenFinalised();
+
         // PUT estimate meta (title / lifecycle status). Gated estimate-admin Edit.
         grp.MapPut("/{id:int}", async (int id, UpdateEstimateRequest req, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AuditService audit) =>
         {

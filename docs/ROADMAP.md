@@ -423,3 +423,227 @@ no force-push and no branch deletion. Direct pushes to `main` are now blocked �
 5. `AppDbContext` with tenant query filters + `xmin` concurrency + tenant auto-stamping.
 6. `DesignTimeDbContextFactory`, `Program.cs`, `appsettings*.json`, health endpoint.
 7. `dotnet build` green ✔ — checkpoint.
+
+---
+
+## 10. Forward roadmap — Estimator + Systems-Analyst review → professional grade
+
+> **Context.** Phases 0–16 delivered a complete, usable bid-estimating SaaS, and the
+> post-audit hardening sprint closed the four production blockers (DB tenant FKs,
+> observability, backups, write transactions) plus auth hardening, refactors and CI gates
+> (audit moved 7.7 → ~9/10). This section is the **next** body of work, written from two
+> lenses — a **senior estimator** (does it serve real tender practice?) and a **senior
+> systems analyst** (architecture, data, scale, process). Each item is sized to ship as one
+> **PR-gated change** (branch → CI green → squash-merge → rebuild → smoke), the same flow
+> used throughout. Items are ordered so each makes the next safer.
+>
+> **Legend.** `E#` = estimator-driven (business value) · `S#` = analyst-driven (technical).
+> Effort: **S** ≈ ½–1 day · **M** ≈ 1–2 days · **L** ≈ 3–5 days.
+
+### Phase 17 — P0: protect bid correctness & money (do first)
+
+These guard the integrity of the number the company is legally bound to. Ship before any
+new feature, because every later change rides on the calculation engine being provably right.
+
+#### 17.1 — `S1` Calculation golden-master + property tests + reconcile endpoint — **M**
+- **Why.** `LineTotal`, `Assembly.ComputedRate`, `DirectCost`, `BidPrice` are *cached/denormalised*.
+  A rounding or apply-order regression silently mis-prices a live tender. This is the single
+  highest risk in a pricing tool.
+- **Steps.**
+  1. Add a **golden-master** test: build one representative estimate fixture (multi-section BOQ,
+     assembly + ad-hoc + component build-up, fixed + time-related prelims, all 4 markups
+     compounding, an Area tree, a secondary currency) and assert the full set of computed
+     figures against a checked-in expected snapshot.
+  2. Add **property-based** tests on `EstimateMath` (FsCheck/CsCheck): markups never produce a
+     negative running subtotal for non-negative inputs; `ApplyMarkups` order-sensitivity holds;
+     `Round2` is idempotent; Σ line totals == reported `DirectCost`.
+  3. Add `POST /api/estimates/{id}/recompute` (estimate-admin) that re-runs the engine and
+     returns `{ before, after, drifted: bool }` without persisting unless `?commit=true` — a
+     reconciliation tool to detect/repair any cached drift.
+  4. CI: fail the build if golden-master or property tests fail.
+- **Files.** `api.Tests/CalcGoldenMasterTests.cs` (new), `api.Tests/EstimateMathPropertyTests.cs`
+  (new), `api/Endpoints/EstimateEndpoints.cs`, `api/Services/EstimateCalculator.cs`.
+- **Acceptance.** Golden master + property tests green in CI; `recompute` reports `drifted:false`
+  on a freshly-saved estimate and detects an artificially corrupted cache.
+
+#### 17.2 — `E2` Tax/VAT as a first-class line (distinct from profit markup) — **M**
+- **Why.** Default currency is AED; UAE levies **5% VAT**, which sits *outside* margin and is
+  often excluded from bid comparison. Folding it into a `Markup` mis-states gross margin and
+  risks a non-compliant tender sum.
+- **Steps.**
+  1. Add `TaxRatePct` (nullable) + cached `TaxAmount` to `Estimate`; migration `AddEstimateTax`.
+  2. Engine: compute `TaxAmount = Round2(BidPrice × TaxRatePct/100)` **after** markups; expose
+     `BidPriceInclTax`. Tax never participates in the markup cascade.
+  3. Surface tenant default tax rate in Settings; show "Bid (excl. tax) / VAT / Bid (incl. tax)"
+     on the estimate header and in Excel/PDF/CSV exports.
+  4. Tests: VAT line, exclusion from margin, exports carry both figures.
+- **Files.** `api/Models/Estimate.cs`, `api/Services/EstimateCalculator.cs`,
+  `api/Services/ExportService.cs`, `app/projects/[id]/page.tsx`, `app/settings/page.tsx`.
+- **Acceptance.** A 5% VAT estimate shows excl/VAT/incl correctly; margin % is unchanged by VAT.
+
+#### 17.3 — `E3` Provisional Sums / PC Sums / Dayworks / Alternates as line types — **M**
+- **Why.** Only `Unit="LS"` exists today. Provisional/PC sums must usually be **excluded from
+  OH+profit markup**; marking them up is a classic rejected-tender error. Alternates must be
+  carried but excluded from the base tender total.
+- **Steps.**
+  1. Add `BoqItemKind` enum { Normal, ProvisionalSum, PcSum, Daywork, Alternate } to `BoqItem`;
+     migration `AddBoqItemKind` (default Normal — existing items unchanged).
+  2. Engine: ProvisionalSum/PcSum contribute to direct cost but are flagged `excludeFromMarkup`;
+     Alternate lines roll up to a separate "alternates" total, not the base bid.
+  3. UI: a Kind selector on the item form; exports group/label these sections distinctly.
+  4. Tests: a provisional sum is **not** marked up; an alternate is excluded from the bid total.
+- **Files.** `api/Models/BoqItem.cs`, `api/Models/Enums.cs`, `api/Services/EstimateCalculator.cs`,
+  `api/Services/ExportService.cs`, `app/projects/[id]/page.tsx`.
+- **Acceptance.** A provisional sum passes through at cost; alternates appear separately; bid total
+  excludes them.
+
+#### 17.4 — `S3` Verify & test project/team-level authorization — **S**
+- **Why.** Global query filters scope by **tenant**; we must confirm a non-admin estimator can
+  only see/edit projects their `ProjectTeam` grants. If enforcement is tenant-only, that's an
+  intra-tenant confidentiality gap.
+- **Steps.**
+  1. Audit every project-scoped read/write endpoint for a `ProjectTeam` membership check
+     (the `ProjectAuthorizationFilter` path).
+  2. Add integration tests: user on Team A is 403/404 on a Team-B-only project across
+     projects, estimates, BOQ, areas, exports.
+  3. Close any endpoint missing the check.
+- **Files.** `api/Endpoints/*.cs` (audit), `api.Tests/IntegrationTests.cs` (new tests).
+- **Acceptance.** A cross-team access attempt is denied on every project-scoped route, proven by tests.
+
+### Phase 18 — P1: high estimator value
+
+#### 18.1 — `E1` Target-price back-solve (commercial adjustment) — **M**
+- **Why.** The most-used move in the final 48h of a bid: *"we must land at AED 10.0M."* Today
+  it's manual trial-and-error on the what-if panel.
+- **Steps.**
+  1. `POST /api/estimates/{id}/target` accepting `{ targetPrice }` or `{ targetMarginPct }`;
+     back-solve the profit markup (or a final lump-sum commercial adjustment line) to hit it,
+     using the existing pure `EstimateMath`. No persistence unless applied.
+  2. Add an optional `CommercialAdjustment` amount on `Estimate` so the solve can be a flat
+     ± lump sum rather than only a margin change.
+  3. UI: extend the What-if panel with "Solve to target price/margin" → preview → Apply.
+  4. Tests: solving to a target price reproduces it within rounding; margin solve is correct.
+- **Files.** `api/Services/EstimateCalculator.cs`, `api/Endpoints/EstimateEndpoints.cs`,
+  `api/Models/Estimate.cs`, `app/projects/[id]/page.tsx`.
+- **Acceptance.** Entering a target price yields markups/adjustment that reproduce it; baseline untouched until Apply.
+
+#### 18.2 — `E8` Surface gross-margin-on-price alongside markup-on-cost — **S**
+- **Why.** "% markup on cost" vs "margin on selling price" confusion is the #1 estimating
+  arithmetic error. Show both so reviewers can sanity-check instantly.
+- **Steps.** Compute and display, on the estimate header + summary exports,
+  `marginOnPrice = (BidPrice − TotalCost) / BidPrice` next to the existing markup %s; no schema
+  change (derived). Add a unit test for the identity.
+- **Files.** `api/Services/EstimateCalculator.cs` (derive in the breakdown DTO),
+  `app/projects/[id]/page.tsx`, `api/Services/ExportService.cs`.
+- **Acceptance.** Both figures shown and reconcile on the golden-master fixture.
+
+#### 18.3 — `E4` + `S7` Dated resource rates, supplier-quote register, scheduled FX — **L**
+- **Why.** Resources are single-valued (`RatePerHour`/`UnitPrice` + `UpdatedAt`) with no
+  effective-dated history and no quote provenance; FX is refreshed manually. Multi-month bids
+  need dated rates and "which quote, valid until when" traceability.
+- **Steps.**
+  1. `ResourceRateHistory` (effective-from date, rate, source) — engine resolves the rate
+     effective at the estimate's pricing date; current rate stays the default.
+  2. `SupplierQuote` (supplier, price, currency, validUntil, attachment ref) linked to a
+     material resource; the chosen quote stamps the cost line for the cost report.
+  3. Scheduled FX pull (see 19.3 job queue) writing `CurrencyRate` with provenance + audit.
+  4. Tests: pricing date selects the correct historical rate; an expired quote is flagged.
+- **Files.** `api/Models/` (new entities + migrations), `api/Services/RateEngine.cs`,
+  `api/Endpoints/ResourceEndpoints.cs`, `app/resources/page.tsx`.
+- **Acceptance.** Changing the pricing date re-prices via historical rates; quotes carry validity; FX auto-refreshes with an audit trail.
+
+#### 18.4 — `S2` Move cascade recompute to a background job queue — **L**
+- **Why.** `RateCascadeService` (resource → assemblies → estimates) is synchronous and
+  in-request; on a large tenant a single common-resource price change can hang/timeout the
+  request (RateEngine batching was deferred).
+- **Steps.**
+  1. Introduce a job queue (**Hangfire** on Postgres, or Quartz) with a dashboard behind admin auth.
+  2. Resource PUT/DELETE enqueues a cascade job, returns 202 + a job id; the UI polls/toasts on completion.
+  3. Batch the recompute SQL (set-based update of affected assemblies/estimates) to kill the N+1.
+  4. Tests: enqueue → job completes → caches consistent; failure is retried + surfaced.
+- **Files.** `api/Program.cs`, `api/Services/RateCascadeService.cs`, `api/Endpoints/ResourceEndpoints.cs`.
+- **Acceptance.** A common-resource rate change returns immediately and reconciles asynchronously; large-tenant cascade no longer times out.
+
+### Phase 19 — P2: maturity, scale & operability
+
+#### 19.1 — `E5` Bid register + win/hit-rate dashboard (strategic) — **L**
+- **Why.** `ProjectStatus` has Won/Lost but nothing captures **as-bid vs awarded vs actual**, so
+  there's no win-rate learning loop — the hallmark of estimating maturity, and the biggest
+  long-term differentiator.
+- **Steps.** Capture submitted bid value, award value and (optional) final cost per project;
+  a Bid Register page + `GET /api/analytics/bids` with hit-rate by project type / client / period,
+  and bid-vs-award variance. Read-only analytics; never mutates a bid.
+- **Files.** `api/Models/Project.cs` (outcome fields), `api/Endpoints/` (analytics), new
+  `app/analytics/page.tsx`.
+- **Acceptance.** Dashboard shows win rate and bid/award variance over a date range, scoped by access.
+
+#### 19.2 — `E6` Risk-weighted contingency + `E7` cash-flow S-curve — **M**
+- **Why.** Contingency is a flat %; reviewers want to *defend* it. Duration + time-related costs
+  are already modelled, so an S-curve is nearly free and increasingly client-requested.
+- **Steps.** A simple risk register (item, probability, impact) → suggested contingency that can
+  feed the Contingency markup; an S-curve cash-flow projection over `DurationMonths` from
+  time-related prelims + a spend curve, shown as a chart and an export tab.
+- **Files.** `api/Models/` (risk entities), `api/Services/EstimateCalculator.cs`,
+  `app/projects/[id]/page.tsx`, `api/Services/ExportService.cs`.
+- **Acceptance.** Risk register produces a defensible contingency figure; S-curve renders and exports.
+
+#### 19.3 — `S4` OpenTelemetry traces/metrics + alerting — **M**
+- **Why.** Observability is logs-only — no metrics, traces or alerting. You'd learn of a failed
+  recompute or backup from a user, not a page.
+- **Steps.** Add OpenTelemetry (ASP.NET + EF + Npgsql instrumentation) exporting traces + metrics
+  (OTLP → Grafana/Tempo/Prometheus or a hosted APM); alert on: failed backup, failed cascade job,
+  5xx rate, readiness failures. Emit a metric on every estimate publish.
+- **Files.** `api/Program.cs`, `docker-compose.prod.yml`, `deploy/`.
+- **Acceptance.** Traces visible end-to-end; an induced backup failure raises an alert.
+
+#### 19.4 — `S5` PITR (WAL archiving) + tested DR drill — **M**
+- **Why.** Backups are daily `pg_dump` snapshots only → RPO up to 24h, weak for a financial
+  system.
+- **Steps.** Enable WAL archiving / continuous archiving (or managed-Postgres PITR); document and
+  **rehearse** a point-in-time restore; record measured RPO/RTO in `docs/BACKUP.md`.
+- **Files.** `docker-compose.prod.yml`, `deploy/backup/`, `docs/BACKUP.md`.
+- **Acceptance.** A rehearsed PITR restores to a chosen timestamp; RPO/RTO documented.
+
+#### 19.5 — `S6` Publish OpenAPI + versioned API + generated TS client — **M**
+- **Why.** `lib/api.ts` is hand-written; no published contract or versioning → silent front/back drift.
+- **Steps.** Emit OpenAPI from the minimal API, introduce `/api/v1` routing, generate the TS client
+  into the web app (replacing hand-written calls incrementally), wire generation into CI.
+- **Files.** `api/Program.cs`, `api/Endpoints/*`, `lib/` (generated client), `.github/workflows/ci.yml`.
+- **Acceptance.** OpenAPI served; generated client compiles; a contract drift fails CI.
+
+#### 19.6 — `S8` Frontend scale: split `page.tsx`, Playwright E2E, BOQ virtualization — **L**
+- **Why.** `app/projects/[id]/page.tsx` is a ~1,471-line monolith; no E2E; large BOQs aren't
+  virtualized (perf cliff on thousand-line bills).
+- **Steps.** Decompose the page into focused components/hooks; add Playwright smoke E2E (login →
+  build a small estimate → export) to CI; virtualize the BOQ/area grids (e.g. TanStack Virtual).
+- **Files.** `app/projects/[id]/` (split), `e2e/` (new), `.github/workflows/ci.yml`,
+  `package.json`.
+- **Acceptance.** Page split with no behavior change; E2E green in CI; a 2,000-line BOQ scrolls smoothly.
+
+#### 19.7 — `S9` Centralized server-side validation (FluentValidation) — **S**
+- **Why.** Write-boundary validation is ad-hoc; no consistent guard against negative
+  qty/rate/percentage.
+- **Steps.** Add FluentValidation, validators for every write DTO (non-negative money/quantity,
+  percentage ranges, required fields), returning ProblemDetails with field errors.
+- **Files.** `api/Program.cs`, `api/Validation/` (new), `api/Endpoints/*`.
+- **Acceptance.** Invalid inputs return a structured 400 with field-level messages, proven by tests.
+
+### Conclusion & sequencing
+
+The system is already a **correct, usable, multi-tenant estimating SaaS** with a sound tender
+build-up and a hardened platform. To reach a **professional, enterprise-grade** standard, execute
+the phases in order:
+
+1. **Phase 17 (P0) first — non-negotiable.** Lock down calculation correctness (17.1), tender
+   compliance (VAT 17.2, provisional/PC/alternate lines 17.3) and intra-tenant authorization (17.4).
+   These protect the legally-binding number and close the only correctness/confidentiality risks.
+2. **Phase 18 (P1) next — estimator leverage.** Target-price back-solve (18.1) and the margin-on-price
+   view (18.2) are daily-use wins; dated rates + quotes (18.3) and the async cascade (18.4) add
+   traceability and scale.
+3. **Phase 19 (P2) — maturity & operability.** The bid register/win-rate loop (19.1) is the strategic
+   differentiator; the rest (risk/S-curve, OTel, PITR, OpenAPI, frontend scale, validation) bring
+   operational and engineering maturity.
+
+**Recommended first PR: 17.1** — small, highest-risk area for a pricing tool, and it makes every
+subsequent change provably safe. Each item above is independently shippable through the existing
+PR-gated flow (branch → CI green → squash-merge → rebuild → smoke).
