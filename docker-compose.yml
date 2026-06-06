@@ -59,6 +59,14 @@ services:
       Jwt__SigningKey: ${JWT_SECRET:?JWT_SECRET must be set in .env (>= 32 chars)}
     ports:
       - "8081:8080"
+    # Liveness probe on /healthz (no DB dependency) so a hung-but-running API is
+    # detected and the web service can wait for it to be healthy.
+    healthcheck:
+      test:         ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval:     10s
+      timeout:      5s
+      retries:      5
+      start_period: 30s
     networks: [bbnet]
 
   web:
@@ -71,7 +79,8 @@ services:
     container_name: bidbuilder-web
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
       - "3100:3000"
     networks: [bbnet]

@@ -38,16 +38,21 @@ public class RateCascadeService(AppDbContext db, RateEngine engine, EstimateCalc
         // Atomic fan-out: recompute every affected assembly rate and every dependent
         // estimate roll-up inside ONE transaction. Without it, a failure partway leaves
         // some dependents freshly priced and others stale — exactly the inconsistency
-        // this cascade exists to prevent. All-or-nothing instead.
-        await using var tx = await db.Database.BeginTransactionAsync();
+        // this cascade exists to prevent. All-or-nothing instead. The transaction is run
+        // through the execution strategy so it's retried as a unit on a transient fault.
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync();
 
-        foreach (var aid in assemblyIds)
-            await engine.RecomputeAssemblyAsync(aid);
+            foreach (var aid in assemblyIds)
+                await engine.RecomputeAssemblyAsync(aid);
 
-        foreach (var eid in estimateIds)
-            await calc.RecomputeAsync(eid);
+            foreach (var eid in estimateIds)
+                await calc.RecomputeAsync(eid);
 
-        await tx.CommitAsync();
+            await tx.CommitAsync();
+        });
         return (assemblyIds.Count, estimateIds.Count);
     }
 }

@@ -1,9 +1,12 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Serilog;
+using Serilog.Formatting.Compact;
 using BidBuilder.Api.Auth;
 using BidBuilder.Api.Data;
 using BidBuilder.Api.Endpoints;
@@ -20,6 +23,21 @@ var builder = WebApplication.CreateBuilder(args);
 
 var isDev = builder.Environment.IsDevelopment();
 
+// ── Structured logging (Serilog) ───────────────────────────────────────────────
+// Human-readable console in Development; compact JSON (one object per line) in
+// every other environment so logs are machine-parseable by a log aggregator and
+// every request/error line carries structured fields (and a trace id, below).
+builder.Host.UseSerilog((ctx, cfg) =>
+{
+    cfg.ReadFrom.Configuration(ctx.Configuration)
+       .Enrich.FromLogContext()
+       .Enrich.WithProperty("app", "bidbuilder-api");
+    if (ctx.HostingEnvironment.IsDevelopment())
+        cfg.WriteTo.Console();
+    else
+        cfg.WriteTo.Console(new RenderedCompactJsonFormatter());
+});
+
 // ── Services ──────────────────────────────────────────────────────────────────
 // Outside Development the connection string MUST be supplied (no insecure
 // localhost/postgres fallback leaking into a real deployment).
@@ -28,8 +46,25 @@ var connString = builder.Configuration.GetConnectionString("Postgres")
                  ?? throw new InvalidOperationException(
                      "ConnectionStrings:Postgres must be configured outside Development (e.g. ConnectionStrings__Postgres).");
 
-builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(connString));
+builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(connString, npg =>
+{
+    // Survive transient DB blips (failover, brief network loss, a deploy restart)
+    // instead of surfacing them as raw 500s. NOTE: a retrying execution strategy is
+    // incompatible with manual BeginTransaction — every such site wraps its
+    // transaction in db.Database.CreateExecutionStrategy().ExecuteAsync(...).
+    npg.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10), errorCodesToAdd: null);
+    npg.CommandTimeout(30);
+}));
 builder.Services.AddScoped<ITenantContext, TenantContext>();
+
+// RFC-7807 ProblemDetails for unhandled errors, enriched with a trace id so a 500
+// in the field can be correlated to the exact request in the structured logs.
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = ctx =>
+        ctx.ProblemDetails.Extensions["traceId"] =
+            System.Diagnostics.Activity.Current?.Id ?? ctx.HttpContext.TraceIdentifier;
+});
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<PermissionService>();
 builder.Services.AddScoped<ProjectAccessService>();
@@ -42,7 +77,11 @@ builder.Services.AddScoped<BidBuilder.Api.Services.AuditService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.AreaRollupService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.BenchmarkService>();
 
-builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>();
+// Liveness vs readiness: the DB probe is tagged "ready" so /readyz reflects the
+// database while /healthz stays a pure liveness signal (process is up). The
+// container healthcheck uses /healthz, so a transient Postgres outage doesn't get
+// a perfectly healthy API killed and restarted.
+builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>("db", tags: new[] { "ready" });
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 // A strong, non-default signing key is mandatory outside Development; refuse to
@@ -123,6 +162,15 @@ var app = builder.Build();
 await DbInitializer.RunAsync(app.Services);
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
+// First in the pipeline: turn any unhandled exception into an RFC-7807 ProblemDetails
+// response (with a traceId) instead of a bare, body-less 500. Active in every
+// environment so production failures are diagnosable, not silent.
+app.UseExceptionHandler();
+
+// One structured log line per request (method, path, status, elapsed ms) — so a
+// failing request is findable in the logs by its trace id.
+app.UseSerilogRequestLogging();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -137,7 +185,11 @@ app.UseAuthentication();
 app.UseTenantResolution();
 app.UseAuthorization();
 
-app.MapHealthChecks("/healthz");
+// Liveness: the process is up and serving — NO dependency checks, so a DB outage
+// never trips it (the container healthcheck targets this).
+app.MapHealthChecks("/healthz", new HealthCheckOptions { Predicate = _ => false });
+// Readiness: the app can actually serve traffic — includes the DB probe.
+app.MapHealthChecks("/readyz", new HealthCheckOptions { Predicate = c => c.Tags.Contains("ready") });
 
 // Authenticated-only diagnostic. /healthz (above) is the anonymous liveness probe;
 // ping requires auth so it can't be used to enumerate tenant slugs while anonymous.

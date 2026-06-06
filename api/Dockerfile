@@ -15,8 +15,9 @@ RUN dotnet publish BidBuilder.Api.csproj -c Release -o /app --no-restore
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 # QuestPDF (SkiaSharp) needs fontconfig + a base font to render PDF text on Linux.
+# curl is included so the container healthcheck can probe /healthz.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libfontconfig1 fontconfig fonts-dejavu-core \
+ && apt-get install -y --no-install-recommends libfontconfig1 fontconfig fonts-dejavu-core curl \
  && rm -rf /var/lib/apt/lists/*
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
