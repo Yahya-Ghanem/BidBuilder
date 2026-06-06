@@ -1,26 +1,38 @@
 import { test, expect } from "@playwright/test"
 
 /**
- * 19.6 — End-to-end happy path against the live dev stack.
+ * 19.6 + 20.1 — End-to-end happy path against the live stack.
  *
- * Prereqs:
+ * Prereqs (local):
  *   docker compose up -d --build api web
  *   (web on :3100, api on :8081, db on :5433 — see docker-compose.yml)
  *
+ * In CI the `e2e` job in .github/workflows/ci.yml boots the same stack
+ * directly on the GH runner and runs this spec.
+ *
  * Coverage:
  *   1. The login page renders and accepts the seeded admin credentials.
- *   2. After auth, /projects shows the seeded project (PRJ-2026-001) — proving
- *      the API auth + tenant resolution + projects query all wire end-to-end.
- *   3. Opening the project page loads the new _components-based detail view
- *      (header card, TeamsPanel, AreasPanel, EstimatesSection) — proving the
- *      19.6 split didn't break route composition.
+ *   2. After auth, /projects loads — the projects tree's "Untyped" group
+ *      (the seeded sample has no project type) expands to surface the
+ *      PRJ-2026-001 row. Proves API auth + tenant resolution + the projects
+ *      query all wire end-to-end.
+ *   3. Direct navigation to the project detail page renders the new
+ *      _components-based layout (header card, TeamsPanel, AreasPanel,
+ *      EstimatesSection). Proves the 19.6 split kept route composition intact.
+ *
+ * Why fetch the project id via the API rather than click "Full display" in the
+ * tree? The production UX (click Untyped → click project → click revision →
+ * double-click "Full display") is four fragile interactions for a smoke. The
+ * direct goto proves the route composition just as well with one navigation.
  *
  * Deliberately NOT covered here: BOQ edits, publish flow, exports. Those have
  * solid API-level coverage in api.Tests/ and benefit less from a brittle UI test.
- * Add Playwright cases for them if a UI bug ever ships that the API suite missed.
  */
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8081"
+
 test.describe("Happy path", () => {
-  test("login → projects → open project", async ({ page }) => {
+  test("login → projects → open project", async ({ page, request }) => {
     await page.goto("/login")
 
     await expect(page.getByRole("heading", { name: /sign in|bidbuilder/i }).or(page.locator("text=BidBuilder"))).toBeVisible()
@@ -29,19 +41,35 @@ test.describe("Happy path", () => {
     await page.getByRole("button", { name: /sign in/i }).click()
 
     await expect(page).toHaveURL(/\/projects/, { timeout: 15_000 })
-    // The seeded project's code is stable across runs.
-    const projectLink = page.locator("text=PRJ-2026-001").first()
-    await expect(projectLink).toBeVisible({ timeout: 10_000 })
 
-    await projectLink.click()
-    await expect(page).toHaveURL(/\/projects\/\d+/, { timeout: 10_000 })
+    // The projects tree groups by project type; the seeded sample has none, so
+    // it's under "Untyped". Expanding the group exposes the project row whose
+    // hint is the code "PRJ-2026-001" — proves the API auth + tenant + projects
+    // query are all wired correctly.
+    await page.getByText(/^Untyped/).click()
+    await expect(page.locator("text=PRJ-2026-001").first()).toBeVisible({ timeout: 10_000 })
+
+    // Read the authenticated session and discover the project id via the API,
+    // then goto the detail page directly — proves the extracted _components/
+    // still compose into the same route.
+    const token = await page.evaluate(() => localStorage.getItem("bb_token"))
+    expect(token, "JWT should be in localStorage after login").toBeTruthy()
+    const projectsRes = await request.get(`${API_URL}/api/projects`, {
+      headers: { Authorization: `Bearer ${token}`, "X-Tenant-Id": "default" },
+    })
+    expect(projectsRes.ok(), `GET /api/projects → ${projectsRes.status()}`).toBeTruthy()
+    const projects = (await projectsRes.json()) as Array<{ id: number; code: string }>
+    const seeded = projects.find((p) => p.code === "PRJ-2026-001")
+    expect(seeded, "seeded project PRJ-2026-001 should exist").toBeTruthy()
+
+    await page.goto(`/projects/${seeded!.id}`)
     // Each landmark proves a different extracted module renders:
-    //   • Currency: ... in the header card  → page.tsx Detail()
-    //   • Teams                              → _components/teams-panel
-    //   • Areas                              → _components/areas-panel
-    //   • Revision                           → _components/estimates-section
-    await expect(page.getByText("Currency:")).toBeVisible()
-    await expect(page.getByRole("heading", { level: 3, name: /Teams/ }).or(page.locator("text=Teams").first())).toBeVisible()
+    //   • "Currency:" in the header card  → page.tsx Detail()
+    //   • Teams                            → _components/teams-panel
+    //   • Areas                            → _components/areas-panel
+    //   • Revision                         → _components/estimates-section
+    await expect(page.getByText("Currency:")).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator("text=Teams").first()).toBeVisible()
     await expect(page.locator("text=Areas").first()).toBeVisible()
     await expect(page.locator("text=Revision").first()).toBeVisible()
   })

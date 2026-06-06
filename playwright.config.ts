@@ -1,14 +1,16 @@
 import { defineConfig, devices } from "@playwright/test"
 
 /**
- * Playwright config for the BidBuilder happy-path E2E (19.6).
+ * Playwright config for the BidBuilder happy-path E2E (19.6 + 20.1).
  *
- * Targets the LIVE dev stack (web on :3100, api on :8081, db on :5433) — bring it
- * up first with `docker compose up -d --build api web`. We don't spin a webServer
- * here on purpose: the test exercises the real stack so a regression in API
- * wiring, auth, or DB seed shows up. CI doesn't run Playwright yet (the stack
- * needs more lift than the existing Postgres service container) — runs locally
- * via `npm run test:e2e`.
+ * Targets the LIVE stack — web on :3100, api on :8081, db on :5433 locally; the
+ * GH-runner ports in CI. We don't spin a webServer here on purpose: the test
+ * exercises the real stack so a regression in API wiring, auth, or DB seed
+ * shows up.
+ *
+ *   Local:  docker compose up -d --build api web  →  npm run test:e2e
+ *   CI:     the `e2e` job in .github/workflows/ci.yml boots dotnet + next,
+ *           waits for /healthz, then runs `npm run test:e2e`.
  */
 const PORT = Number(process.env.WEB_PORT ?? 3100)
 
