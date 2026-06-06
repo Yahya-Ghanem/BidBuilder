@@ -2,7 +2,10 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using BidBuilder.Api.Data;
+using BidBuilder.Api.Models;
 using ClosedXML.Excel;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace BidBuilder.Api.Tests;
@@ -1580,6 +1583,26 @@ public class HardeningTests(ApiFixture fx)
         // Re-activate → the same token works again.
         await super.PostAsync($"/api/platform/tenants/{id}/activate", null);
         Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/api/projects")).StatusCode);
+    }
+
+    // DB-level defense in depth: a tenant-scoped row carrying a non-existent TenantId is
+    // rejected by the Postgres FK — the last line of defense if the application's query
+    // filter / auto-stamp were ever bypassed (raw SQL, a future IgnoreQueryFilters slip).
+    [Fact]
+    public async Task Tenant_scoped_row_with_an_orphan_tenant_id_is_rejected_by_the_database()
+    {
+        await fx.WithTenantDbAsync("default", async (db, _) =>
+        {
+            // A bogus, NON-empty TenantId skips the SaveChanges auto-stamp (which only fills
+            // Guid.Empty), so it reaches the database — where the new FK constraint must reject it.
+            db.Projects.Add(new Project
+            {
+                TenantId = Guid.NewGuid(),
+                Code = "ORPH-" + Guid.NewGuid().ToString("N")[..6],
+                Name = "Orphan", Currency = "AED", Status = ProjectStatus.Draft,
+            });
+            await Assert.ThrowsAnyAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        });
     }
 
     // A BOQ item may only reference an area of its OWN project, not another project's.

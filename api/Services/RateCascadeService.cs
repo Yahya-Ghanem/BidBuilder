@@ -26,9 +26,6 @@ public class RateCascadeService(AppDbContext db, RateEngine engine, EstimateCalc
             .Distinct()
             .ToListAsync();
 
-        foreach (var aid in assemblyIds)
-            await engine.RecomputeAssemblyAsync(aid);
-
         if (assemblyIds.Count == 0) return (0, 0);
 
         // 2) Estimates whose BOQ items are priced from any of those assemblies.
@@ -38,9 +35,19 @@ public class RateCascadeService(AppDbContext db, RateEngine engine, EstimateCalc
             .Distinct()
             .ToListAsync();
 
+        // Atomic fan-out: recompute every affected assembly rate and every dependent
+        // estimate roll-up inside ONE transaction. Without it, a failure partway leaves
+        // some dependents freshly priced and others stale — exactly the inconsistency
+        // this cascade exists to prevent. All-or-nothing instead.
+        await using var tx = await db.Database.BeginTransactionAsync();
+
+        foreach (var aid in assemblyIds)
+            await engine.RecomputeAssemblyAsync(aid);
+
         foreach (var eid in estimateIds)
             await calc.RecomputeAsync(eid);
 
+        await tx.CommitAsync();
         return (assemblyIds.Count, estimateIds.Count);
     }
 }
