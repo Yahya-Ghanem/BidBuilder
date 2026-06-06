@@ -94,6 +94,19 @@ export interface ApprovalsView {
   approvals: ApprovalRow[]
 }
 
+/** 20.5 — one estimate column in a side-by-side bid comparison. */
+export interface CompareColumn {
+  estimateId: number; projectId: number; projectCode: string; projectName: string
+  revision: number; title: string; status: string; currency: string
+  directCost: number; indirectCost: number; markupCost: number; bidPrice: number
+  taxRatePct: number | null; taxAmount: number; bidPriceInclTax: number
+  alternatesTotal: number; marginOnPricePct: number; commercialAdjustment: number
+}
+/** 20.5 — one section total aligned across the compared estimates (null = absent). */
+export interface CompareSectionRow { key: string; code: string; title: string; totals: (number | null)[] }
+/** 20.5 — full side-by-side comparison. */
+export interface CompareView { mixedCurrency: boolean; columns: CompareColumn[]; sections: CompareSectionRow[] }
+
 export interface ProjectTeam {
   groupId: number
   groupCode: string

@@ -1974,6 +1974,32 @@
         ]
       }
     },
+    "/api/estimates/compare": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ids",
+            "required": true,
+            "schema": {
+              "items": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
     "/api/estimates/import-template.xlsx": {
       "get": {
         "responses": {
