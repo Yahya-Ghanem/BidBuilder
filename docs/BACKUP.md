@@ -1,7 +1,23 @@
 # Backup & restore
 
-The bid data **is** the product, so the production stack ships a backup sidecar.
+The bid data **is** the product, so the production stack ships a two-layer
+backup story: nightly **logical dumps** for clean import/export, and
+continuous **WAL archiving + base backups** for point-in-time recovery (PITR).
 This is the operational runbook.
+
+## RPO / RTO at a glance
+
+| Loss scenario | Recovery via | Target RPO | Target RTO |
+|---|---|---|---|
+| Application bug / accidental data wipe | PITR to just before the bad write | ≤ 5 min | ≤ 30 min |
+| Postgres process crash, data files intact | Postgres internal WAL replay (automatic on restart) | 0 | ≤ 5 min |
+| Single disk loss, host intact | Restore latest logical dump OR base backup + WAL | ≤ 24 h (dump) / ≤ 5 min (PITR) | ≤ 1 h |
+| Whole-host loss | Off-host copy of `dbbackups` + `dbarchive` volumes → new host | ≤ off-host-sync interval | ≤ 4 h |
+
+The PITR RPO is bounded by `archive_timeout=300` (the db service forces a WAL
+switch every 5 minutes even if traffic is quiet), so the worst case is the last
+5 minutes of writes on a low-traffic deployment. Under load, the WAL ships per
+segment fill so the practical RPO is shorter.
 
 ## What runs automatically
 
@@ -85,3 +101,72 @@ docker compose -f docker-compose.prod.yml run --rm \
 docker compose -f docker-compose.prod.yml exec db \
   psql -U "$POSTGRES_USER" -c 'DROP DATABASE restore_test;'
 ```
+
+## PITR (point-in-time recovery)
+
+The prod db service runs with **continuous WAL archiving** enabled:
+
+- `wal_level=replica`, `archive_mode=on`
+- `archive_command` writes each completed WAL segment to the `dbarchive`
+  named volume (`/var/lib/postgresql/archive` inside the container). The
+  command refuses to overwrite, so a duplicate-segment bug becomes loud, not
+  silent.
+- `archive_timeout=300` forces a WAL switch every 5 minutes — bounds the RPO
+  when traffic is quiet.
+
+The `db-backup` sidecar takes **base backups** every `BASEBACKUP_INTERVAL_SECONDS`
+(default weekly) via `pg_basebackup -Ft -z -X stream`. Each one lands under
+`/backups/base/<stamp>/` and is enough — combined with the WAL archive — to
+restore to any point in time after that backup was taken.
+
+WAL retention: segments older than `WAL_RETENTION_DAYS` (default 21) are pruned,
+but ONLY if at least one base backup younger than the cutoff still exists. This
+makes orphaned WAL impossible: we never delete WAL that would have to anchor on
+a base backup we've already discarded.
+
+### Run an immediate base backup
+
+```sh
+docker compose -f docker-compose.prod.yml exec db-backup sh /scripts/basebackup.sh
+```
+
+### Restore the cluster to a point in time
+
+```sh
+# 1. List available restore points
+docker compose -f docker-compose.prod.yml exec db-backup ls -1 /backups/base
+# 2. Stage a recovery dir (does NOT touch the live cluster)
+docker compose -f docker-compose.prod.yml exec db-backup \
+  sh /scripts/pitr-restore.sh <stamp> '2026-06-06 14:32:00 UTC'
+# 3. Follow the printed cut-over steps to swap /var/lib/postgresql/data
+```
+
+If you omit the timestamp, the script replays ALL archived WAL and stops at
+the end of the stream (effectively the latest committed transaction Postgres
+managed to archive). With a timestamp, recovery pauses at that point —
+inspect, then `SELECT pg_wal_replay_resume();` and promote.
+
+### Automated DR drill
+
+`deploy/backup/dr-drill.sh` proves end-to-end that the PITR pipeline works
+WITHOUT touching the live cluster: it picks the latest base backup, restores
+into `/tmp/dr-drill`, starts a throwaway postgres on port 5433, waits for WAL
+replay to finish, validates against the live `Tenants` / `Users` / `Projects`
+/ `Estimates` tables, then tears the throwaway down. Run on-demand or wire
+into your scheduler:
+
+```sh
+docker compose -f docker-compose.prod.yml exec db-backup sh /scripts/dr-drill.sh
+```
+
+Failure modes the drill catches: no base backups at all (exit 2), `pg_basebackup`
+output that can't be untarred, broken `archive_command` (WAL segments missing
+when replay needs them), and a schema-loss bug that drops the seed tenant.
+
+### Off-host durability
+
+A named volume on the same host protects against an accidental wipe, **not**
+against losing the host. For real disaster recovery, sync BOTH `dbbackups` AND
+`dbarchive` off the machine: bind-mount to a host path and back that up, or
+`aws s3 sync` on a schedule. Without the archive, you can only recover to the
+last logical dump (≤ 24 h RPO); with both, you recover to within minutes.
