@@ -20,6 +20,11 @@ public record EquipmentInput(string Code, string Name, string? Unit, decimal Rat
 public record SubcontractorDto(int Id, string Code, string Name, string Unit, decimal UnitRate, bool IsActive);
 public record SubcontractorInput(string Code, string Name, string Unit, decimal UnitRate, bool IsActive);
 
+// ── Dated rate history (18.3) ────────────────────────────────────────────────
+public record RateHistoryDto(int Id, string ResourceType, int ResourceId, DateOnly EffectiveFrom, decimal Rate, string? Source, DateTime CreatedAt);
+/// <summary>Manual back-date entry: estimator records "this rate was effective from X".</summary>
+public record RateHistoryInput(DateOnly EffectiveFrom, decimal Rate, string? Source);
+
 /// <summary>
 /// CRUD for the tenant-shared resource library. All routes require the
 /// <c>resource-library</c> module permission for the relevant action.
@@ -53,7 +58,9 @@ public static class ResourceEndpoints
         {
             var g = await Guard(me, perm, ModuleAction.Edit); if (g is not null) return g;
             var e = await db.LaborResources.FirstOrDefaultAsync(r => r.Id == id); if (e is null) return NotFound();
+            var oldRate = e.RatePerHour;
             e.Name = i.Name.Trim(); e.Unit = i.Unit ?? "hr"; e.RatePerHour = i.RatePerHour; e.IsActive = i.IsActive; e.UpdatedAt = DateTime.UtcNow;
+            RecordHistoryIfRateChanged(db, ResourceType.Labor, e.Id, oldRate, e.RatePerHour, "rate-change");
             await db.SaveChangesAsync();
             await cascade.OnResourceChangedAsync(ResourceType.Labor, e.Id);
             return Results.Ok(new LaborDto(e.Id, e.Code, e.Name, e.Unit, e.RatePerHour, e.IsActive));
@@ -88,7 +95,9 @@ public static class ResourceEndpoints
         {
             var g = await Guard(me, perm, ModuleAction.Edit); if (g is not null) return g;
             var e = await db.MaterialResources.FirstOrDefaultAsync(r => r.Id == id); if (e is null) return NotFound();
+            var oldRate = e.UnitPrice;
             e.Name = i.Name.Trim(); e.Unit = i.Unit; e.UnitPrice = i.UnitPrice; e.WastagePct = i.WastagePct; e.Supplier = i.Supplier; e.IsActive = i.IsActive; e.UpdatedAt = DateTime.UtcNow;
+            RecordHistoryIfRateChanged(db, ResourceType.Material, e.Id, oldRate, e.UnitPrice, "rate-change");
             await db.SaveChangesAsync();
             await cascade.OnResourceChangedAsync(ResourceType.Material, e.Id);
             return Results.Ok(new MaterialDto(e.Id, e.Code, e.Name, e.Unit, e.UnitPrice, e.WastagePct, e.Supplier, e.IsActive));
@@ -123,7 +132,9 @@ public static class ResourceEndpoints
         {
             var g = await Guard(me, perm, ModuleAction.Edit); if (g is not null) return g;
             var e = await db.EquipmentResources.FirstOrDefaultAsync(r => r.Id == id); if (e is null) return NotFound();
+            var oldRate = e.RatePerHour;
             e.Name = i.Name.Trim(); e.Unit = i.Unit ?? "hr"; e.RatePerHour = i.RatePerHour; e.IsActive = i.IsActive; e.UpdatedAt = DateTime.UtcNow;
+            RecordHistoryIfRateChanged(db, ResourceType.Equipment, e.Id, oldRate, e.RatePerHour, "rate-change");
             await db.SaveChangesAsync();
             await cascade.OnResourceChangedAsync(ResourceType.Equipment, e.Id);
             return Results.Ok(new EquipmentDto(e.Id, e.Code, e.Name, e.Unit, e.RatePerHour, e.IsActive));
@@ -158,7 +169,9 @@ public static class ResourceEndpoints
         {
             var g = await Guard(me, perm, ModuleAction.Edit); if (g is not null) return g;
             var e = await db.Subcontractors.FirstOrDefaultAsync(r => r.Id == id); if (e is null) return NotFound();
+            var oldRate = e.UnitRate;
             e.Name = i.Name.Trim(); e.Unit = i.Unit; e.UnitRate = i.UnitRate; e.IsActive = i.IsActive; e.UpdatedAt = DateTime.UtcNow;
+            RecordHistoryIfRateChanged(db, ResourceType.Subcontractor, e.Id, oldRate, e.UnitRate, "rate-change");
             await db.SaveChangesAsync();
             await cascade.OnResourceChangedAsync(ResourceType.Subcontractor, e.Id);
             return Results.Ok(new SubcontractorDto(e.Id, e.Code, e.Name, e.Unit, e.UnitRate, e.IsActive));
@@ -171,7 +184,88 @@ public static class ResourceEndpoints
             var inUse = await InUse(db, ResourceType.Subcontractor, id); if (inUse is not null) return inUse;
             db.Subcontractors.Remove(e); await db.SaveChangesAsync(); return Results.NoContent();
         });
+
+        // ── Dated rate history (18.3) ────────────────────────────────────────
+        // GET → all rate snapshots for the resource, newest-first
+        // POST → manually insert a back-dated snapshot (estimator records "this
+        //   was the rate from date X" — supplier PO, quote ref, etc.)
+        // DELETE → remove a stray snapshot
+        grp.MapGet("/{type}/{id:int}/history", async (string type, int id, ClaimsPrincipal me, PermissionService perm, AppDbContext db) =>
+        {
+            var g = await Guard(me, perm, ModuleAction.View); if (g is not null) return g;
+            if (!TryParseType(type, out var rt)) return BadResourceType(type);
+            var rows = await db.ResourceRateHistory
+                .Where(h => h.ResourceType == rt && h.ResourceId == id)
+                .OrderByDescending(h => h.EffectiveFrom).ThenByDescending(h => h.Id)
+                .Select(h => new RateHistoryDto(h.Id, h.ResourceType.ToString(), h.ResourceId, h.EffectiveFrom, h.Rate, h.Source, h.CreatedAt))
+                .ToListAsync();
+            return Results.Ok(rows);
+        });
+
+        grp.MapPost("/{type}/{id:int}/history", async (string type, int id, RateHistoryInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db, RateCascadeService cascade) =>
+        {
+            var g = await Guard(me, perm, ModuleAction.Edit); if (g is not null) return g;
+            if (!TryParseType(type, out var rt)) return BadResourceType(type);
+            if (i.Rate < 0) return Results.Json(new { error = "Rate cannot be negative." }, statusCode: 400);
+            var h = new ResourceRateHistory { ResourceType = rt, ResourceId = id, EffectiveFrom = i.EffectiveFrom, Rate = i.Rate, Source = i.Source?.Trim() };
+            db.ResourceRateHistory.Add(h);
+            await db.SaveChangesAsync();
+            // A back-date snapshot does NOT touch the live resource rate, but it can
+            // alter any estimate with a PricingDate on/after EffectiveFrom; cascade so
+            // those estimates re-roll their bid (the live cascade traverses by
+            // resource→assembly→estimate identically here).
+            await cascade.OnResourceChangedAsync(rt, id);
+            return Results.Created($"/api/resources/{type}/{id}/history/{h.Id}",
+                new RateHistoryDto(h.Id, h.ResourceType.ToString(), h.ResourceId, h.EffectiveFrom, h.Rate, h.Source, h.CreatedAt));
+        });
+
+        grp.MapDelete("/{type}/{id:int}/history/{historyId:int}", async (string type, int id, int historyId, ClaimsPrincipal me, PermissionService perm, AppDbContext db, RateCascadeService cascade) =>
+        {
+            var g = await Guard(me, perm, ModuleAction.Delete); if (g is not null) return g;
+            if (!TryParseType(type, out var rt)) return BadResourceType(type);
+            var h = await db.ResourceRateHistory.FirstOrDefaultAsync(x => x.Id == historyId && x.ResourceType == rt && x.ResourceId == id);
+            if (h is null) return Results.NotFound(new { error = "History entry not found" });
+            db.ResourceRateHistory.Remove(h); await db.SaveChangesAsync();
+            await cascade.OnResourceChangedAsync(rt, id);
+            return Results.NoContent();
+        });
     }
+
+    /// <summary>Snapshot the prior rate into history when a resource's rate
+    /// changes via the API. The effective-from date is "today" (UTC) — the snapshot
+    /// captures the rate as it WAS up to this point. Manual back-dating uses the
+    /// dedicated POST /history endpoint.</summary>
+    private static void RecordHistoryIfRateChanged(AppDbContext db, ResourceType type, int resourceId, decimal oldRate, decimal newRate, string source)
+    {
+        if (oldRate == newRate) return;
+        db.ResourceRateHistory.Add(new ResourceRateHistory
+        {
+            ResourceType = type,
+            ResourceId = resourceId,
+            EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow),
+            Rate = oldRate,    // snapshot the rate that just ended
+            Source = source,
+        });
+    }
+
+    /// <summary>Accept either the route segment (e.g. "materials") or the canonical
+    /// enum name. False if unknown.</summary>
+    public static bool TryParseType(string raw, out ResourceType type)
+    {
+        switch ((raw ?? "").Trim().ToLowerInvariant())
+        {
+            case "labor":          type = ResourceType.Labor;         return true;
+            case "materials":
+            case "material":       type = ResourceType.Material;      return true;
+            case "equipment":      type = ResourceType.Equipment;     return true;
+            case "subcontractors":
+            case "subcontractor":  type = ResourceType.Subcontractor; return true;
+            default:               type = ResourceType.Labor;         return false;
+        }
+    }
+
+    private static IResult BadResourceType(string raw) =>
+        Results.Json(new { error = $"Unknown resource type '{raw}'. Use labor|materials|equipment|subcontractors." }, statusCode: 400);
 
     // ── helpers ──────────────────────────────────────────────────────────────
     private static async Task<IResult?> Guard(ClaimsPrincipal me, PermissionService perm, ModuleAction action) =>

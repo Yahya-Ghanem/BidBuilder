@@ -259,6 +259,7 @@ app.MapGet("/api/ping", (ITenantContext t) =>
 app.MapAuthEndpoints();
 app.MapProjectEndpoints();
 app.MapResourceEndpoints();
+app.MapQuoteEndpoints();
 app.MapAssemblyEndpoints();
 app.MapEstimateEndpoints();
 app.MapExportEndpoints();

@@ -36,12 +36,12 @@ public class CalcGoldenMasterTests(ApiFixture fx)
         bool reReconcileClean = false;
         await fx.WithTenantDbAsync("default", async (db, _) =>
         {
-            bd = (await new EstimateCalculator(db).RecomputeAsync(id))!;
+            bd = (await new EstimateCalculator(db, new RateEngine(db)).RecomputeAsync(id))!;
         });
         // A recompute must be a FIXED POINT: reconciling immediately after reports no drift.
         await fx.WithTenantDbAsync("default", async (db, _) =>
         {
-            var r = await new EstimateCalculator(db).ReconcileAsync(id, commit: false);
+            var r = await new EstimateCalculator(db, new RateEngine(db)).ReconcileAsync(id, commit: false);
             reReconcileClean = r is { Drifted: false };
         });
 
@@ -145,7 +145,7 @@ public class CalcGoldenMasterTests(ApiFixture fx)
         });
         await fx.WithTenantDbAsync("default", async (db, _) =>
         {
-            bd = (await new EstimateCalculator(db).RecomputeAsync(id))!;
+            bd = (await new EstimateCalculator(db, new RateEngine(db)).RecomputeAsync(id))!;
         });
 
         Assert.Equal(1_500.00m, bd.DirectCost);        // Normal 1000 + Provisional 500 (alternate excluded)
@@ -159,7 +159,7 @@ public class CalcGoldenMasterTests(ApiFixture fx)
     public async Task Target_price_back_solve_lands_the_bid_and_re_targets_without_stacking()
     {
         var id = await SeedGoldenEstimateAsync();
-        await fx.WithTenantDbAsync("default", async (db, _) => { await new EstimateCalculator(db).RecomputeAsync(id); });
+        await fx.WithTenantDbAsync("default", async (db, _) => { await new EstimateCalculator(db, new RateEngine(db)).RecomputeAsync(id); });
         var admin = await fx.AdminClientAsync();
 
         // Preview to 80,000 → adjustment 6,146.56, NOT yet applied.

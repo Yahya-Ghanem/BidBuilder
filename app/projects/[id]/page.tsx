@@ -405,7 +405,7 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
   const delPrelim = useEstimateMut((pid: number) => fetchApi(`/api/estimates/${estimateId}/preliminaries/${pid}`, { method: "DELETE", headers: ifMatch() }))
   const addMarkup = useEstimateMut((v: any) => fetchApi(`/api/estimates/${estimateId}/markups`, { method: "POST", headers: ifMatch(), body: JSON.stringify(v) }))
   const delMarkup = useEstimateMut((mid: number) => fetchApi(`/api/estimates/${estimateId}/markups/${mid}`, { method: "DELETE", headers: ifMatch() }))
-  const updateMeta = useEstimateMut((v: { title: string; status?: string; secondaryCurrency?: string; taxRatePct?: number }) => fetchApi(`/api/estimates/${estimateId}`, { method: "PUT", headers: ifMatch(), body: JSON.stringify(v) }))
+  const updateMeta = useEstimateMut((v: { title: string; status?: string; secondaryCurrency?: string; taxRatePct?: number; pricingDate?: string; clearPricingDate?: boolean }) => fetchApi(`/api/estimates/${estimateId}`, { method: "PUT", headers: ifMatch(), body: JSON.stringify(v) }))
   // Clone a room: new unit + its activities. Also refreshes the project areas list.
   const cloneRoom = useMutation({
     mutationFn: (v: { areaId: number; name: string }) =>
@@ -510,6 +510,22 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
               <input type="number" step="0.01" min={0} max={100} defaultValue={e.taxRatePct ?? 0}
                      className="w-16 rounded-md border border-[var(--border)] px-2 py-1 text-xs outline-none focus:border-[var(--brand)]"
                      onBlur={(ev) => { const v = Number(ev.target.value); if (v !== (e.taxRatePct ?? 0)) updateMeta.mutate({ title: e.title, taxRatePct: v }) }} />
+            </label>
+          )}
+          {canEditMeta && (
+            <label className="flex items-center gap-1 text-xs text-slate-500" title="Price as-of: resolves resource rates from ResourceRateHistory (most-recent snapshot ≤ date). Empty = live rate.">
+              Priced as-of
+              <input type="date" defaultValue={e.pricingDate ?? ""}
+                     className="rounded-md border border-[var(--border)] px-2 py-1 text-xs outline-none focus:border-[var(--brand)]"
+                     onBlur={(ev) => {
+                       const v = ev.target.value
+                       if ((v || null) === (e.pricingDate ?? null)) return
+                       if (!v) updateMeta.mutate({ title: e.title, clearPricingDate: true })
+                       else updateMeta.mutate({ title: e.title, pricingDate: v })
+                     }} />
+              {e.pricingDate && (
+                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium uppercase text-amber-800">historical pricing</span>
+              )}
             </label>
           )}
         </div>

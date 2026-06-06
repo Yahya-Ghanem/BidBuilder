@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutGrid, FolderKanban, Library, Boxes, LogOut, Settings, ScrollText, Users, BarChart3, Menu, X } from "lucide-react"
+import { LayoutGrid, FolderKanban, Library, Boxes, LogOut, Settings, ScrollText, Users, BarChart3, Menu, X, Receipt } from "lucide-react"
 import { useAuth, useRequireAuth } from "@/lib/auth"
 import { usePermissions } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
@@ -12,6 +12,7 @@ import { useState, type ReactNode } from "react"
 const NAV = [
   { href: "/projects", label: "BidBuilder", icon: FolderKanban, module: "projects" },
   { href: "/resources", label: "Resource Library", icon: Library, module: "resource-library" },
+  { href: "/quotes", label: "Quotes Register", icon: Receipt, module: "resource-library" },
   { href: "/assemblies", label: "Assemblies", icon: Boxes, module: "assemblies" },
   { href: "/benchmarks", label: "Benchmarks", icon: BarChart3, module: "reports" },
 ]

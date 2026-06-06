@@ -10,7 +10,14 @@ namespace BidBuilder.Api.Endpoints;
 
 public record EstimateSummaryDto(int Id, int Revision, string Title, string Status, string Currency, decimal BidPrice, DateTime UpdatedAt);
 public record CreateEstimateRequest(string? Title);
-public record UpdateEstimateRequest(string? Title, string? Status, string? SecondaryCurrency, decimal? TaxRatePct);
+/// <summary>
+/// Patch-style update for estimate meta. Every field is optional ("null = leave alone"):
+/// pass <c>SecondaryCurrency=""</c> to clear FX, <c>TaxRatePct=0</c> to clear tax,
+/// <c>PricingDate</c> as ISO date to re-price as-of, or <c>"" / null sentinel</c> to clear.
+/// Because <see cref="DateOnly"/>? can't natively distinguish "absent" from "null in JSON",
+/// the dedicated <c>ClearPricingDate</c> flag drives the clear path.
+/// </summary>
+public record UpdateEstimateRequest(string? Title, string? Status, string? SecondaryCurrency, decimal? TaxRatePct, DateOnly? PricingDate, bool? ClearPricingDate);
 public record CopyEstimateRequest(int TargetProjectId, string? Title);
 public record SectionInput(string Code, string Title, int SortOrder, int? ParentSectionId);
 public record ItemInput(string? ItemCode, string Description, string Unit, decimal Quantity, int? AssemblyId, decimal UnitRate, int SortOrder, List<ItemCostComponentInput>? Components, int? AreaId, string? Kind = null);
@@ -257,6 +264,18 @@ public static class EstimateEndpoints
                 var normalized = tr > 0m ? tr : (decimal?)null;
                 if (e.TaxRatePct != normalized) { e.TaxRatePct = normalized; taxChanged = true; }
             }
+            // PricingDate: set re-prices the estimate as-of that date (via ResourceRateHistory);
+            // ClearPricingDate=true clears it (back to live rates). Either path triggers a
+            // recompute below (so the cached roll-ups + breakdown reflect the new rates).
+            var pricingDateChanged = false;
+            if (req.ClearPricingDate is true)
+            {
+                if (e.PricingDate is not null) { e.PricingDate = null; pricingDateChanged = true; }
+            }
+            else if (req.PricingDate is { } pd)
+            {
+                if (e.PricingDate != pd) { e.PricingDate = pd; pricingDateChanged = true; }
+            }
             // SecondaryCurrency: null = unchanged, "" = clear, else set (3-letter ISO).
             if (req.SecondaryCurrency is not null)
             {
@@ -289,7 +308,8 @@ public static class EstimateEndpoints
             await audit.LogAsync(me, oldStatus != e.Status ? "estimate.status" : "estimate.update", "Estimate", id.ToString(),
                 oldStatus != e.Status ? $"{oldStatus} → {e.Status}" : $"edited (status {e.Status})");
             // A tax-rate change shifts TaxAmount/total — recompute; otherwise the cached breakdown stands.
-            return Results.Ok(taxChanged ? await calc.RecomputeAsync(id) : await calc.GetAsync(id));
+            // A pricing-date change shifts every assembly-rate lookup → also recompute.
+            return Results.Ok((taxChanged || pricingDateChanged) ? await calc.RecomputeAsync(id) : await calc.GetAsync(id));
         }).AllowWhenFinalised();   // status/title change is the unlock path — must stay available when finalised
 
         // POST what-if — preview the bid price under a proposed markup set, no save.
@@ -651,6 +671,7 @@ public static class EstimateEndpoints
             Currency  = src.Currency,
             DefaultLaborRate = src.DefaultLaborRate,
             TaxRatePct = src.TaxRatePct,
+            PricingDate = src.PricingDate,
         };
         db.Estimates.Add(clone);
         await db.SaveChangesAsync();

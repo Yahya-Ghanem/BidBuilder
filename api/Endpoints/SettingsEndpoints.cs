@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using BidBuilder.Api.Auth;
 using BidBuilder.Api.Data;
 using BidBuilder.Api.Models;
+using BidBuilder.Api.Services;
 using BidBuilder.Api.Tenancy;
 
 namespace BidBuilder.Api.Endpoints;
@@ -170,6 +171,24 @@ public static class SettingsEndpoints
             var r = await db.CurrencyRates.FirstOrDefaultAsync(x => x.Code == code);
             if (r is not null) { db.CurrencyRates.Remove(r); await db.SaveChangesAsync(); }
             return Results.NoContent();
+        });
+
+        // FX refresh (18.3) — touches every rate's UpdatedAt and writes an audit row,
+        // proving "FX rates were reviewed on date X by user Y". This is the manual-confirm
+        // surrogate for a scheduled provider pull (which would add a background-job
+        // dependency — deferred to 18.4 to avoid two infra changes in one PR). Tenant
+        // admin only.
+        grp.MapPost("/currencies/refresh", async (ClaimsPrincipal me, AppDbContext db, AuditService audit) =>
+        {
+            if (!me.IsAdmin())
+                return Results.Json(new { error = "Only a tenant admin can refresh currency rates" }, statusCode: 403);
+            var rates = await db.CurrencyRates.ToListAsync();
+            var now = DateTime.UtcNow;
+            foreach (var r in rates) r.UpdatedAt = now;
+            await db.SaveChangesAsync();
+            await audit.LogAsync(me, "fx.refresh", "CurrencyRate", null,
+                $"reviewed {rates.Count} currency rate(s)");
+            return Results.Ok(new { reviewed = rates.Count, at = now });
         });
     }
 
