@@ -32,6 +32,14 @@ public record WhatIfResult(
     decimal DirectCost, decimal IndirectCost, decimal MarkupCost,
     decimal BidPrice, decimal BaselineBidPrice, List<WhatIfMarkupLine> Markups);
 
+// ── Reconcile (drift detection between cached and freshly-computed totals) ─────
+/// <summary>The four cached roll-up totals of an estimate.</summary>
+public record EstimateTotals(decimal DirectCost, decimal IndirectCost, decimal MarkupCost, decimal BidPrice);
+/// <summary>Result of a reconcile: the cached totals (<c>Before</c>), the freshly
+/// recomputed totals (<c>After</c>), and whether they differ. When they differ the
+/// stored cache has drifted from what the engine now produces.</summary>
+public record ReconcileResult(EstimateTotals Before, EstimateTotals After, bool Drifted);
+
 /// <summary>
 /// Loads an estimate's full graph, recomputes every cached money field via the
 /// pure <see cref="EstimateMath"/>, persists, and returns a breakdown. A BOQ item
@@ -42,14 +50,55 @@ public class EstimateCalculator(AppDbContext db)
 {
     public async Task<EstimateBreakdown?> RecomputeAsync(int estimateId)
     {
-        var e = await db.Estimates
-            .Include(x => x.Project)
-            .Include(x => x.Sections).ThenInclude(s => s.Items).ThenInclude(i => i.CostComponents)
-            .Include(x => x.Preliminaries)
-            .Include(x => x.Markups)
-            .FirstOrDefaultAsync(x => x.Id == estimateId);
+        var e = await LoadGraphAsync(estimateId);
+        if (e is null) return null;
+        var (ordered, typeMap) = await ComputeAsync(e);
+        await db.SaveChangesAsync();
+        return Build(e, ordered, RowVersionOf(e), await BuildFxAsync(e), typeMap);
+    }
+
+    /// <summary>
+    /// Reconcile the stored cached totals against what the engine produces now.
+    /// Reports the cached values (<c>Before</c>), the freshly computed values
+    /// (<c>After</c>), and whether they differ (drift). Persists the corrected
+    /// values ONLY when <paramref name="commit"/> is true; otherwise it is a pure
+    /// read — the recomputed entity is discarded with the request scope. This is the
+    /// safety net for the denormalised money cache: it proves (or repairs) that
+    /// DirectCost/IndirectCost/MarkupCost/BidPrice still equal a clean recomputation.
+    /// </summary>
+    public async Task<ReconcileResult?> ReconcileAsync(int estimateId, bool commit)
+    {
+        var e = await LoadGraphAsync(estimateId);
         if (e is null) return null;
 
+        var before = new EstimateTotals(e.DirectCost, e.IndirectCost, e.MarkupCost, e.BidPrice);
+        await ComputeAsync(e);
+        var after = new EstimateTotals(e.DirectCost, e.IndirectCost, e.MarkupCost, e.BidPrice);
+        var drifted = before != after;
+
+        if (commit && drifted) await db.SaveChangesAsync();
+        return new ReconcileResult(before, after, drifted);
+    }
+
+    /// <summary>Load an estimate's full pricing graph (project, BOQ tree + component
+    /// lines, preliminaries, markups) for a recompute/reconcile.</summary>
+    private Task<Estimate?> LoadGraphAsync(int estimateId) => db.Estimates
+        .Include(x => x.Project)
+        .Include(x => x.Sections).ThenInclude(s => s.Items).ThenInclude(i => i.CostComponents)
+        .Include(x => x.Preliminaries)
+        .Include(x => x.Markups)
+        .FirstOrDefaultAsync(x => x.Id == estimateId);
+
+    /// <summary>
+    /// The single calculation authority: recompute every cached money field on the
+    /// loaded estimate via the pure <see cref="EstimateMath"/> — item unit rates &amp;
+    /// line totals, section totals, direct cost, preliminaries &amp; indirect cost, the
+    /// compounding markups, and the bid price. Mutates the tracked entity in place but
+    /// does NOT save; callers decide whether to persist. Returns the ordered markups
+    /// and the cost-component type map for building the breakdown DTO.
+    /// </summary>
+    private async Task<(List<Markup> Ordered, Dictionary<int, CostComponentType> TypeMap)> ComputeAsync(Estimate e)
+    {
         // Resolve assembly rates for any assembly-priced items in one query.
         var assemblyIds = e.Sections.SelectMany(s => s.Items)
                                     .Where(i => i.AssemblyId is not null)
@@ -98,8 +147,7 @@ public class EstimateCalculator(AppDbContext db)
         e.BidPrice     = EstimateMath.Round2(direct + indirect + markupTotal);
         e.UpdatedAt    = DateTime.UtcNow;
 
-        await db.SaveChangesAsync();
-        return Build(e, ordered, RowVersionOf(e), await BuildFxAsync(e), typeMap);
+        return (ordered, typeMap);
     }
 
     /// <summary>
