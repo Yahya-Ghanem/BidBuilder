@@ -70,4 +70,8 @@ public class Estimate : IHasTenant
     /// <summary>Risk register rows (19.2) — sum of EV produces a suggested contingency
     /// the estimator can apply to the Contingency markup. NOT in the bid by default.</summary>
     public ICollection<RiskItem>    Risks        { get; set; } = new List<RiskItem>();
+    /// <summary>Sign-offs recorded against this revision (20.2). Wiped on any
+    /// content edit (BOQ / preliminaries / markups / risks) so the publish gate
+    /// never approves bid A and lets bid B ship under its sign-offs.</summary>
+    public ICollection<EstimateApproval> Approvals { get; set; } = new List<EstimateApproval>();
 }

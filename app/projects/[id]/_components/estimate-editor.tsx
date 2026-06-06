@@ -13,6 +13,7 @@ import { ExpandCollapseAll, Row, Stat, useCollapse, type CompInput } from "./sha
 import { AddItemForm as _UnusedAddItemForm, AddSection, SectionBlock } from "./boq"
 import { WhatIfPanel } from "./what-if"
 import { TargetPanel } from "./target"
+import { ApprovalPanel } from "./approval-panel"
 import { AddMarkup, AddPrelim } from "./prelim-markup-controls"
 import { RiskAndCashFlowPanel } from "./risk-cashflow"
 import { AreaRollupPanel } from "./area-rollup"
@@ -317,6 +318,10 @@ export function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number
           cashFlow={e.cashFlow}
           canEdit={plmEdit && !locked} />
       )}
+
+      {/* 20.2 — sign-off gate. Renders nothing when the tenant has
+          RequiredApprovalsToPublish=0 (the panel self-hides). */}
+      <ApprovalPanel estimateId={estimateId} status={e.status} />
     </div>
   )
 }

@@ -34,6 +34,13 @@ public record MarkupInput(string Type, string? Label, decimal Percentage, int Ap
 public record WhatIfRequest(List<MarkupInput> Markups);
 public record TargetRequest(decimal? TargetPrice, decimal? TargetMarginPct, decimal? Adjustment, bool Apply = false);
 public record ImportResultDto(int SectionsAdded, int ItemsAdded, EstimateBreakdown Estimate);
+/// <summary>20.2 — sign-off input. Note is optional.</summary>
+public record ApprovalInput(string? Note);
+/// <summary>20.2 — single approval row in the UI/list endpoint.</summary>
+public record ApprovalRow(int Id, int ApproverUserId, string ApproverEmail, string ApproverName, DateTime ApprovedAt, string? Note);
+/// <summary>20.2 — full approvals view: how many the tenant requires, how
+/// many are currently recorded, and who has approved.</summary>
+public record ApprovalsView(int RequiredApprovals, int CurrentApprovals, IReadOnlyList<ApprovalRow> Approvals);
 
 /// <summary>
 /// Estimate editing: BOQ sections/items, preliminaries, markups, and the
@@ -261,6 +268,32 @@ public static class EstimateEndpoints
             if (!string.IsNullOrWhiteSpace(req.Status))
             {
                 if (!Enum.TryParse<EstimateStatus>(req.Status, true, out var st)) return Bad($"Invalid status '{req.Status}'");
+                // 20.2 — approval gate. A Draft/UnderReview → Published transition is
+                // blocked when the tenant requires N approvals but only M < N are recorded.
+                // Returns 409 with structured payload so the UI can render "needs K more".
+                // The gate runs BEFORE the status assignment so a 409 leaves the row
+                // untouched (no silent state change).
+                if (st == EstimateStatus.Published && oldStatus is EstimateStatus.Draft or EstimateStatus.UnderReview)
+                {
+                    var required = await db.TenantSettings
+                        .Select(ts => ts.RequiredApprovalsToPublish)
+                        .FirstOrDefaultAsync();
+                    if (required > 0)
+                    {
+                        var have = await db.EstimateApprovals.CountAsync(a => a.EstimateId == id);
+                        if (have < required)
+                        {
+                            await audit.LogAsync(me, "estimate.publish.blocked", "Estimate", id.ToString(),
+                                $"blocked: {have}/{required} approvals");
+                            return Results.Json(new
+                            {
+                                error = $"Publish requires {required} approval(s); only {have} recorded.",
+                                requiredApprovals = required,
+                                currentApprovals  = have,
+                            }, statusCode: 409);
+                        }
+                    }
+                }
                 e.Status = st;
                 if (st == EstimateStatus.Published) e.PublishedAt ??= DateTime.UtcNow;
             }
@@ -687,6 +720,91 @@ public static class EstimateEndpoints
                 $"applied {pct}% risk-weighted contingency from register");
             return Results.Ok(await calc.RecomputeAsync(id));
         });
+
+        // ── Approvals (20.2) ─────────────────────────────────────────────────
+        // Sign-offs that gate the Draft/UnderReview → Published transition. The
+        // tenant's RequiredApprovalsToPublish setting controls how many are
+        // needed. Any content edit invalidates ALL approvals (via SaveChanges
+        // interceptor in AppDbContext) so a publish is always on the bid the
+        // approvers actually saw.
+
+        // GET — current approvals + the tenant's required threshold. Gated by
+        // estimate-admin View (the same gate as reading the estimate itself).
+        grp.MapGet("/{id:int}/approvals", async (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db) =>
+        {
+            var g = await Guard(me, id, Admin, ModuleAction.View, access, perm); if (g is not null) return g;
+            var approvals = await db.EstimateApprovals
+                .Where(a => a.EstimateId == id)
+                .OrderBy(a => a.ApprovedAt)
+                .Select(a => new ApprovalRow(a.Id, a.ApproverUserId, a.ApproverEmail, a.ApproverName, a.ApprovedAt, a.Note))
+                .ToListAsync();
+            var required = await db.TenantSettings
+                .Select(ts => ts.RequiredApprovalsToPublish)
+                .FirstOrDefaultAsync();
+            return Results.Ok(new ApprovalsView(required, approvals.Count, approvals));
+        }).AllowWhenFinalised();
+
+        // POST — record an approval by the current user. Idempotent: a second
+        // POST by the same user is a no-op (returns 200 with the same view).
+        // Approving requires the TenantAdmin role — plain TenantUsers can't
+        // sign off on a publish. SuperAdmins are not approvers (they're a
+        // platform role, not a tenant role).
+        grp.MapPost("/{id:int}/approvals", async (int id, ApprovalInput? input, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, AuditService audit) =>
+        {
+            var g = await Guard(me, id, Admin, ModuleAction.Edit, access, perm); if (g is not null) return g;
+            if (me.Role() != UserRole.TenantAdmin)
+                return Results.Json(new { error = "Only TenantAdmins may sign off on estimates." }, statusCode: 403);
+            var uid = me.Id();
+            // Refuse to approve a non-Draft/Review revision — approving a
+            // Published estimate would be a no-op and approving a Superseded
+            // one is incoherent.
+            var status = await db.Estimates.Where(e => e.Id == id).Select(e => (EstimateStatus?)e.Status).FirstOrDefaultAsync();
+            if (status is null) return NotFound();
+            if (status is not (EstimateStatus.Draft or EstimateStatus.UnderReview))
+                return Results.Json(new { error = $"Cannot approve a {status} revision; only Draft / UnderReview." }, statusCode: 409);
+            var note = input?.Note?.Trim();
+            if (note?.Length > 1000) return Bad("Note must be 1000 characters or fewer.");
+
+            var existing = await db.EstimateApprovals.FirstOrDefaultAsync(a => a.EstimateId == id && a.ApproverUserId == uid);
+            if (existing is null)
+            {
+                db.EstimateApprovals.Add(new EstimateApproval
+                {
+                    EstimateId = id, ApproverUserId = uid,
+                    ApproverEmail = me.Email(), ApproverName = me.Name(),
+                    Note = note,
+                });
+                await db.SaveChangesAsync();
+                await audit.LogAsync(me, "estimate.approval.granted", "Estimate", id.ToString(),
+                    $"approved by {me.Email()}");
+            }
+            // Return the fresh view (count, threshold, all approvers) so the UI
+            // can rerender without a follow-up GET.
+            var approvals = await db.EstimateApprovals
+                .Where(a => a.EstimateId == id).OrderBy(a => a.ApprovedAt)
+                .Select(a => new ApprovalRow(a.Id, a.ApproverUserId, a.ApproverEmail, a.ApproverName, a.ApprovedAt, a.Note))
+                .ToListAsync();
+            var required = await db.TenantSettings.Select(ts => ts.RequiredApprovalsToPublish).FirstOrDefaultAsync();
+            return Results.Ok(new ApprovalsView(required, approvals.Count, approvals));
+        }).AllowWhenFinalised();   // refuses internally on non-Draft/Review
+
+        // DELETE — revoke an approval. A user may revoke their own; a
+        // TenantAdmin may revoke anyone's. The revoke audit row carries the
+        // original approver's email so the trail says WHOSE sign-off was withdrawn.
+        grp.MapDelete("/{id:int}/approvals/{aid:int}", async (int id, int aid, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, AuditService audit) =>
+        {
+            var g = await Guard(me, id, Admin, ModuleAction.Edit, access, perm); if (g is not null) return g;
+            var row = await db.EstimateApprovals.FirstOrDefaultAsync(a => a.Id == aid && a.EstimateId == id);
+            if (row is null) return NotFound();
+            var myUid = me.Id();
+            if (row.ApproverUserId != myUid && me.Role() != UserRole.TenantAdmin)
+                return Results.Json(new { error = "You can only revoke your own approval." }, statusCode: 403);
+            db.EstimateApprovals.Remove(row);
+            await db.SaveChangesAsync();
+            await audit.LogAsync(me, "estimate.approval.revoked", "Estimate", id.ToString(),
+                $"revoked sign-off by {row.ApproverEmail}");
+            return Results.NoContent();
+        }).AllowWhenFinalised();
 
         // ── Markups (module: prelims-markups) ────────────────────────────────
         grp.MapPost("/{id:int}/markups", async (int id, MarkupInput i, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc) =>

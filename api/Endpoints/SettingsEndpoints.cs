@@ -12,12 +12,17 @@ public record SettingsDto(
     string CompanyName, string? Website, string? ContactEmail, string? Phone,
     string? Address, string? City, string? Country, string Timezone,
     string BaseCurrency, decimal DefaultOverheadPct, decimal DefaultProfitPct, decimal DefaultContingencyPct,
-    decimal DefaultTaxRatePct, bool HasLogo);
+    decimal DefaultTaxRatePct, bool HasLogo,
+    /// <summary>20.2 — sign-offs required before a Draft can be Published.
+    /// Zero = no approval workflow (legacy behavior).</summary>
+    int RequiredApprovalsToPublish);
 
 public record SettingsInput(
     string? Website, string? ContactEmail, string? Phone, string? Address, string? City, string? Country,
     string? Timezone, string? BaseCurrency, decimal DefaultOverheadPct, decimal DefaultProfitPct, decimal DefaultContingencyPct,
-    decimal DefaultTaxRatePct);
+    decimal DefaultTaxRatePct,
+    /// <summary>20.2 — null leaves the existing value alone (back-compat).</summary>
+    int? RequiredApprovalsToPublish);
 
 public record CurrencyRateDto(string Code, decimal RateToBase, DateTime UpdatedAt);
 public record CurrencyRatesDto(string BaseCurrency, List<CurrencyRateDto> Rates);
@@ -60,6 +65,8 @@ public static class SettingsEndpoints
                 return Bad("Default percentages cannot be negative.");
             if (i.DefaultTaxRatePct < 0 || i.DefaultTaxRatePct > 100)
                 return Bad("Default tax rate must be between 0 and 100.");
+            if (i.RequiredApprovalsToPublish is { } req && req < 0)
+                return Bad("Required approvals cannot be negative.");
 
             var s = await db.TenantSettings.FirstOrDefaultAsync();
             if (s is null) { s = new TenantSettings(); db.TenantSettings.Add(s); }   // TenantId auto-stamped on save
@@ -72,6 +79,7 @@ public static class SettingsEndpoints
             s.DefaultProfitPct = i.DefaultProfitPct;
             s.DefaultContingencyPct = i.DefaultContingencyPct;
             s.DefaultTaxRatePct = i.DefaultTaxRatePct;
+            if (i.RequiredApprovalsToPublish is { } reqAps) s.RequiredApprovalsToPublish = reqAps;
             s.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
@@ -212,5 +220,6 @@ public static class SettingsEndpoints
         s?.Timezone ?? "UTC", s?.BaseCurrency ?? "AED",
         s?.DefaultOverheadPct ?? 0, s?.DefaultProfitPct ?? 0, s?.DefaultContingencyPct ?? 0,
         s?.DefaultTaxRatePct ?? 0,
-        s?.LogoBytes is { Length: > 0 });
+        s?.LogoBytes is { Length: > 0 },
+        s?.RequiredApprovalsToPublish ?? 0);
 }

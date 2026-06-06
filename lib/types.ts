@@ -78,6 +78,20 @@ export interface TenantSettings {
   defaultContingencyPct: number
   defaultTaxRatePct: number
   hasLogo: boolean
+  /** 20.2 — sign-offs required before Draft→Published. 0 = no workflow. */
+  requiredApprovalsToPublish: number
+}
+
+/** 20.2 — One recorded sign-off on an estimate revision. */
+export interface ApprovalRow {
+  id: number; approverUserId: number; approverEmail: string; approverName: string
+  approvedAt: string; note: string | null
+}
+/** 20.2 — The full approvals view for an estimate. */
+export interface ApprovalsView {
+  requiredApprovals: number
+  currentApprovals: number
+  approvals: ApprovalRow[]
 }
 
 export interface ProjectTeam {
