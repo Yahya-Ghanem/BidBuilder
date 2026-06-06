@@ -84,6 +84,9 @@ builder.Services.AddScoped<BidBuilder.Api.Services.ExportService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.ImportService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.AuditService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.NotificationService>();
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<BidBuilder.Api.Services.IWebhookSender, BidBuilder.Api.Services.HttpWebhookSender>();
+builder.Services.AddScoped<BidBuilder.Api.Services.WebhookDispatcher>();
 builder.Services.AddScoped<BidBuilder.Api.Services.AreaRollupService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.BenchmarkService>();
 
@@ -417,6 +420,7 @@ app.MapSettingsEndpoints();
 app.MapAuditEndpoints();
 app.MapNotificationEndpoints();
 app.MapSearchEndpoints();
+app.MapWebhookEndpoints();
 app.MapCostComponentEndpoints();
 app.MapAreaEndpoints();
 app.MapActivityEndpoints();

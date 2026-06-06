@@ -353,7 +353,7 @@ public static class EstimateEndpoints
         }).AllowWhenFinalised();
 
         // PUT estimate meta (title / lifecycle status). Gated estimate-admin Edit.
-        grp.MapPut("/{id:int}", async (int id, UpdateEstimateRequest req, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AuditService audit, NotificationService notify, ITenantContext tenant) =>
+        grp.MapPut("/{id:int}", async (int id, UpdateEstimateRequest req, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AuditService audit, NotificationService notify, WebhookDispatcher webhooks, ITenantContext tenant) =>
         {
             var g = await Guard(me, id, Admin, ModuleAction.Edit, access, perm); if (g is not null) return g;
             var e = await db.Estimates.FirstOrDefaultAsync(x => x.Id == id); if (e is null) return NotFound();
@@ -461,6 +461,13 @@ public static class EstimateEndpoints
                     $"Estimate published — Rev {e.Revision}",
                     $"{me.Name()} published \"{e.Title}\" (Rev {e.Revision}).",
                     $"/projects/{e.ProjectId}", "Estimate", id.ToString());
+                // 20.9 — fan the same event out to subscribed webhooks.
+                await webhooks.DispatchAsync(WebhookEvents.Published, new
+                {
+                    estimateId = e.Id, projectId = e.ProjectId, revision = e.Revision,
+                    title = e.Title, status = e.Status.ToString(), bidPrice = e.BidPrice,
+                    currency = e.Currency, actor = me.Email(),
+                });
             }
             else if (e.Status == EstimateStatus.UnderReview && oldStatus != EstimateStatus.UnderReview)
             {
@@ -469,6 +476,11 @@ public static class EstimateEndpoints
                     $"Approval needed — Rev {e.Revision}",
                     $"{me.Name()} submitted \"{e.Title}\" (Rev {e.Revision}) for review.",
                     $"/projects/{e.ProjectId}", "Estimate", id.ToString());
+                await webhooks.DispatchAsync(WebhookEvents.UnderReview, new
+                {
+                    estimateId = e.Id, projectId = e.ProjectId, revision = e.Revision,
+                    title = e.Title, status = e.Status.ToString(), actor = me.Email(),
+                });
             }
             // A tax-rate change shifts TaxAmount/total — recompute; otherwise the cached breakdown stands.
             // A pricing-date change shifts every assembly-rate lookup → also recompute.
@@ -863,7 +875,7 @@ public static class EstimateEndpoints
         // Approving requires the TenantAdmin role — plain TenantUsers can't
         // sign off on a publish. SuperAdmins are not approvers (they're a
         // platform role, not a tenant role).
-        grp.MapPost("/{id:int}/approvals", async (int id, ApprovalInput? input, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, AuditService audit, NotificationService notify) =>
+        grp.MapPost("/{id:int}/approvals", async (int id, ApprovalInput? input, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, AuditService audit, NotificationService notify, WebhookDispatcher webhooks) =>
         {
             var g = await Guard(me, id, Admin, ModuleAction.Edit, access, perm); if (g is not null) return g;
             if (me.Role() != UserRole.TenantAdmin)
@@ -900,6 +912,10 @@ public static class EstimateEndpoints
                     $"Sign-off recorded — Rev {meta?.Revision}",
                     $"{me.Name()} approved Rev {meta?.Revision}.",
                     meta is null ? null : $"/projects/{meta.ProjectId}", "Estimate", id.ToString());
+                await webhooks.DispatchAsync(WebhookEvents.Approved, new
+                {
+                    estimateId = id, projectId = meta?.ProjectId, revision = meta?.Revision, actor = me.Email(),
+                });
             }
             // Return the fresh view (count, threshold, all approvers) so the UI
             // can rerender without a follow-up GET.
