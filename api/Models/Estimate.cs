@@ -46,6 +46,11 @@ public class Estimate : IHasTenant
     /// but EXCLUDED from BidPrice/markups/tax (numeric(18,2)).</summary>
     public decimal AlternatesTotal { get; set; }
 
+    /// <summary>A ± lump-sum commercial adjustment applied to the bid AFTER markups
+    /// (the final "land on the target number" move). Part of the tender sum, so tax is
+    /// charged on it; set/solved via the target endpoint. 0 = none (numeric(18,2)).</summary>
+    public decimal CommercialAdjustment { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? PublishedAt { get; set; }

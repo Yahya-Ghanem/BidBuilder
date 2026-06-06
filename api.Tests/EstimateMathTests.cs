@@ -62,6 +62,17 @@ public class EstimateMathTests
         Assert.Equal(0m, EstimateMath.Tax(1_000m, -5m));
     }
 
+    // ── Target margin → bid price (price = cost / (1 − margin)) ─────────────────
+    [Theory]
+    [InlineData(60_000, 20, 75_000.00)]   // 60,000 / 0.80
+    [InlineData(80_000, 0, 80_000.00)]    // no margin → cost
+    public void BidForTargetMargin_grosses_up_cost(decimal cost, decimal margin, decimal expected)
+        => Assert.Equal(expected, EstimateMath.BidForTargetMargin(cost, margin));
+
+    [Fact]
+    public void BidForTargetMargin_is_zero_for_impossible_margin()
+        => Assert.Equal(0m, EstimateMath.BidForTargetMargin(60_000m, 100m));
+
     [Fact]
     public void No_markups_leaves_base_untouched()
     {
