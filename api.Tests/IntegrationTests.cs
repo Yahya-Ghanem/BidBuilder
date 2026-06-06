@@ -550,6 +550,39 @@ public class ExportTests(ApiFixture fx)
         Assert.Contains(unitWs.RowsUsed(), row => row.Cell(1).GetString().Contains(bldg));
         Assert.Contains(unitWs.RowsUsed(), row => row.Cell(1).GetString().Contains(floor));
     }
+
+    // The priced-BOQ Excel must build when the tenant has a logo. ClosedXML rejects a
+    // resize before the picture has a Move placement, so scaling the logo before MoveTo
+    // used to 500 the whole export (only when a logo > 64px was set).
+    [Fact]
+    public async Task Priced_boq_excel_export_works_with_a_logo()
+    {
+        // A real 96px-tall PNG (> the 64px cap) so the export exercises the scale path.
+        const string pngB64 =
+            "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAIAAABt+uBvAAAAjklEQVR42u3QMQ0AAAgDsMmZfz2IwQEnV5Mq" +
+            "aKblEAWCBAkSJEiQIEEIEiRIkCBBggQhSJAgQYIECRKEIEGCBAkSJEiQIAQJEiRIkCBBghAkSJAgQYIECUKQ" +
+            "IEGCBAkSJEgQggQJEiRIkCBBCBIkSJAgQYIEIUiQIEGCBAkSJAhBggQJEiRIkCAECRL0F7S4ODJ3G0gzdgAA" +
+            "AABJRU5ErkJggg==";
+        var c = await fx.AdminClientAsync();
+        var form = new MultipartFormDataContent();
+        var img = new ByteArrayContent(Convert.FromBase64String(pngB64));
+        img.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+        form.Add(img, "file", "logo.png");
+        (await c.PostAsync("/api/settings/logo", form)).EnsureSuccessStatusCode();
+        try
+        {
+            var pid = await Api.ProjectIdAsync(c);
+            var eid = await Api.FirstEstimateIdAsync(c, pid);
+            var r = await c.GetAsync($"/api/estimates/{eid}/export.xlsx");
+            Assert.Equal(HttpStatusCode.OK, r.StatusCode);   // regression: was 500 with a logo
+            using var wb = new XLWorkbook(new MemoryStream(await r.Content.ReadAsByteArrayAsync()));
+            Assert.NotEmpty(wb.Worksheets);
+        }
+        finally
+        {
+            await c.DeleteAsync("/api/settings/logo");   // restore the no-logo baseline for other tests
+        }
+    }
 }
 
 [Collection("api")]
