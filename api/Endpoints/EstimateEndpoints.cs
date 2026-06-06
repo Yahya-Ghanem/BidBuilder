@@ -5,6 +5,8 @@ using BidBuilder.Api.Auth;
 using BidBuilder.Api.Data;
 using BidBuilder.Api.Models;
 using BidBuilder.Api.Services;
+using BidBuilder.Api.Telemetry;
+using BidBuilder.Api.Tenancy;
 
 namespace BidBuilder.Api.Endpoints;
 
@@ -249,7 +251,7 @@ public static class EstimateEndpoints
         }).AllowWhenFinalised();
 
         // PUT estimate meta (title / lifecycle status). Gated estimate-admin Edit.
-        grp.MapPut("/{id:int}", async (int id, UpdateEstimateRequest req, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AuditService audit) =>
+        grp.MapPut("/{id:int}", async (int id, UpdateEstimateRequest req, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AuditService audit, ITenantContext tenant) =>
         {
             var g = await Guard(me, id, Admin, ModuleAction.Edit, access, perm); if (g is not null) return g;
             var e = await db.Estimates.FirstOrDefaultAsync(x => x.Id == id); if (e is null) return NotFound();
@@ -262,6 +264,9 @@ public static class EstimateEndpoints
                 e.Status = st;
                 if (st == EstimateStatus.Published) e.PublishedAt ??= DateTime.UtcNow;
             }
+            // Will only fire on a Draft/Review→Published transition (oldStatus check below
+            // gates this so a re-PUT against an already-Published revision doesn't double-count).
+            var newlyPublished = e.Status == EstimateStatus.Published && oldStatus != EstimateStatus.Published;
             // Tax/VAT rate: null = unchanged; 0 = no tax line; else the % (0–100).
             var taxChanged = false;
             if (req.TaxRatePct is { } tr)
@@ -313,6 +318,11 @@ public static class EstimateEndpoints
             await db.SaveChangesAsync();
             await audit.LogAsync(me, oldStatus != e.Status ? "estimate.status" : "estimate.update", "Estimate", id.ToString(),
                 oldStatus != e.Status ? $"{oldStatus} → {e.Status}" : $"edited (status {e.Status})");
+            // 19.3 — domain metric. Tagged with tenant_slug so per-tenant publish cadence
+            // is visible on dashboards. Fired AFTER SaveChangesAsync so a failed write
+            // never registers a spurious publish event.
+            if (newlyPublished)
+                BidBuilderTelemetry.EstimatesPublished.Add(1, new KeyValuePair<string, object?>("tenant_slug", tenant.TenantSlug ?? "unknown"));
             // A tax-rate change shifts TaxAmount/total — recompute; otherwise the cached breakdown stands.
             // A pricing-date change shifts every assembly-rate lookup → also recompute.
             return Results.Ok((taxChanged || pricingDateChanged) ? await calc.RecomputeAsync(id) : await calc.GetAsync(id));
