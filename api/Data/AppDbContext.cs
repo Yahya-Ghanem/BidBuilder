@@ -169,6 +169,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.Property(p => p.Location).HasMaxLength(200);
             b.Property(p => p.Currency).HasMaxLength(3).IsRequired();
             b.Property(p => p.Status).HasConversion<string>().HasMaxLength(16);
+            // Bid outcome register (19.1) — money fields stored to 2dp; note is bounded.
+            b.Property(p => p.SubmittedBidValue).HasColumnType("numeric(18,2)");
+            b.Property(p => p.AwardedValue).HasColumnType("numeric(18,2)");
+            b.Property(p => p.FinalCost).HasColumnType("numeric(18,2)");
+            b.Property(p => p.WinLossNote).HasMaxLength(1000);
+            // DecisionAt drives the period axis on the dashboard; index for fast aggregation.
+            b.HasIndex(p => new { p.TenantId, p.DecisionAt });
             b.HasQueryFilter(p => p.TenantId == _tenant.TenantId);
         });
 
