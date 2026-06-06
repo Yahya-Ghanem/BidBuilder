@@ -30,7 +30,10 @@ non-default values (enforced in `Program.cs`):
 - Outside Development **no default credential is seeded**: set `Seed__AdminPassword`
   (and optionally `Seed__AdminEmail`) to create the first admin, or create it out-of-band.
   The sample project is only seeded when `Seed__DemoData=true`.
-- Back up the Postgres volume; the bid data is the product.
+- **Backups**: the production stack runs a `db-backup` sidecar that takes a daily
+  gzipped `pg_dump` (configurable interval + retention) into the `dbbackups` volume.
+  See **[docs/BACKUP.md](BACKUP.md)** for tuning, off-host durability, and the
+  restore runbook. The bid data is the product — get the dumps off-host.
 
 ## Network / TLS
 
