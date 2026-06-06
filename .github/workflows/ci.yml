@@ -32,7 +32,7 @@ jobs:
       - name: Build API
         run: dotnet build api/BidBuilder.Api.csproj -c Release --nologo
       - name: Test (integration against the Postgres service)
-        run: dotnet test api.Tests/BidBuilder.Api.Tests.csproj -c Release --nologo
+        run: dotnet test api.Tests/BidBuilder.Api.Tests.csproj -c Release --nologo --collect:"XPlat Code Coverage" --results-directory ./coverage
         env:
           # The test fixture builds its connection from these; the API under test
           # creates/migrates/seeds a throwaway DB per run on the service container.
@@ -41,8 +41,17 @@ jobs:
           POSTGRES_USER: bidbuilder
           POSTGRES_PASSWORD: bidbuilder_ci
           JWT_SECRET: ci-only-signing-key-at-least-32-characters-long-000
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: ./coverage/**/coverage.cobertura.xml
+          if-no-files-found: warn
 
   frontend:
+    # Keep this job name exactly "Frontend (type-check)" — it's the required status
+    # check in branch protection. It now also lints and runs unit tests.
     name: Frontend (type-check)
     runs-on: ubuntu-latest
     steps:
@@ -51,5 +60,12 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
-      - run: npx tsc --noEmit
+      # --legacy-peer-deps mirrors the web Dockerfile: React 19 / Next 16 are ahead of
+      # some packages' peer ranges (eslint tooling included).
+      - run: npm ci --legacy-peer-deps
+      - name: Type-check
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm run test

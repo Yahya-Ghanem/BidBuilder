@@ -18,7 +18,7 @@ export function Modal({
   // Keep the latest onClose without making it an effect dependency (it's often a fresh
   // closure each render, which would otherwise re-run the effect and steal focus).
   const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
+  useEffect(() => { onCloseRef.current = onClose })
 
   useEffect(() => {
     if (!open) return
