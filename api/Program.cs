@@ -416,6 +416,7 @@ app.MapExportEndpoints();
 app.MapSettingsEndpoints();
 app.MapAuditEndpoints();
 app.MapNotificationEndpoints();
+app.MapSearchEndpoints();
 app.MapCostComponentEndpoints();
 app.MapAreaEndpoints();
 app.MapActivityEndpoints();

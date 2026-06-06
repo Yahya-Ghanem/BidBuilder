@@ -115,6 +115,13 @@ export interface NotificationItem {
 /** 20.3 — the signed-in user's inbox page + unread total. */
 export interface NotificationList { unreadCount: number; items: NotificationItem[] }
 
+/** 20.4 — one cross-project search match. */
+export interface SearchHit { title: string; subtitle: string | null; link: string }
+/** 20.4 — a typed cluster of search hits. */
+export interface SearchGroup { type: string; label: string; hits: SearchHit[] }
+/** 20.4 — the full search result set. */
+export interface SearchResults { query: string; groups: SearchGroup[] }
+
 export interface ProjectTeam {
   groupId: number
   groupCode: string

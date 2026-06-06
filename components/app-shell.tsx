@@ -8,6 +8,7 @@ import { usePermissions } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { ProjectsTreeProvider, ProjectsSidebarTree } from "@/components/projects-tree"
 import { NotificationsBell } from "@/components/notifications-bell"
+import { SearchPalette } from "@/components/search-palette"
 import { useState, type ReactNode } from "react"
 
 const NAV = [
@@ -105,7 +106,8 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
             <Menu className="h-5 w-5" />
           </button>
           <h1 className="truncate text-lg font-semibold">{title}</h1>
-          <div className="ml-auto flex items-center">
+          <div className="ml-auto flex items-center gap-2">
+            <SearchPalette />
             <NotificationsBell />
           </div>
         </header>
