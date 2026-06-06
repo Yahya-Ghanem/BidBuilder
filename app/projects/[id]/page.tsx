@@ -405,7 +405,7 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
   const delPrelim = useEstimateMut((pid: number) => fetchApi(`/api/estimates/${estimateId}/preliminaries/${pid}`, { method: "DELETE", headers: ifMatch() }))
   const addMarkup = useEstimateMut((v: any) => fetchApi(`/api/estimates/${estimateId}/markups`, { method: "POST", headers: ifMatch(), body: JSON.stringify(v) }))
   const delMarkup = useEstimateMut((mid: number) => fetchApi(`/api/estimates/${estimateId}/markups/${mid}`, { method: "DELETE", headers: ifMatch() }))
-  const updateMeta = useEstimateMut((v: { title: string; status?: string; secondaryCurrency?: string }) => fetchApi(`/api/estimates/${estimateId}`, { method: "PUT", headers: ifMatch(), body: JSON.stringify(v) }))
+  const updateMeta = useEstimateMut((v: { title: string; status?: string; secondaryCurrency?: string; taxRatePct?: number }) => fetchApi(`/api/estimates/${estimateId}`, { method: "PUT", headers: ifMatch(), body: JSON.stringify(v) }))
   // Clone a room: new unit + its activities. Also refreshes the project areas list.
   const cloneRoom = useMutation({
     mutationFn: (v: { areaId: number; name: string }) =>
@@ -504,6 +504,14 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
               </label>
             )
           })()}
+          {canEditMeta && (
+            <label className="flex items-center gap-1 text-xs text-slate-500">
+              VAT %
+              <input type="number" step="0.01" min={0} max={100} defaultValue={e.taxRatePct ?? 0}
+                     className="w-16 rounded-md border border-[var(--border)] px-2 py-1 text-xs outline-none focus:border-[var(--brand)]"
+                     onBlur={(ev) => { const v = Number(ev.target.value); if (v !== (e.taxRatePct ?? 0)) updateMeta.mutate({ title: e.title, taxRatePct: v }) }} />
+            </label>
+          )}
         </div>
         {canReports && (
           <div className="flex gap-2">
@@ -523,7 +531,9 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
         <Stat label="Direct cost" value={money(e.directCost, c)} />
         <Stat label="Indirect (prelims)" value={money(e.indirectCost, c)} />
         <Stat label="Markups" value={money(e.markupCost, c)} />
-        <Stat label="Bid price" value={money(e.bidPrice, c)} highlight />
+        <Stat label={e.taxAmount > 0 ? "Bid (excl. tax)" : "Bid price"} value={money(e.bidPrice, c)} highlight={e.taxAmount <= 0} />
+        {e.taxAmount > 0 && <Stat label={`VAT (${e.taxRatePct ?? 0}%)`} value={money(e.taxAmount, c)} />}
+        {e.taxAmount > 0 && <Stat label="Total incl. tax" value={money(e.bidPriceInclTax, c)} highlight />}
       </div>
       {e.fx && (
         <p className="text-sm text-slate-500">
@@ -575,7 +585,7 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
 
       <AreaRollupPanel estimateId={estimateId} currency={c} canExport={canReports} onExport={dlCostByArea} />
 
-      {bidLetter && <BidLetterModal estimateId={estimateId} bidPrice={e.bidPrice} currency={c} onClose={() => setBidLetter(false)} />}
+      {bidLetter && <BidLetterModal estimateId={estimateId} bidPrice={e.bidPriceInclTax} currency={c} onClose={() => setBidLetter(false)} />}
 
       {/* Prelims + markups */}
       <div className="grid gap-4 sm:grid-cols-2">

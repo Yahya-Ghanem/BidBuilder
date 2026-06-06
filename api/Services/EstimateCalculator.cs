@@ -8,6 +8,7 @@ namespace BidBuilder.Api.Services;
 public record EstimateBreakdown(
     int Id, int ProjectId, int Revision, string Title, string Status, string Currency,
     decimal DirectCost, decimal IndirectCost, decimal MarkupCost, decimal BidPrice,
+    decimal? TaxRatePct, decimal TaxAmount, decimal BidPriceInclTax,
     List<SectionBreakdown> Sections, List<PrelimBreakdown> Preliminaries, List<MarkupBreakdown> Markups,
     string RowVersion, FxView? Fx);
 
@@ -145,6 +146,8 @@ public class EstimateCalculator(AppDbContext db)
         e.IndirectCost = EstimateMath.Round2(indirect);
         e.MarkupCost   = EstimateMath.Round2(markupTotal);
         e.BidPrice     = EstimateMath.Round2(direct + indirect + markupTotal);
+        // Tax sits OUTSIDE the markup cascade — computed on the finished (pre-tax) bid price.
+        e.TaxAmount    = EstimateMath.Tax(e.BidPrice, e.TaxRatePct);
         e.UpdatedAt    = DateTime.UtcNow;
 
         return (ordered, typeMap);
@@ -290,6 +293,7 @@ public class EstimateCalculator(AppDbContext db)
         IReadOnlyDictionary<int, CostComponentType> typeMap) => new(
         e.Id, e.ProjectId, e.Revision, e.Title, e.Status.ToString(), e.Currency,
         e.DirectCost, e.IndirectCost, e.MarkupCost, e.BidPrice,
+        e.TaxRatePct, e.TaxAmount, EstimateMath.Round2(e.BidPrice + e.TaxAmount),
         e.Sections.OrderBy(s => s.SortOrder).Select(s => new SectionBreakdown(
             s.Id, s.Code, s.Title, s.SortOrder, s.SectionTotal,
             s.Items.OrderBy(i => i.SortOrder).Select(i => new ItemBreakdown(

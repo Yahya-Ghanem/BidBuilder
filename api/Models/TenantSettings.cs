@@ -27,6 +27,7 @@ public class TenantSettings : IHasTenant
     public decimal DefaultOverheadPct  { get; set; }          // e.g. 8.00
     public decimal DefaultProfitPct     { get; set; }         // e.g. 12.00
     public decimal DefaultContingencyPct { get; set; }        // e.g. 5.00
+    public decimal DefaultTaxRatePct     { get; set; }        // e.g. 5.00 (VAT) — pre-fills new estimates
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

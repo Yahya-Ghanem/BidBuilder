@@ -76,6 +76,7 @@ export interface TenantSettings {
   defaultOverheadPct: number
   defaultProfitPct: number
   defaultContingencyPct: number
+  defaultTaxRatePct: number
   hasLogo: boolean
 }
 
@@ -147,6 +148,7 @@ export interface FxView {
 export interface EstimateBreakdown {
   id: number; projectId: number; revision: number; title: string; status: string; currency: string
   directCost: number; indirectCost: number; markupCost: number; bidPrice: number
+  taxRatePct: number | null; taxAmount: number; bidPriceInclTax: number
   sections: SectionBreakdown[]; preliminaries: PrelimBreakdown[]; markups: MarkupBreakdown[]
   rowVersion: string
   fx: FxView | null

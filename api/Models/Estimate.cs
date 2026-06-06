@@ -29,11 +29,18 @@ public class Estimate : IHasTenant
     /// component does not pin its own rate. Tunable per estimate.</summary>
     public decimal        DefaultLaborRate { get; set; }
 
+    // ── Tax / VAT ─────────────────────────────────────────────────────────────
+    // Sales tax (e.g. UAE 5% VAT) applied to the bid price AFTER markups. Tax sits
+    // OUTSIDE margin and is never part of the markup cascade, so the bid price stays
+    // the pre-tax tender sum and the tax is reported separately. Null/0 = no tax line.
+    public decimal? TaxRatePct { get; set; }        // e.g. 5.00 (%)
+    public decimal  TaxAmount  { get; set; }        // cached = Round2(BidPrice × rate/100)
+
     // Cached roll-up totals (recomputed by the engine on save; numeric(18,2)).
     public decimal DirectCost      { get; set; }
     public decimal IndirectCost    { get; set; }   // sum of preliminaries
     public decimal MarkupCost      { get; set; }   // sum of applied markups
-    public decimal BidPrice        { get; set; }   // final tender sum
+    public decimal BidPrice        { get; set; }   // final tender sum (EXCLUDING tax)
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

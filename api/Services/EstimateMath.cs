@@ -23,6 +23,11 @@ public static class EstimateMath
     public static decimal PreliminaryTotal(PreliminaryKind kind, decimal amount, int durationMonths) =>
         Round2(kind == PreliminaryKind.TimeRelated ? amount * Math.Max(1, durationMonths) : amount);
 
+    /// <summary>Sales tax / VAT on the (post-markup) bid price. A null or non-positive
+    /// rate yields zero — tax is applied AFTER markups and never compounds into them.</summary>
+    public static decimal Tax(decimal bidPrice, decimal? ratePct) =>
+        ratePct is { } r && r > 0m ? Round2(bidPrice * r / 100m) : 0m;
+
     /// <summary>
     /// Apply markup percentages in the given order, compounding on the running
     /// subtotal. Returns the per-markup amounts (aligned to input order), their

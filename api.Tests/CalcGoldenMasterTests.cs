@@ -71,7 +71,28 @@ public class CalcGoldenMasterTests(ApiFixture fx)
         Assert.Equal(0.5m, bd.Fx.Rate);
         Assert.Equal(36_926.72m, bd.Fx.ConvertedBidPrice);   // 73,853.44 × 0.5
 
+        // ── No tax configured: tax amount is zero, inclusive total equals the bid. ──
+        Assert.Equal(0m, bd.TaxAmount);
+        Assert.Equal(bd.BidPrice, bd.BidPriceInclTax);
+
         Assert.True(reReconcileClean, "recompute should be a fixed point (no drift on immediate reconcile)");
+    }
+
+    [Fact]
+    public async Task Tax_is_applied_after_markups_and_reported_separately()
+    {
+        var id = await SeedGoldenEstimateAsync();
+        var admin = await fx.AdminClientAsync();
+
+        // Setting a 5% VAT recomputes; tax is taken on the finished bid, never compounded.
+        var resp = await admin.PutAsJsonAsync($"/api/estimates/{id}", new { taxRatePct = 5m });
+        resp.EnsureSuccessStatusCode();
+        var bd = await resp.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(ExpectedBid, bd.GetProperty("bidPrice").GetDecimal());          // unchanged by tax
+        Assert.Equal(5m,          bd.GetProperty("taxRatePct").GetDecimal());
+        Assert.Equal(3_692.67m,   bd.GetProperty("taxAmount").GetDecimal());         // 73,853.44 × 5%
+        Assert.Equal(77_546.11m,  bd.GetProperty("bidPriceInclTax").GetDecimal());   // bid + VAT
     }
 
     [Fact]
