@@ -14,6 +14,12 @@ public record ExportModel(
     string? Client, string? Location, string GeneratedOn, EstimateBreakdown Estimate,
     byte[]? LogoBytes = null, AreaRollupResult? AreaRollup = null);
 
+/// <summary>Editable fields for the bid submission letter; blanks fall back to sensible defaults.</summary>
+public record BidLetterOptions(
+    string? Recipient = null, string? RecipientTitle = null,
+    string? Signatory = null, string? SignatoryTitle = null,
+    int? ValidityDays = null, string? Note = null, string? Reference = null);
+
 /// <summary>
 /// Renders an estimate as a priced-BOQ + bid-summary in Excel (ClosedXML) and
 /// PDF (QuestPDF) — the client-facing deliverable.
@@ -763,6 +769,136 @@ public class ExportService
     }
 
     /// <summary>Compact PDF document header (company + project + title).</summary>
+    // ── Bid submission letter ───────────────────────────────────────────────
+    /// <summary>
+    /// A formal tender cover letter on the company letterhead: addressed to the client,
+    /// stating the tender sum (figures + words) and validity, signed off. Editable fields
+    /// (recipient, signatory, validity, optional note) come from <paramref name="o"/>;
+    /// everything else is pulled from the project / estimate / company profile.
+    /// </summary>
+    public byte[] BuildBidLetterPdf(ExportModel m, BidLetterOptions o)
+    {
+        var e = m.Estimate;
+        var recipient   = Clean(o.Recipient) ?? m.Client ?? "Sir/Madam";
+        var validity    = o.ValidityDays is > 0 ? o.ValidityDays.Value : 90;
+        var reference   = Clean(o.Reference) ?? m.ProjectCode;
+        var signatory   = Clean(o.Signatory) ?? "____________________";
+        var amount      = $"{e.Currency} {e.BidPrice:#,##0.00}";
+        var amountWords = MoneyInWords(e.BidPrice, e.Currency);
+
+        var doc = Document.Create(container => container.Page(page =>
+        {
+            page.Margin(50); page.Size(PageSizes.A4); page.DefaultTextStyle(x => x.FontSize(10));
+
+            // Letterhead
+            page.Header().Column(h =>
+            {
+                h.Item().Row(top =>
+                {
+                    top.RelativeItem().Column(left =>
+                    {
+                        left.Item().Text(m.CompanyName).FontSize(16).Bold().FontColor(Colors.Teal.Darken2);
+                        if (!string.IsNullOrWhiteSpace(m.CompanyAddress)) left.Item().Text(m.CompanyAddress).FontSize(8).FontColor(Colors.Grey.Darken1);
+                        if (!string.IsNullOrWhiteSpace(m.CompanyContact)) left.Item().Text(m.CompanyContact).FontSize(8).FontColor(Colors.Grey.Darken1);
+                    });
+                    if (m.LogoBytes is { Length: > 0 })
+                        top.ConstantItem(130).MaxHeight(48).AlignRight().AlignTop().Image(m.LogoBytes).FitArea();
+                });
+                h.Item().PaddingTop(6).LineHorizontal(1).LineColor(Colors.Grey.Lighten1);
+            });
+
+            page.Content().PaddingVertical(14).Column(col =>
+            {
+                col.Spacing(10);
+                col.Item().AlignRight().Text(m.GeneratedOn).FontSize(9).FontColor(Colors.Grey.Darken1);
+
+                col.Item().Column(to =>
+                {
+                    to.Item().Text("To:").FontSize(9).FontColor(Colors.Grey.Darken1);
+                    to.Item().Text(recipient).Bold();
+                    if (!string.IsNullOrWhiteSpace(o.RecipientTitle)) to.Item().Text(o.RecipientTitle!.Trim()).FontSize(9);
+                    if (!string.IsNullOrWhiteSpace(m.Client) && !string.Equals(m.Client, recipient, StringComparison.OrdinalIgnoreCase))
+                        to.Item().Text(m.Client!).FontSize(9);
+                    if (!string.IsNullOrWhiteSpace(m.Location)) to.Item().Text(m.Location!).FontSize(9).FontColor(Colors.Grey.Darken1);
+                });
+
+                col.Item().Text($"Ref: {reference}").FontSize(9).FontColor(Colors.Grey.Darken1);
+                col.Item().Text($"Subject: Bid Submission — {m.ProjectName}").Bold().FontSize(11);
+
+                col.Item().Text($"Dear {recipient},");
+
+                col.Item().Text(
+                    $"We are pleased to submit our bid for the above-referenced project, {m.ProjectName} ({m.ProjectCode})"
+                    + (string.IsNullOrWhiteSpace(m.Location) ? "" : $", located at {m.Location}") + ".")
+                    .LineHeight(1.4f);
+
+                col.Item().Text(t =>
+                {
+                    t.Span("Having reviewed the tender documents, we hereby offer to execute the works described therein for the total tender sum of ");
+                    t.Span(amount).Bold();
+                    t.Span($" ({amountWords}).");
+                });
+
+                if (!string.IsNullOrWhiteSpace(o.Note))
+                    col.Item().Text(o.Note!.Trim()).LineHeight(1.4f);
+
+                col.Item().Text($"This offer shall remain valid for {validity} days from the date of this letter.").LineHeight(1.4f);
+                col.Item().Text("We trust our submission meets your requirements and look forward to your favourable consideration.").LineHeight(1.4f);
+
+                col.Item().PaddingTop(18).Text("Yours faithfully,");
+                col.Item().PaddingTop(24).Text(m.CompanyName).Bold();
+                col.Item().Text(signatory);
+                if (!string.IsNullOrWhiteSpace(o.SignatoryTitle)) col.Item().Text(o.SignatoryTitle!.Trim()).FontSize(9).FontColor(Colors.Grey.Darken1);
+            });
+
+            page.Footer().AlignCenter().Text(x => { x.Span("BidBuilder · "); x.CurrentPageNumber(); x.Span(" / "); x.TotalPages(); });
+        }));
+        return doc.GeneratePdf();
+    }
+
+    private static string? Clean(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+
+    private static readonly string[] Ones =
+        { "Zero","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve",
+          "Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen" };
+    private static readonly string[] TensWords =
+        { "","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety" };
+    private static readonly string[] Scales = { "", " Thousand", " Million", " Billion", " Trillion" };
+
+    private static string ThreeDigitWords(int n)
+    {
+        var s = "";
+        if (n >= 100) { s += Ones[n / 100] + " Hundred"; n %= 100; if (n > 0) s += " "; }
+        if (n >= 20) { s += TensWords[n / 10]; if (n % 10 > 0) s += "-" + Ones[n % 10]; }
+        else if (n > 0) s += Ones[n];
+        return s;
+    }
+
+    private static string IntToWords(long n)
+    {
+        if (n == 0) return "Zero";
+        if (n < 0) return "Minus " + IntToWords(-n);
+        var groups = new List<int>();
+        while (n > 0) { groups.Add((int)(n % 1000)); n /= 1000; }
+        var parts = new List<string>();
+        for (int i = groups.Count - 1; i >= 0; i--)
+            if (groups[i] > 0) parts.Add(ThreeDigitWords(groups[i]) + Scales[i]);
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>"7065941.66 AED" → "Seven Million … Forty-One AED and Sixty-Six Fils only".</summary>
+    private static string MoneyInWords(decimal amount, string currency)
+    {
+        var whole = (long)Math.Floor(amount);
+        var frac = (int)Math.Round((amount - whole) * 100m, MidpointRounding.AwayFromZero);
+        if (frac == 100) { whole++; frac = 0; }
+        var cur = (currency ?? "").Trim().ToUpperInvariant();
+        var sub = cur == "AED" ? "Fils" : "Cents";
+        var s = $"{IntToWords(whole)} {cur}";
+        if (frac > 0) s += $" and {IntToWords(frac)} {sub}";
+        return s + " only";
+    }
+
     private static void PdfHeader(PageDescriptor page, ExportModel m, string title)
     {
         page.Header().Column(col =>

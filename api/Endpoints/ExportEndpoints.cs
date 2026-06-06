@@ -53,6 +53,19 @@ public static class ExportEndpoints
             Export(id, me, access, perm, db, calc, rollup, tc, async m =>
                 Results.File(export.BuildActivitiesPdf(m, level ?? "detail"), "application/pdf", ActivitiesFile(level, "pdf"))));
 
+        // ── Bid submission letter ───────────────────────────────────────────
+        grp.MapGet("/{id:int}/bid-letter.pdf", (int id, string? to, string? toTitle, string? from, string? fromTitle, int? validityDays, string? note, string? reference,
+            ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
+            Export(id, me, access, perm, db, calc, rollup, tc, async m =>
+            {
+                var opts = new BidLetterOptions(
+                    Recipient: to, RecipientTitle: toTitle,
+                    // Default the signatory to the signed-in user's name.
+                    Signatory: string.IsNullOrWhiteSpace(from) ? me.Name() : from,
+                    SignatoryTitle: fromTitle, ValidityDays: validityDays, Note: note, Reference: reference);
+                return Results.File(export.BuildBidLetterPdf(m, opts), "application/pdf", $"{m.ProjectCode}-BidLetter.pdf");
+            }));
+
         // ── Cost by area (level = detail|area|subarea|unit) ─────────────────
         grp.MapGet("/{id:int}/cost-by-area.xlsx", (int id, string? level, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
             Export(id, me, access, perm, db, calc, rollup, tc, async m =>
