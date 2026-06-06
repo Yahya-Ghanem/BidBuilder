@@ -122,6 +122,14 @@ export interface SearchGroup { type: string; label: string; hits: SearchHit[] }
 /** 20.4 — the full search result set. */
 export interface SearchResults { query: string; groups: SearchGroup[] }
 
+/** 20.9 — an outbound webhook subscription (secret never returned after create). */
+export interface WebhookSubscription {
+  id: number; url: string; events: string; isActive: boolean; createdAt: string
+  lastStatus: string | null; lastAttemptAt: string | null; failureCount: number
+}
+/** 20.9 — create response, which includes the signing secret exactly once. */
+export interface WebhookCreated extends WebhookSubscription { secret: string }
+
 export interface ProjectTeam {
   groupId: number
   groupCode: string

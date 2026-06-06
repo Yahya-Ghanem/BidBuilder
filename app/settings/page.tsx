@@ -10,6 +10,7 @@ import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input } from "@/components/ui"
 import { Field } from "@/components/form"
+import { WebhooksCard } from "./webhooks-card"
 
 export default function SettingsPage() {
   return (
@@ -99,6 +100,7 @@ function SettingsForm() {
       <CostTypesCard isAdmin={isAdmin} />
       <ActivitiesCard isAdmin={isAdmin} />
       <ProjectTypesCard isAdmin={isAdmin} />
+      <WebhooksCard isAdmin={isAdmin} />
     </div>
   )
 }

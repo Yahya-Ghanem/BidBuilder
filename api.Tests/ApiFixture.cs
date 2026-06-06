@@ -3,11 +3,14 @@ using System.Net.Http.Json;
 using BidBuilder.Api.Data;
 using BidBuilder.Api.Models;
 using BidBuilder.Api.Tenancy;
+using BidBuilder.Api.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Npgsql;
 using Xunit;
@@ -59,9 +62,22 @@ public sealed class ApiFixture : IAsyncLifetime
 
     public string ConnString => $"{Server};Database={_dbName}";
 
+    /// <summary>20.9 — captures outbound webhook deliveries in-memory so tests can
+    /// assert dispatch + payload without real HTTP. Replaces the real
+    /// <see cref="IWebhookSender"/> for the whole test host (harmless to non-webhook tests).</summary>
+    public static readonly CapturingWebhookSender Webhooks = new();
+
     private sealed class Factory : WebApplicationFactory<Program>
     {
-        protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.UseEnvironment("Production");
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            builder.UseEnvironment("Production");
+            builder.ConfigureTestServices(s =>
+            {
+                s.RemoveAll<IWebhookSender>();
+                s.AddSingleton<IWebhookSender>(Webhooks);
+            });
+        }
     }
 
     public Task InitializeAsync()

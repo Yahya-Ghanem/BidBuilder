@@ -28,6 +28,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<AuditEvent>     AuditEvents    => Set<AuditEvent>();
     // In-app notifications (20.3) — one row per recipient per event.
     public DbSet<Notification>   Notifications  => Set<Notification>();
+    // Outbound webhooks (20.9) — tenant-configured event subscriptions.
+    public DbSet<WebhookSubscription> WebhookSubscriptions => Set<WebhookSubscription>();
 
     // ── Project scoping layer (BidBuilder) ────────────────────────────────────
     public DbSet<Project>     Projects     => Set<Project>();
@@ -345,6 +347,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.Property(n => n.EntityType).HasMaxLength(64);
             b.Property(n => n.EntityKey).HasMaxLength(64);
             b.HasQueryFilter(n => n.TenantId == _tenant.TenantId);
+        });
+
+        // ── WebhookSubscription (20.9 outbound API) ──────────────────────────
+        mb.Entity<WebhookSubscription>(b =>
+        {
+            b.HasIndex(w => w.TenantId);
+            b.Property(w => w.Url).HasMaxLength(2048).IsRequired();
+            b.Property(w => w.Secret).HasMaxLength(128).IsRequired();
+            b.Property(w => w.Events).HasMaxLength(1024).IsRequired();
+            b.Property(w => w.LastStatus).HasMaxLength(120);
+            b.HasQueryFilter(w => w.TenantId == _tenant.TenantId);
         });
 
         // ── Resource library ──────────────────────────────────────────────────
