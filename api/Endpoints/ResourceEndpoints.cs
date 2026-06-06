@@ -4,6 +4,7 @@ using BidBuilder.Api.Auth;
 using BidBuilder.Api.Data;
 using BidBuilder.Api.Models;
 using BidBuilder.Api.Services;
+using BidBuilder.Api.Tenancy;
 
 namespace BidBuilder.Api.Endpoints;
 
@@ -54,7 +55,7 @@ public static class ResourceEndpoints
             return Results.Created($"/api/resources/labor/{e.Id}", new LaborDto(e.Id, e.Code, e.Name, e.Unit, e.RatePerHour, e.IsActive));
         });
 
-        labor.MapPut("/{id:int}", async (int id, LaborInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db, RateCascadeService cascade) =>
+        labor.MapPut("/{id:int}", async (int id, LaborInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db, ICascadeQueue queue, ITenantContext tenant) =>
         {
             var g = await Guard(me, perm, ModuleAction.Edit); if (g is not null) return g;
             var e = await db.LaborResources.FirstOrDefaultAsync(r => r.Id == id); if (e is null) return NotFound();
@@ -62,7 +63,8 @@ public static class ResourceEndpoints
             e.Name = i.Name.Trim(); e.Unit = i.Unit ?? "hr"; e.RatePerHour = i.RatePerHour; e.IsActive = i.IsActive; e.UpdatedAt = DateTime.UtcNow;
             RecordHistoryIfRateChanged(db, ResourceType.Labor, e.Id, oldRate, e.RatePerHour, "rate-change");
             await db.SaveChangesAsync();
-            await cascade.OnResourceChangedAsync(ResourceType.Labor, e.Id);
+            // Fan-out is fire-and-forget (Hangfire job in prod; inline in tests).
+            await queue.EnqueueResourceChangedAsync(tenant.TenantId, ResourceType.Labor, e.Id);
             return Results.Ok(new LaborDto(e.Id, e.Code, e.Name, e.Unit, e.RatePerHour, e.IsActive));
         });
 
@@ -91,7 +93,7 @@ public static class ResourceEndpoints
             return Results.Created($"/api/resources/materials/{e.Id}", new MaterialDto(e.Id, e.Code, e.Name, e.Unit, e.UnitPrice, e.WastagePct, e.Supplier, e.IsActive));
         });
 
-        mat.MapPut("/{id:int}", async (int id, MaterialInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db, RateCascadeService cascade) =>
+        mat.MapPut("/{id:int}", async (int id, MaterialInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db, ICascadeQueue queue, ITenantContext tenant) =>
         {
             var g = await Guard(me, perm, ModuleAction.Edit); if (g is not null) return g;
             var e = await db.MaterialResources.FirstOrDefaultAsync(r => r.Id == id); if (e is null) return NotFound();
@@ -99,7 +101,7 @@ public static class ResourceEndpoints
             e.Name = i.Name.Trim(); e.Unit = i.Unit; e.UnitPrice = i.UnitPrice; e.WastagePct = i.WastagePct; e.Supplier = i.Supplier; e.IsActive = i.IsActive; e.UpdatedAt = DateTime.UtcNow;
             RecordHistoryIfRateChanged(db, ResourceType.Material, e.Id, oldRate, e.UnitPrice, "rate-change");
             await db.SaveChangesAsync();
-            await cascade.OnResourceChangedAsync(ResourceType.Material, e.Id);
+            await queue.EnqueueResourceChangedAsync(tenant.TenantId, ResourceType.Material, e.Id);
             return Results.Ok(new MaterialDto(e.Id, e.Code, e.Name, e.Unit, e.UnitPrice, e.WastagePct, e.Supplier, e.IsActive));
         });
 
@@ -128,7 +130,7 @@ public static class ResourceEndpoints
             return Results.Created($"/api/resources/equipment/{e.Id}", new EquipmentDto(e.Id, e.Code, e.Name, e.Unit, e.RatePerHour, e.IsActive));
         });
 
-        eq.MapPut("/{id:int}", async (int id, EquipmentInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db, RateCascadeService cascade) =>
+        eq.MapPut("/{id:int}", async (int id, EquipmentInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db, ICascadeQueue queue, ITenantContext tenant) =>
         {
             var g = await Guard(me, perm, ModuleAction.Edit); if (g is not null) return g;
             var e = await db.EquipmentResources.FirstOrDefaultAsync(r => r.Id == id); if (e is null) return NotFound();
@@ -136,7 +138,7 @@ public static class ResourceEndpoints
             e.Name = i.Name.Trim(); e.Unit = i.Unit ?? "hr"; e.RatePerHour = i.RatePerHour; e.IsActive = i.IsActive; e.UpdatedAt = DateTime.UtcNow;
             RecordHistoryIfRateChanged(db, ResourceType.Equipment, e.Id, oldRate, e.RatePerHour, "rate-change");
             await db.SaveChangesAsync();
-            await cascade.OnResourceChangedAsync(ResourceType.Equipment, e.Id);
+            await queue.EnqueueResourceChangedAsync(tenant.TenantId, ResourceType.Equipment, e.Id);
             return Results.Ok(new EquipmentDto(e.Id, e.Code, e.Name, e.Unit, e.RatePerHour, e.IsActive));
         });
 
@@ -165,7 +167,7 @@ public static class ResourceEndpoints
             return Results.Created($"/api/resources/subcontractors/{e.Id}", new SubcontractorDto(e.Id, e.Code, e.Name, e.Unit, e.UnitRate, e.IsActive));
         });
 
-        sub.MapPut("/{id:int}", async (int id, SubcontractorInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db, RateCascadeService cascade) =>
+        sub.MapPut("/{id:int}", async (int id, SubcontractorInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db, ICascadeQueue queue, ITenantContext tenant) =>
         {
             var g = await Guard(me, perm, ModuleAction.Edit); if (g is not null) return g;
             var e = await db.Subcontractors.FirstOrDefaultAsync(r => r.Id == id); if (e is null) return NotFound();
@@ -173,7 +175,7 @@ public static class ResourceEndpoints
             e.Name = i.Name.Trim(); e.Unit = i.Unit; e.UnitRate = i.UnitRate; e.IsActive = i.IsActive; e.UpdatedAt = DateTime.UtcNow;
             RecordHistoryIfRateChanged(db, ResourceType.Subcontractor, e.Id, oldRate, e.UnitRate, "rate-change");
             await db.SaveChangesAsync();
-            await cascade.OnResourceChangedAsync(ResourceType.Subcontractor, e.Id);
+            await queue.EnqueueResourceChangedAsync(tenant.TenantId, ResourceType.Subcontractor, e.Id);
             return Results.Ok(new SubcontractorDto(e.Id, e.Code, e.Name, e.Unit, e.UnitRate, e.IsActive));
         });
 
@@ -202,7 +204,7 @@ public static class ResourceEndpoints
             return Results.Ok(rows);
         });
 
-        grp.MapPost("/{type}/{id:int}/history", async (string type, int id, RateHistoryInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db, RateCascadeService cascade) =>
+        grp.MapPost("/{type}/{id:int}/history", async (string type, int id, RateHistoryInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db, ICascadeQueue queue, ITenantContext tenant) =>
         {
             var g = await Guard(me, perm, ModuleAction.Edit); if (g is not null) return g;
             if (!TryParseType(type, out var rt)) return BadResourceType(type);
@@ -214,19 +216,19 @@ public static class ResourceEndpoints
             // alter any estimate with a PricingDate on/after EffectiveFrom; cascade so
             // those estimates re-roll their bid (the live cascade traverses by
             // resource→assembly→estimate identically here).
-            await cascade.OnResourceChangedAsync(rt, id);
+            await queue.EnqueueResourceChangedAsync(tenant.TenantId, rt, id);
             return Results.Created($"/api/resources/{type}/{id}/history/{h.Id}",
                 new RateHistoryDto(h.Id, h.ResourceType.ToString(), h.ResourceId, h.EffectiveFrom, h.Rate, h.Source, h.CreatedAt));
         });
 
-        grp.MapDelete("/{type}/{id:int}/history/{historyId:int}", async (string type, int id, int historyId, ClaimsPrincipal me, PermissionService perm, AppDbContext db, RateCascadeService cascade) =>
+        grp.MapDelete("/{type}/{id:int}/history/{historyId:int}", async (string type, int id, int historyId, ClaimsPrincipal me, PermissionService perm, AppDbContext db, ICascadeQueue queue, ITenantContext tenant) =>
         {
             var g = await Guard(me, perm, ModuleAction.Delete); if (g is not null) return g;
             if (!TryParseType(type, out var rt)) return BadResourceType(type);
             var h = await db.ResourceRateHistory.FirstOrDefaultAsync(x => x.Id == historyId && x.ResourceType == rt && x.ResourceId == id);
             if (h is null) return Results.NotFound(new { error = "History entry not found" });
             db.ResourceRateHistory.Remove(h); await db.SaveChangesAsync();
-            await cascade.OnResourceChangedAsync(rt, id);
+            await queue.EnqueueResourceChangedAsync(tenant.TenantId, rt, id);
             return Results.NoContent();
         });
     }

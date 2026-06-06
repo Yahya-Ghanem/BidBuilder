@@ -9,6 +9,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using Serilog.Formatting.Compact;
+using Hangfire;
+using Hangfire.PostgreSql;
 using BidBuilder.Api.Auth;
 using BidBuilder.Api.Data;
 using BidBuilder.Api.Endpoints;
@@ -78,6 +80,47 @@ builder.Services.AddScoped<BidBuilder.Api.Services.ImportService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.AuditService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.AreaRollupService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.BenchmarkService>();
+
+// ── Background-job queue (Hangfire on Postgres, 18.4) ────────────────────────
+// Resource edits are common; the cascade that recomputes every dependent assembly
+// + estimate is expensive. We push the cascade onto a persisted job queue so the
+// PUT/DELETE response stays fast, and a slow recompute can retry without blocking
+// the user. Two modes:
+//   • Enabled (default): Hangfire on its own Postgres schema ("hangfire") + an
+//     in-process worker. Production + dev.
+//   • Disabled: tests set Hangfire:Enabled=false and the cascade runs inline so
+//     post-mutation assertions can see the cascaded effect deterministically.
+// Either mode binds ICascadeQueue; ResourceEndpoints only ever calls that abstraction.
+var hangfireEnabled = builder.Configuration.GetValue("Hangfire:Enabled", true);
+if (hangfireEnabled)
+{
+    builder.Services.AddHangfire(h => h
+        .SetDataCompatibilityLevel(Hangfire.CompatibilityLevel.Version_180)
+        .UseSimpleAssemblyNameTypeSerializer()
+        .UseRecommendedSerializerSettings()
+        .UsePostgreSqlStorage(c => c.UseNpgsqlConnection(connString),
+            new Hangfire.PostgreSql.PostgreSqlStorageOptions
+            {
+                // Dedicated schema so EF migrations and Hangfire's install/upgrade SQL
+                // never collide. Hangfire creates the schema and its tables on startup.
+                SchemaName = "hangfire",
+                QueuePollInterval = TimeSpan.FromSeconds(2),
+                InvisibilityTimeout = TimeSpan.FromMinutes(5),
+                PrepareSchemaIfNecessary = true,
+            }));
+    builder.Services.AddHangfireServer(opt =>
+    {
+        opt.WorkerCount = Math.Min(Environment.ProcessorCount * 2, 8);
+        opt.Queues = new[] { "default" };
+    });
+    builder.Services.AddScoped<BidBuilder.Api.Services.RateCascadeJob>();
+    builder.Services.AddScoped<BidBuilder.Api.Services.ICascadeQueue, BidBuilder.Api.Services.HangfireCascadeQueue>();
+    builder.Services.AddSingleton<BidBuilder.Api.Auth.HangfireDashboardAuth>();
+}
+else
+{
+    builder.Services.AddScoped<BidBuilder.Api.Services.ICascadeQueue, BidBuilder.Api.Services.InlineCascadeQueue>();
+}
 
 // Liveness vs readiness: the DB probe is tagged "ready" so /readyz reflects the
 // database while /healthz stays a pure liveness signal (process is up). The
@@ -243,6 +286,21 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseTenantResolution();
 app.UseAuthorization();
+
+// ── Hangfire dashboard (operator UI for the job queue) ───────────────────────
+// Mounted at /hangfire when Hangfire is enabled. Auth is HTTP Basic via
+// HangfireDashboardAuth: localhost in Development is allowed for convenience,
+// every other request needs a configured operator credential. The dashboard is
+// the only entry point — there is no other UI exposing job internals.
+if (hangfireEnabled)
+{
+    app.UseHangfireDashboard("/hangfire", new Hangfire.DashboardOptions
+    {
+        Authorization = new[] { app.Services.GetRequiredService<BidBuilder.Api.Auth.HangfireDashboardAuth>() },
+        DashboardTitle = "BidBuilder · Jobs",
+        IsReadOnlyFunc = _ => false,
+    });
+}
 
 // Liveness: the process is up and serving — NO dependency checks, so a DB outage
 // never trips it (the container healthcheck targets this).
