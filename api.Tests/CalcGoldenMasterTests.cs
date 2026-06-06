@@ -60,6 +60,9 @@ public class CalcGoldenMasterTests(ApiFixture fx)
         Assert.Equal(165.00m, buildUp.UnitRate);
         Assert.Equal(330.00m, buildUp.LineTotal);
 
+        // ── Gross margin on price = MarkupCost / BidPrice = 17,398.44 / 73,853.44 ──
+        Assert.Equal(23.56m, bd.MarginOnPricePct);
+
         // ── Markups compound in order: 8% → 12% → 5% → 3% on base 56,455 ──────
         Assert.Equal(
             new[] { 4_516.40m, 7_316.57m, 3_414.40m, 2_151.07m },

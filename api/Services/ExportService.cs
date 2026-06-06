@@ -158,6 +158,14 @@ public class ExportService
             sum.Cell(r, 2).Style.Font.SetItalic().Font.FontColor = XLColor.Gray;
             sumLast = r; r++;
         }
+        if (e.MarginOnPricePct > 0m)
+        {
+            sum.Cell(r, 1).Value = "Gross margin (on price)";
+            sum.Cell(r, 2).Value = e.MarginOnPricePct / 100m;
+            sum.Cell(r, 2).Style.NumberFormat.Format = "0.00%";
+            sum.Range(r, 1, r, 2).Style.Font.SetItalic().Font.FontColor = XLColor.Gray;
+            sumLast = r; r++;
+        }
         Box(sum.Range(sumHead, 1, sumLast, 2));
         sum.Columns().AdjustToContents();
         sum.Column(2).Width = Math.Max(sum.Column(2).Width, 18);
@@ -381,6 +389,8 @@ public class ExportService
                         if (e.Fx is not null)
                             t.Item().Text($"≈ {e.Fx.SecondaryCurrency} {e.Fx.ConvertedBidPrice:#,##0.00}  (1 {e.Currency} = {e.Fx.Rate:#,##0.######} {e.Fx.SecondaryCurrency}{(e.Fx.Frozen ? ", frozen" : "")})")
                                 .FontSize(8).FontColor(Colors.Grey.Darken1);
+                        if (e.MarginOnPricePct > 0m)
+                            t.Item().Text($"Gross margin (on price): {e.MarginOnPricePct:#,##0.##}%").FontSize(8).FontColor(Colors.Grey.Darken1);
                     });
                 });
 

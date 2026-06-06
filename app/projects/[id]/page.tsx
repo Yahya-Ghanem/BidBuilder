@@ -536,6 +536,9 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
         {e.taxAmount > 0 && <Stat label="Total incl. tax" value={money(e.bidPriceInclTax, c)} highlight />}
         {e.alternatesTotal > 0 && <Stat label="Alternates (excl. bid)" value={money(e.alternatesTotal, c)} />}
       </div>
+      {e.markupCost > 0 && (
+        <p className="text-sm text-slate-500">Gross margin (on price): <b className="text-slate-700">{e.marginOnPricePct}%</b> <span className="text-slate-400">(markups are % on cost)</span></p>
+      )}
       {e.fx && (
         <p className="text-sm text-slate-500">
           ≈ <b className="text-slate-700">{money(e.fx.convertedBidPrice, e.fx.secondaryCurrency)}</b>

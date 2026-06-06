@@ -9,6 +9,7 @@ public record EstimateBreakdown(
     int Id, int ProjectId, int Revision, string Title, string Status, string Currency,
     decimal DirectCost, decimal IndirectCost, decimal MarkupCost, decimal BidPrice,
     decimal? TaxRatePct, decimal TaxAmount, decimal BidPriceInclTax, decimal AlternatesTotal,
+    decimal MarginOnPricePct,
     List<SectionBreakdown> Sections, List<PrelimBreakdown> Preliminaries, List<MarkupBreakdown> Markups,
     string RowVersion, FxView? Fx);
 
@@ -317,6 +318,11 @@ public class EstimateCalculator(AppDbContext db)
         e.Id, e.ProjectId, e.Revision, e.Title, e.Status.ToString(), e.Currency,
         e.DirectCost, e.IndirectCost, e.MarkupCost, e.BidPrice,
         e.TaxRatePct, e.TaxAmount, EstimateMath.Round2(e.BidPrice + e.TaxAmount), e.AlternatesTotal,
+        // Gross margin as a % of the (pre-tax) selling price: (BidPrice − cost) / BidPrice.
+        // Since BidPrice − (direct+indirect) == MarkupCost, this is MarkupCost / BidPrice.
+        // Surfacing it next to the markup %s guards against the classic markup-on-cost vs
+        // margin-on-price confusion.
+        e.BidPrice > 0m ? EstimateMath.Round2(e.MarkupCost / e.BidPrice * 100m) : 0m,
         e.Sections.OrderBy(s => s.SortOrder).Select(s => new SectionBreakdown(
             s.Id, s.Code, s.Title, s.SortOrder, s.SectionTotal,
             s.Items.OrderBy(i => i.SortOrder).Select(i => new ItemBreakdown(
