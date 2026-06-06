@@ -8,7 +8,7 @@ import { fetchApi } from "@/lib/api"
 import type { SupplierQuote } from "@/lib/types"
 import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
-import { Card, Button, Input } from "@/components/ui"
+import { Card, Button, Input, TableScroll } from "@/components/ui"
 import { Modal, Field, ModalActions, Select } from "@/components/form"
 import { money } from "@/lib/utils"
 
@@ -61,7 +61,8 @@ function QuotesTable() {
         : error ? <p className="p-4 text-sm text-rose-600">{(error as Error).message}</p>
         : !data?.length ? <p className="p-4 text-sm text-slate-400">No quotes yet.</p>
         : (
-          <table className="w-full text-sm">
+          <TableScroll>
+          <table className="w-full min-w-[52rem] text-sm">
             <thead className="bg-slate-50 text-left text-xs text-slate-500">
               <tr>
                 <th className="px-4 py-2">Supplier</th>
@@ -103,6 +104,7 @@ function QuotesTable() {
               ))}
             </tbody>
           </table>
+          </TableScroll>
         )}
 
       {adding && <AddQuoteModal onClose={() => setAdding(false)} onSaved={() => { setAdding(false); qc.invalidateQueries({ queryKey: ["quotes"] }) }} />}

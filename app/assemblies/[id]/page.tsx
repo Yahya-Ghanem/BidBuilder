@@ -9,7 +9,7 @@ import { fetchApi } from "@/lib/api"
 import type { AssemblyDetail, ResourceRow } from "@/lib/types"
 import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
-import { Card, Button, Input } from "@/components/ui"
+import { Card, Button, Input, TableScroll } from "@/components/ui"
 import { Modal, Field, Select } from "@/components/form"
 import { money } from "@/lib/utils"
 
@@ -85,7 +85,8 @@ function Detail({ id }: { id: number }) {
 
       <Card className="overflow-hidden">
         <div className="border-b border-[var(--border)] px-4 py-2 text-sm font-semibold">Components</div>
-        <table className="w-full text-sm">
+        <TableScroll>
+        <table className="w-full min-w-[40rem] text-sm">
           <thead className="bg-slate-50 text-left text-xs text-slate-500">
             <tr><th className="px-4 py-2">Type</th><th className="px-4 py-2">Resource</th><th className="px-4 py-2 text-right">Factor</th><th className="px-4 py-2 text-right">Rate</th><th className="px-4 py-2 text-right">Cost</th><th className="px-2 py-2"></th></tr>
           </thead>
@@ -105,6 +106,7 @@ function Detail({ id }: { id: number }) {
             {!a.components.length && <tr><td colSpan={6} className="px-4 py-3 text-sm text-slate-400">No components yet — add one below.</td></tr>}
           </tbody>
         </table>
+        </TableScroll>
         {canEdit && <AddComponent assemblyId={id} onUpdated={(d) => { qc.setQueryData(key, d); qc.invalidateQueries({ queryKey: ["assemblies"] }) }} />}
       </Card>
     </div>

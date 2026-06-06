@@ -8,7 +8,7 @@ import { fetchApi } from "@/lib/api"
 import type { ResourceRow, BulkResourceResult } from "@/lib/types"
 import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
-import { Card, Button, Input } from "@/components/ui"
+import { Card, Button, Input, TableScroll } from "@/components/ui"
 import { Modal, Field } from "@/components/form"
 import { money } from "@/lib/utils"
 
@@ -101,7 +101,8 @@ function ResourceTable({ cfg }: { cfg: TabCfg }) {
         : error ? <p className="p-4 text-sm text-rose-600">{(error as Error).message}</p>
         : !rows.length ? <p className="p-4 text-sm text-slate-400">None yet.</p>
         : (
-          <table className="w-full text-sm">
+          <TableScroll>
+          <table className="w-full min-w-[34rem] text-sm">
             <thead className="bg-slate-50 text-left text-xs text-slate-500">
               <tr>
                 {canSelect && <th className="px-3 py-2"><input type="checkbox" aria-label="Select all" checked={allChecked} onChange={toggleAll} /></th>}
@@ -127,6 +128,7 @@ function ResourceTable({ cfg }: { cfg: TabCfg }) {
               ))}
             </tbody>
           </table>
+          </TableScroll>
         )}
       {(adding || editing) && (
         <ResourceEditor cfg={cfg} row={editing} onClose={() => { setAdding(false); setEditing(null) }} />

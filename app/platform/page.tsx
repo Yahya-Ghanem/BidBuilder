@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { ShieldCheck, Plus, LogOut, Building2 } from "lucide-react"
 import { toast } from "sonner"
 import { platformApi, platformSession, type PlatformTenant, type PlatformLoginResponse } from "@/lib/platform"
-import { Button, Input, Card, Badge } from "@/components/ui"
+import { Button, Input, Card, Badge, TableScroll } from "@/components/ui"
 import { Modal, Field, Select } from "@/components/form"
 
 export default function PlatformPage() {
@@ -123,7 +123,8 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
         {error && <p className="text-rose-600">{(error as Error).message}</p>}
         {tenants && tenants.length === 0 && <p className="text-slate-400">No tenants yet.</p>}
         {tenants && tenants.length > 0 && (
-          <table className="w-full text-sm">
+          <TableScroll>
+          <table className="w-full min-w-[44rem] text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
                 <th className="py-2">Name</th>
@@ -162,6 +163,7 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
               ))}
             </tbody>
           </table>
+          </TableScroll>
         )}
       </Card>
 

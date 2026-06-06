@@ -111,7 +111,7 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
             <NotificationsBell />
           </div>
         </header>
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <main className="flex-1 overflow-auto p-4 sm:p-6">{children}</main>
       </div>
     </div>
     </ProjectsTreeProvider>

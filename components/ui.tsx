@@ -43,6 +43,15 @@ export function Card({ className, children }: { className?: string; children: Re
   )
 }
 
+/**
+ * 20.7 — Horizontal-scroll container for data tables on narrow screens. Wrap a
+ * `<table>` (give it a sensible `min-w-…`) so columns keep their width and the
+ * region scrolls sideways on a phone instead of crushing or breaking the layout.
+ */
+export function TableScroll({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn("w-full overflow-x-auto", className)}>{children}</div>
+}
+
 export function Badge({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", className)}>
