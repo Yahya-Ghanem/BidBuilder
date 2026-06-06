@@ -123,6 +123,16 @@ public sealed class ApiFixture : IAsyncLifetime
     /// host-based (custom-domain) tenant resolution (20.11).</summary>
     public HttpClient AnonymousClient() => NewClient();
 
+    /// <summary>An unauthenticated client that does NOT auto-follow redirects, so a
+    /// test can inspect a 302 Location (e.g. the SAML ACS handing back a session, 20.8b).
+    /// Carries no tenant header — SSO endpoints take the tenant from the URL slug.</summary>
+    public HttpClient NoRedirectClient()
+    {
+        var c = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        c.DefaultRequestHeaders.Add("X-Forwarded-For", $"203.0.113.{Guid.NewGuid().GetHashCode() & 0xFF}.{Environment.CurrentManagedThreadId}");
+        return c;
+    }
+
     /// <summary>Create a client with a UNIQUE forwarded client IP so the login
     /// rate-limiter (partitioned on X-Forwarded-For) buckets each test independently —
     /// one test's logins never deplete another's allowance.</summary>

@@ -65,6 +65,8 @@ builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(connString, npg
     npg.CommandTimeout(30);
 }));
 builder.Services.AddScoped<ITenantContext, TenantContext>();
+// In-memory cache backs SAML single-use assertion replay protection (20.8b).
+builder.Services.AddMemoryCache();
 
 // RFC-7807 ProblemDetails for unhandled errors, enriched with a trace id so a 500
 // in the field can be correlated to the exact request in the structured logs.
@@ -410,6 +412,7 @@ app.MapGet("/api/ping", (ITenantContext t) =>
    .RequireAuthorization();
 
 app.MapAuthEndpoints();
+app.MapSsoEndpoints();
 app.MapProjectEndpoints();
 app.MapResourceEndpoints();
 app.MapQuoteEndpoints();

@@ -12,6 +12,7 @@ import { Card, Button, Input } from "@/components/ui"
 import { Field } from "@/components/form"
 import { WebhooksCard } from "./webhooks-card"
 import { CustomDomainCard } from "./custom-domain-card"
+import { SsoCard } from "./sso-card"
 
 export default function SettingsPage() {
   return (
@@ -102,6 +103,7 @@ function SettingsForm() {
       <ActivitiesCard isAdmin={isAdmin} />
       <ProjectTypesCard isAdmin={isAdmin} />
       <CustomDomainCard isAdmin={isAdmin} />
+      <SsoCard isAdmin={isAdmin} />
       <WebhooksCard isAdmin={isAdmin} />
     </div>
   )
