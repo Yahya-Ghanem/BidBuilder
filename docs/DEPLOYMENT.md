@@ -61,3 +61,36 @@ Run it: `docker compose -f docker-compose.prod.yml up -d --build`
 1. `GET /healthz` → 200.
 2. `POST /api/auth/login` with the admin creds → token.
 3. `GET /api/projects` with the token → the seeded project.
+
+## Per-tenant custom domains (20.11)
+
+A workspace can be reached at its own host (e.g. `bids.acme.com`). A tenant admin
+registers it under **Settings → Custom domain** (`PUT /api/settings/custom-domain`);
+the host is stored lowercase and must be globally unique. When a request arrives with
+no auth token and no `X-Tenant-Id` header, the tenant-resolution middleware matches the
+request `Host` against the registered domain — so the vanity host resolves the tenant
+with no header gymnastics.
+
+Two ops steps are required for a registered domain to actually serve:
+
+1. **DNS** — the customer points a `CNAME` (or `A`/`AAAA`) at the BidBuilder ingress.
+2. **TLS** — the reverse proxy must obtain a certificate for the host. With Caddy, enable
+   [on-demand TLS](https://caddyserver.com/docs/automatic-https#on-demand-tls) and gate it
+   with an `ask` endpoint that confirms the host is a known custom domain, so certificates
+   are only issued for hosts that belong to a tenant. Example:
+
+   ```
+   {
+     on_demand_tls {
+       ask http://api:8080/api/public/domain-allowed
+     }
+   }
+
+   https:// {
+     tls { on_demand }
+     # ... existing reverse_proxy rules ...
+   }
+   ```
+
+   (The `ask` endpoint is left as a deployment-time addition; the platform domain in
+   `PUBLIC_DOMAIN` keeps its statically-issued certificate.)

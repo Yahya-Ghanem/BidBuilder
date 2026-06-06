@@ -15,7 +15,12 @@ public record SettingsDto(
     decimal DefaultTaxRatePct, bool HasLogo,
     /// <summary>20.2 — sign-offs required before a Draft can be Published.
     /// Zero = no approval workflow (legacy behavior).</summary>
-    int RequiredApprovalsToPublish);
+    int RequiredApprovalsToPublish,
+    /// <summary>20.11 — the tenant's vanity host, or null if none is registered.</summary>
+    string? CustomDomain);
+
+/// <summary>20.11 — set (non-empty) or clear (null/empty) the tenant's custom domain.</summary>
+public record CustomDomainInput(string? Domain);
 
 public record SettingsInput(
     string? Website, string? ContactEmail, string? Phone, string? Address, string? City, string? Country,
@@ -43,7 +48,7 @@ public static class SettingsEndpoints
         {
             var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tc.TenantId);
             var s = await db.TenantSettings.FirstOrDefaultAsync();
-            return Results.Ok(ToDto(tenant?.Name ?? "BidBuilder", s));
+            return Results.Ok(ToDto(tenant?.Name ?? "BidBuilder", s, tenant?.CustomDomain));
         });
 
         grp.MapPut("/", async (SettingsInput i, ClaimsPrincipal me, AppDbContext db, ITenantContext tc) =>
@@ -84,7 +89,45 @@ public static class SettingsEndpoints
             await db.SaveChangesAsync();
 
             var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tc.TenantId);
-            return Results.Ok(ToDto(tenant?.Name ?? "BidBuilder", s));
+            return Results.Ok(ToDto(tenant?.Name ?? "BidBuilder", s, tenant?.CustomDomain));
+        });
+
+        // ── Custom domain (20.11) ────────────────────────────────────────────
+        // Register (or clear) the vanity host the workspace is reached at. Tenant
+        // admin only. Stored lowercase; must be globally unique (409 otherwise) so two
+        // workspaces can't claim the same host. The middleware resolves a request with
+        // no token/header to this tenant when the request Host matches. DNS + TLS for
+        // the host are an ops concern (see docs/DEPLOYMENT.md).
+        grp.MapPut("/custom-domain", async (CustomDomainInput i, ClaimsPrincipal me, AppDbContext db, ITenantContext tc, AuditService audit) =>
+        {
+            if (!me.IsAdmin())
+                return Results.Json(new { error = "Only a tenant admin can change the custom domain" }, statusCode: 403);
+
+            var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tc.TenantId);
+            if (tenant is null) return Results.NotFound(new { error = "Tenant not found" });
+
+            var raw = i.Domain?.Trim().ToLowerInvariant();
+            string? domain = string.IsNullOrEmpty(raw) ? null : raw;
+
+            if (domain is not null)
+            {
+                // Strip an accidental scheme/path so "https://bids.acme.com/" is accepted.
+                domain = domain.Replace("https://", "").Replace("http://", "").TrimEnd('/');
+                if (!IsValidDomain(domain))
+                    return Bad("Enter a valid hostname, e.g. bids.acme.com.");
+                // Unique across all tenants (the query filter does NOT apply to Tenants).
+                if (await db.Tenants.AnyAsync(t => t.CustomDomain == domain && t.Id != tenant.Id))
+                    return Results.Conflict(new { error = "That domain is already in use by another workspace." });
+            }
+
+            var old = tenant.CustomDomain;
+            tenant.CustomDomain = domain;
+            await db.SaveChangesAsync();
+            await audit.LogAsync(me, "tenant.custom-domain", "Tenant", tenant.Slug,
+                domain is null ? $"cleared (was {old ?? "none"})" : $"set to {domain}");
+
+            var s = await db.TenantSettings.FirstOrDefaultAsync();
+            return Results.Ok(ToDto(tenant.Name, s, tenant.CustomDomain));
         });
 
         // ── Company logo ─────────────────────────────────────────────────────
@@ -215,11 +258,31 @@ public static class SettingsEndpoints
         return false;
     }
 
-    private static SettingsDto ToDto(string companyName, TenantSettings? s) => new(
+    private static SettingsDto ToDto(string companyName, TenantSettings? s, string? customDomain = null) => new(
         companyName, s?.Website, s?.ContactEmail, s?.Phone, s?.Address, s?.City, s?.Country,
         s?.Timezone ?? "UTC", s?.BaseCurrency ?? "AED",
         s?.DefaultOverheadPct ?? 0, s?.DefaultProfitPct ?? 0, s?.DefaultContingencyPct ?? 0,
         s?.DefaultTaxRatePct ?? 0,
         s?.LogoBytes is { Length: > 0 },
-        s?.RequiredApprovalsToPublish ?? 0);
+        s?.RequiredApprovalsToPublish ?? 0,
+        customDomain);
+
+    /// <summary>Validate a hostname for use as a custom domain. Lowercased, 1–253 chars,
+    /// dot-separated DNS labels (letters/digits/hyphens, no leading/trailing hyphen),
+    /// at least two labels (so "localhost" or a bare word is rejected).</summary>
+    public static bool IsValidDomain(string host)
+    {
+        if (host.Length is 0 or > 253) return false;
+        var labels = host.Split('.');
+        if (labels.Length < 2) return false;
+        foreach (var l in labels)
+        {
+            if (l.Length is 0 or > 63) return false;
+            if (l[0] == '-' || l[^1] == '-') return false;
+            foreach (var ch in l)
+                if (!(char.IsAsciiLetterOrDigit(ch) || ch == '-')) return false;
+        }
+        // The last label (TLD) must be alphabetic.
+        return labels[^1].All(char.IsAsciiLetter);
+    }
 }

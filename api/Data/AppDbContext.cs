@@ -79,6 +79,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.Property(t => t.Slug).HasMaxLength(64).IsRequired();
             b.Property(t => t.Name).HasMaxLength(120).IsRequired();
             b.Property(t => t.BrandColor).HasMaxLength(7);
+            b.Property(t => t.CustomDomain).HasMaxLength(253);   // max DNS hostname length
+            // Unique only among rows that set it — many tenants have NULL.
+            b.HasIndex(t => t.CustomDomain).IsUnique().HasFilter("\"CustomDomain\" IS NOT NULL");
             b.Property(t => t.DefaultLocale).HasMaxLength(8).IsRequired();
         });
 

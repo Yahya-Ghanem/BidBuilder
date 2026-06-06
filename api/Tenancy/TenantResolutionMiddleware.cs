@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using BidBuilder.Api.Data;
+using BidBuilder.Api.Models;
 
 namespace BidBuilder.Api.Tenancy;
 
@@ -65,10 +66,27 @@ public class TenantResolutionMiddleware(
             slug = ctx.User.FindFirst("tenant_slug")?.Value;
         }
 
-        // 2. Header-based fallback (server-to-server calls, dev tooling)
+        // 2. Custom-domain resolution (20.11). When the caller carries no tenant claim
+        //    (e.g. the pre-auth /api/auth/login request from a vanity host), match the
+        //    request Host against a tenant's registered CustomDomain. This is what lets
+        //    a workspace be reached at bids.acme.com without passing X-Tenant-Id. The
+        //    platform's own host is never a CustomDomain, so it falls through.
+        Tenant? tenant = null;
+        if (string.IsNullOrWhiteSpace(slug))
+        {
+            var host = ctx.Request.Host.Host?.Trim().ToLowerInvariant();
+            if (!string.IsNullOrEmpty(host))
+            {
+                tenant = await db.Tenants.AsNoTracking()
+                                         .FirstOrDefaultAsync(t => t.CustomDomain == host);
+                if (tenant is not null) slug = tenant.Slug;
+            }
+        }
+
+        // 3. Header-based fallback (server-to-server calls, dev tooling)
         slug ??= ctx.Request.Headers[TenantHeader].FirstOrDefault()?.Trim();
 
-        // 3. Default tenant in dev so the demo "just works"
+        // 4. Default tenant in dev so the demo "just works"
         if (string.IsNullOrWhiteSpace(slug))
         {
             if (!env.IsDevelopment())
@@ -80,8 +98,9 @@ public class TenantResolutionMiddleware(
             slug = "default";
         }
 
-        var tenant = await db.Tenants.AsNoTracking()
-                                     .FirstOrDefaultAsync(t => t.Slug == slug);
+        // Already loaded via the custom-domain match? Otherwise resolve by slug.
+        tenant ??= await db.Tenants.AsNoTracking()
+                                   .FirstOrDefaultAsync(t => t.Slug == slug);
 
         if (tenant is null)
         {

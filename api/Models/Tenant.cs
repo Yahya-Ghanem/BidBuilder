@@ -15,6 +15,12 @@ public class Tenant
     public string   Name          { get; set; } = "";   // display name
     public string?  BrandColor    { get; set; }          // hex (#RRGGBB)
     public string?  LogoUrl       { get; set; }
+
+    /// <summary>20.11 — optional vanity host (e.g. "bids.acme.com"). When a request
+    /// arrives with no auth token and no X-Tenant-Id header, the tenant is resolved
+    /// by matching this against the request Host. Stored lowercase; unique per tenant.</summary>
+    public string?  CustomDomain  { get; set; }
+
     public string   DefaultLocale { get; set; } = "en";  // "en" | "ar"
     public DateTime CreatedAt     { get; set; } = DateTime.UtcNow;
 
