@@ -66,6 +66,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<ResourceRateHistory> ResourceRateHistory => Set<ResourceRateHistory>();
     public DbSet<SupplierQuote>       SupplierQuotes      => Set<SupplierQuote>();
 
+    // ── Subcontractor quote portal (20.6) ─────────────────────────────────────
+    public DbSet<SubcontractorQuote>  SubcontractorQuotes => Set<SubcontractorQuote>();
+
     // ── Cost-component build-up (extensible item pricing) ──────────────────────
     public DbSet<CostComponentType> CostComponentTypes => Set<CostComponentType>();
     public DbSet<ItemCostComponent> ItemCostComponents => Set<ItemCostComponent>();
@@ -433,6 +436,29 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.Property(q => q.Unit).HasMaxLength(16);
             b.Property(q => q.Note).HasMaxLength(400);
             b.Property(q => q.AttachmentUrl).HasMaxLength(500);
+            b.HasQueryFilter(q => q.TenantId == _tenant.TenantId);
+        });
+
+        // ── SubcontractorQuote (20.6 RFQ + external portal submission) ─────────
+        mb.Entity<SubcontractorQuote>(b =>
+        {
+            // Token is the public capability credential — it must be unique ACROSS
+            // tenants (no tenant prefix) so the anonymous portal endpoint can resolve
+            // the owning tenant from the token alone.
+            b.HasIndex(q => q.Token).IsUnique();
+            b.HasIndex(q => new { q.TenantId, q.ProjectId });
+            b.HasOne(q => q.Project).WithMany()
+             .HasForeignKey(q => q.ProjectId).OnDelete(DeleteBehavior.Cascade);
+            b.Property(q => q.Token).HasMaxLength(64).IsRequired();
+            b.Property(q => q.Trade).HasMaxLength(120).IsRequired();
+            b.Property(q => q.Scope).HasMaxLength(4000).IsRequired();
+            b.Property(q => q.Currency).HasMaxLength(3).IsRequired();
+            b.Property(q => q.ContractorName).HasMaxLength(200).IsRequired();
+            b.Property(q => q.ContractorEmail).HasMaxLength(254);
+            b.Property(q => q.Status).HasConversion<string>().HasMaxLength(16);
+            b.Property(q => q.QuotedAmount).HasColumnType("numeric(18,2)");
+            b.Property(q => q.SubmissionNotes).HasMaxLength(2000);
+            b.Property(q => q.RespondentName).HasMaxLength(200);
             b.HasQueryFilter(q => q.TenantId == _tenant.TenantId);
         });
 

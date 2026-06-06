@@ -446,6 +446,41 @@
         },
         "type": "object"
       },
+      "CreateSubQuoteInput": {
+        "additionalProperties": false,
+        "properties": {
+          "contractorEmail": {
+            "nullable": true,
+            "type": "string"
+          },
+          "contractorName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "currency": {
+            "nullable": true,
+            "type": "string"
+          },
+          "projectId": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "scope": {
+            "nullable": true,
+            "type": "string"
+          },
+          "trade": {
+            "nullable": true,
+            "type": "string"
+          },
+          "validDays": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "CreateTenantInput": {
         "additionalProperties": false,
         "properties": {
@@ -755,6 +790,24 @@
         },
         "type": "object"
       },
+      "PortalSubmitInput": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "format": "double",
+            "type": "number"
+          },
+          "notes": {
+            "nullable": true,
+            "type": "string"
+          },
+          "respondentName": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "PrelimInput": {
         "additionalProperties": false,
         "properties": {
@@ -978,6 +1031,15 @@
           "website": {
             "nullable": true,
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SubQuoteDecisionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "accept": {
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -3472,6 +3534,58 @@
         ]
       }
     },
+    "/api/portal/{token}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortalSubmitInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
     "/api/project-types": {
       "get": {
         "responses": {
@@ -4863,6 +4977,104 @@
               }
             }
           }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/subcontractor-quotes": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "projectId",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSubQuoteInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/subcontractor-quotes/{id}": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/subcontractor-quotes/{id}/decision": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubQuoteDecisionInput"
+              }
+            }
+          },
+          "required": true
         },
         "responses": {
           "200": {
