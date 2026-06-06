@@ -80,6 +80,8 @@ export interface TenantSettings {
   hasLogo: boolean
   /** 20.2 — sign-offs required before Draft→Published. 0 = no workflow. */
   requiredApprovalsToPublish: number
+  /** 20.11 — the tenant's vanity host, or null if none is registered. */
+  customDomain: string | null
 }
 
 /** 20.2 — One recorded sign-off on an estimate revision. */

@@ -119,6 +119,10 @@ public sealed class ApiFixture : IAsyncLifetime
         return c;
     }
 
+    /// <summary>An unauthenticated client with NO tenant header — used to exercise
+    /// host-based (custom-domain) tenant resolution (20.11).</summary>
+    public HttpClient AnonymousClient() => NewClient();
+
     /// <summary>Create a client with a UNIQUE forwarded client IP so the login
     /// rate-limiter (partitioned on X-Forwarded-For) buckets each test independently —
     /// one test's logins never deplete another's allowance.</summary>

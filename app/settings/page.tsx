@@ -11,6 +11,7 @@ import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input } from "@/components/ui"
 import { Field } from "@/components/form"
 import { WebhooksCard } from "./webhooks-card"
+import { CustomDomainCard } from "./custom-domain-card"
 
 export default function SettingsPage() {
   return (
@@ -100,6 +101,7 @@ function SettingsForm() {
       <CostTypesCard isAdmin={isAdmin} />
       <ActivitiesCard isAdmin={isAdmin} />
       <ProjectTypesCard isAdmin={isAdmin} />
+      <CustomDomainCard isAdmin={isAdmin} />
       <WebhooksCard isAdmin={isAdmin} />
     </div>
   )

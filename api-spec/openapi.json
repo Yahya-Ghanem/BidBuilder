@@ -516,6 +516,16 @@
         },
         "type": "object"
       },
+      "CustomDomainInput": {
+        "additionalProperties": false,
+        "properties": {
+          "domain": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "EquipmentInput": {
         "additionalProperties": false,
         "properties": {
@@ -4772,6 +4782,28 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CurrencyRateInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/settings/custom-domain": {
+      "put": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomDomainInput"
               }
             }
           },
