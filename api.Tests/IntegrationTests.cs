@@ -1678,9 +1678,12 @@ public class HardeningTests(ApiFixture fx)
             new { email = "admin@bidbuilder.local", password = "Admin@12345" })).Json())
             .GetProperty("token").GetString()!;
 
-        // Flip the final character of the signature segment — the JWT still parses but
-        // its HMAC no longer matches, so validation must fail.
-        var tampered = token[..^1] + (token[^1] == 'A' ? 'B' : 'A');
+        // Flip the FIRST character of the signature segment — that always changes the
+        // decoded HMAC bytes (the last base64url char carries padding bits and can decode
+        // to the same value), so the signature reliably no longer matches → must 401.
+        var parts = token.Split('.');
+        parts[2] = (parts[2][0] == 'A' ? 'B' : 'A') + parts[2][1..];
+        var tampered = string.Join('.', parts);
         var req = new HttpRequestMessage(HttpMethod.Get, "/api/projects");
         req.Headers.Add("X-Tenant-Id", "default");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tampered);
