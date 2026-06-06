@@ -5,6 +5,7 @@ using BidBuilder.Api.Data;
 using BidBuilder.Api.Models;
 using BidBuilder.Api.Services;
 using BidBuilder.Api.Tenancy;
+using BidBuilder.Api.Validation;
 
 namespace BidBuilder.Api.Endpoints;
 
@@ -53,7 +54,7 @@ public static class ResourceEndpoints
             var e = new LaborResource { Code = code, Name = i.Name.Trim(), Unit = i.Unit ?? "hr", RatePerHour = i.RatePerHour, IsActive = i.IsActive };
             db.LaborResources.Add(e); await db.SaveChangesAsync();
             return Results.Created($"/api/resources/labor/{e.Id}", new LaborDto(e.Id, e.Code, e.Name, e.Unit, e.RatePerHour, e.IsActive));
-        });
+        }).AddEndpointFilter<ValidationFilter<LaborInput>>();
 
         labor.MapPut("/{id:int}", async (int id, LaborInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db, ICascadeQueue queue, ITenantContext tenant) =>
         {
@@ -66,7 +67,7 @@ public static class ResourceEndpoints
             // Fan-out is fire-and-forget (Hangfire job in prod; inline in tests).
             await queue.EnqueueResourceChangedAsync(tenant.TenantId, ResourceType.Labor, e.Id);
             return Results.Ok(new LaborDto(e.Id, e.Code, e.Name, e.Unit, e.RatePerHour, e.IsActive));
-        });
+        }).AddEndpointFilter<ValidationFilter<LaborInput>>();
 
         labor.MapDelete("/{id:int}", async (int id, ClaimsPrincipal me, PermissionService perm, AppDbContext db) =>
         {
@@ -91,7 +92,7 @@ public static class ResourceEndpoints
             var e = new MaterialResource { Code = code, Name = i.Name.Trim(), Unit = i.Unit, UnitPrice = i.UnitPrice, WastagePct = i.WastagePct, Supplier = i.Supplier, IsActive = i.IsActive };
             db.MaterialResources.Add(e); await db.SaveChangesAsync();
             return Results.Created($"/api/resources/materials/{e.Id}", new MaterialDto(e.Id, e.Code, e.Name, e.Unit, e.UnitPrice, e.WastagePct, e.Supplier, e.IsActive));
-        });
+        }).AddEndpointFilter<ValidationFilter<MaterialInput>>();
 
         mat.MapPut("/{id:int}", async (int id, MaterialInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db, ICascadeQueue queue, ITenantContext tenant) =>
         {
@@ -103,7 +104,7 @@ public static class ResourceEndpoints
             await db.SaveChangesAsync();
             await queue.EnqueueResourceChangedAsync(tenant.TenantId, ResourceType.Material, e.Id);
             return Results.Ok(new MaterialDto(e.Id, e.Code, e.Name, e.Unit, e.UnitPrice, e.WastagePct, e.Supplier, e.IsActive));
-        });
+        }).AddEndpointFilter<ValidationFilter<MaterialInput>>();
 
         mat.MapDelete("/{id:int}", async (int id, ClaimsPrincipal me, PermissionService perm, AppDbContext db) =>
         {
@@ -128,7 +129,7 @@ public static class ResourceEndpoints
             var e = new EquipmentResource { Code = code, Name = i.Name.Trim(), Unit = i.Unit ?? "hr", RatePerHour = i.RatePerHour, IsActive = i.IsActive };
             db.EquipmentResources.Add(e); await db.SaveChangesAsync();
             return Results.Created($"/api/resources/equipment/{e.Id}", new EquipmentDto(e.Id, e.Code, e.Name, e.Unit, e.RatePerHour, e.IsActive));
-        });
+        }).AddEndpointFilter<ValidationFilter<EquipmentInput>>();
 
         eq.MapPut("/{id:int}", async (int id, EquipmentInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db, ICascadeQueue queue, ITenantContext tenant) =>
         {
@@ -140,7 +141,7 @@ public static class ResourceEndpoints
             await db.SaveChangesAsync();
             await queue.EnqueueResourceChangedAsync(tenant.TenantId, ResourceType.Equipment, e.Id);
             return Results.Ok(new EquipmentDto(e.Id, e.Code, e.Name, e.Unit, e.RatePerHour, e.IsActive));
-        });
+        }).AddEndpointFilter<ValidationFilter<EquipmentInput>>();
 
         eq.MapDelete("/{id:int}", async (int id, ClaimsPrincipal me, PermissionService perm, AppDbContext db) =>
         {
@@ -165,7 +166,7 @@ public static class ResourceEndpoints
             var e = new Subcontractor { Code = code, Name = i.Name.Trim(), Unit = i.Unit, UnitRate = i.UnitRate, IsActive = i.IsActive };
             db.Subcontractors.Add(e); await db.SaveChangesAsync();
             return Results.Created($"/api/resources/subcontractors/{e.Id}", new SubcontractorDto(e.Id, e.Code, e.Name, e.Unit, e.UnitRate, e.IsActive));
-        });
+        }).AddEndpointFilter<ValidationFilter<SubcontractorInput>>();
 
         sub.MapPut("/{id:int}", async (int id, SubcontractorInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db, ICascadeQueue queue, ITenantContext tenant) =>
         {
@@ -177,7 +178,7 @@ public static class ResourceEndpoints
             await db.SaveChangesAsync();
             await queue.EnqueueResourceChangedAsync(tenant.TenantId, ResourceType.Subcontractor, e.Id);
             return Results.Ok(new SubcontractorDto(e.Id, e.Code, e.Name, e.Unit, e.UnitRate, e.IsActive));
-        });
+        }).AddEndpointFilter<ValidationFilter<SubcontractorInput>>();
 
         sub.MapDelete("/{id:int}", async (int id, ClaimsPrincipal me, PermissionService perm, AppDbContext db) =>
         {
@@ -219,7 +220,7 @@ public static class ResourceEndpoints
             await queue.EnqueueResourceChangedAsync(tenant.TenantId, rt, id);
             return Results.Created($"/api/resources/{type}/{id}/history/{h.Id}",
                 new RateHistoryDto(h.Id, h.ResourceType.ToString(), h.ResourceId, h.EffectiveFrom, h.Rate, h.Source, h.CreatedAt));
-        });
+        }).AddEndpointFilter<ValidationFilter<RateHistoryInput>>();
 
         grp.MapDelete("/{type}/{id:int}/history/{historyId:int}", async (string type, int id, int historyId, ClaimsPrincipal me, PermissionService perm, AppDbContext db, ICascadeQueue queue, ITenantContext tenant) =>
         {

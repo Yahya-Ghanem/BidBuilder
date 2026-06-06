@@ -11,6 +11,7 @@ using Serilog;
 using Serilog.Formatting.Compact;
 using Hangfire;
 using Hangfire.PostgreSql;
+using FluentValidation;
 using BidBuilder.Api.Auth;
 using BidBuilder.Api.Data;
 using BidBuilder.Api.Endpoints;
@@ -80,6 +81,13 @@ builder.Services.AddScoped<BidBuilder.Api.Services.ImportService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.AuditService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.AreaRollupService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.BenchmarkService>();
+
+// ── FluentValidation (19.7) ───────────────────────────────────────────────────
+// Auto-register every IValidator<T> in the API assembly so the ValidationFilter
+// can resolve them by request type without per-endpoint wiring. The filter itself
+// is attached per-route below; validators run BEFORE the handler and short-circuit
+// to RFC-7807 ProblemDetails on failure.
+builder.Services.AddValidatorsFromAssemblyContaining<BidBuilder.Api.Validation.ValidationFilter<object>>();
 
 // ── Background-job queue (Hangfire on Postgres, 18.4) ────────────────────────
 // Resource edits are common; the cascade that recomputes every dependent assembly

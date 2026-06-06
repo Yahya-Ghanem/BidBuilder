@@ -41,6 +41,12 @@
          collide. The dashboard is mounted at /hangfire, gated by TenantAdmin. -->
     <PackageReference Include="Hangfire.AspNetCore" Version="1.8.14" />
     <PackageReference Include="Hangfire.PostgreSql" Version="1.20.10" />
+
+    <!-- Centralised write-boundary validation (19.7). FluentValidation runs via
+         a generic endpoint filter; a failed validation short-circuits the handler
+         and returns RFC-7807 ProblemDetails with field-level errors. -->
+    <PackageReference Include="FluentValidation" Version="11.10.0" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.10.0" />
   </ItemGroup>
 
 </Project>

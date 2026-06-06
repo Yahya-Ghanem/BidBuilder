@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using BidBuilder.Api.Auth;
 using BidBuilder.Api.Data;
 using BidBuilder.Api.Models;
+using BidBuilder.Api.Validation;
 
 namespace BidBuilder.Api.Endpoints;
 
@@ -87,7 +88,7 @@ public static class QuoteEndpoints
                 q.Supplier, q.Price, q.Currency, q.Unit,
                 q.QuotedOn, q.ValidUntil, q.ValidUntil != null && q.ValidUntil < today,
                 q.Note, q.AttachmentUrl, q.UpdatedAt));
-        });
+        }).AddEndpointFilter<ValidationFilter<QuoteInput>>();
 
         grp.MapPut("/{id:int}", async (int id, QuoteInput i, ClaimsPrincipal me, PermissionService perm, AppDbContext db) =>
         {
@@ -118,7 +119,7 @@ public static class QuoteEndpoints
                 q.Supplier, q.Price, q.Currency, q.Unit,
                 q.QuotedOn, q.ValidUntil, q.ValidUntil != null && q.ValidUntil < today,
                 q.Note, q.AttachmentUrl, q.UpdatedAt));
-        });
+        }).AddEndpointFilter<ValidationFilter<QuoteInput>>();
 
         grp.MapDelete("/{id:int}", async (int id, ClaimsPrincipal me, PermissionService perm, AppDbContext db) =>
         {
