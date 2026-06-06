@@ -12,7 +12,20 @@ public record EstimateBreakdown(
     decimal MarginOnPricePct, decimal CommercialAdjustment,
     DateOnly? PricingDate,
     List<SectionBreakdown> Sections, List<PrelimBreakdown> Preliminaries, List<MarkupBreakdown> Markups,
+    List<RiskBreakdown> Risks,
+    decimal SuggestedContingencyAmount, decimal SuggestedContingencyPct,
+    CashFlowProjection CashFlow,
     string RowVersion, FxView? Fx);
+
+/// <summary>One row of the risk register, plus its expected value (EV = p/100 × impact).</summary>
+public record RiskBreakdown(int Id, string Title, string Category, decimal ProbabilityPct,
+    decimal ImpactAmount, decimal ExpectedValue, string? Note, int SortOrder);
+
+/// <summary>Cash-flow S-curve over the project duration. Months are 1-indexed; the
+/// sum of <see cref="Monthly"/> equals <see cref="Total"/> exactly (rounding residue
+/// absorbed in the last month).</summary>
+public record CashFlowProjection(int DurationMonths, decimal Total, List<CashFlowMonth> Monthly);
+public record CashFlowMonth(int Month, decimal Spend, decimal Cumulative);
 
 /// <summary>The bid expressed in the estimate's secondary (presentation) currency.
 /// <c>Rate</c> is the native→secondary factor; <c>Frozen</c> = snapshotted at publish.</summary>
@@ -96,6 +109,7 @@ public class EstimateCalculator(AppDbContext db, RateEngine engine)
         .Include(x => x.Sections).ThenInclude(s => s.Items).ThenInclude(i => i.CostComponents)
         .Include(x => x.Preliminaries)
         .Include(x => x.Markups)
+        .Include(x => x.Risks)
         .FirstOrDefaultAsync(x => x.Id == estimateId);
 
     /// <summary>
@@ -355,9 +369,11 @@ public class EstimateCalculator(AppDbContext db, RateEngine engine)
     public async Task<EstimateBreakdown?> GetAsync(int estimateId)
     {
         var e = await db.Estimates
+            .Include(x => x.Project)
             .Include(x => x.Sections).ThenInclude(s => s.Items).ThenInclude(i => i.CostComponents)
             .Include(x => x.Preliminaries)
             .Include(x => x.Markups)
+            .Include(x => x.Risks)
             .FirstOrDefaultAsync(x => x.Id == estimateId);
         if (e is null) return null;
         var typeMap = await db.CostComponentTypes.AsNoTracking().ToDictionaryAsync(t => t.Id, t => t);
@@ -365,25 +381,62 @@ public class EstimateCalculator(AppDbContext db, RateEngine engine)
     }
 
     private static EstimateBreakdown Build(Estimate e, List<Markup> orderedMarkups, string rowVersion, FxView? fx,
-        IReadOnlyDictionary<int, CostComponentType> typeMap) => new(
-        e.Id, e.ProjectId, e.Revision, e.Title, e.Status.ToString(), e.Currency,
-        e.DirectCost, e.IndirectCost, e.MarkupCost, e.BidPrice,
-        e.TaxRatePct, e.TaxAmount, EstimateMath.Round2(e.BidPrice + e.TaxAmount), e.AlternatesTotal,
-        // Gross margin as a % of the (pre-tax) selling price: (BidPrice − cost) / BidPrice,
-        // where cost = direct + indirect. The numerator is the markups PLUS any commercial
-        // adjustment. Surfacing it guards against the markup-on-cost vs margin-on-price error.
-        e.BidPrice > 0m ? EstimateMath.Round2((e.BidPrice - e.DirectCost - e.IndirectCost) / e.BidPrice * 100m) : 0m,
-        e.CommercialAdjustment,
-        e.PricingDate,
-        e.Sections.OrderBy(s => s.SortOrder).Select(s => new SectionBreakdown(
-            s.Id, s.Code, s.Title, s.SortOrder, s.SectionTotal,
-            s.Items.OrderBy(i => i.SortOrder).Select(i => new ItemBreakdown(
-                i.Id, i.ItemCode, i.Description, i.Unit, i.Quantity, i.AssemblyId,
-                i.UnitRate, i.LineTotal, i.SortOrder,
-                BuildItemRate(i.CostComponents, typeMap).Lines, i.AreaId, i.Kind.ToString())).ToList())).ToList(),
-        e.Preliminaries.OrderBy(p => p.SortOrder).Select(p => new PrelimBreakdown(
-            p.Id, p.Description, p.Kind.ToString(), p.Amount, p.ComputedTotal, p.SortOrder)).ToList(),
-        orderedMarkups.Select(m => new MarkupBreakdown(
-            m.Id, m.Type.ToString(), m.Label, m.Percentage, m.ApplyOrder, m.ComputedAmount)).ToList(),
-        rowVersion, fx);
+        IReadOnlyDictionary<int, CostComponentType> typeMap)
+    {
+        // ── Risk register → expected-value sum → suggested contingency (19.2) ──
+        // EV per row = probability/100 × impact; the suggestion is EV / (direct+indirect)
+        // as a percentage so it slots straight into the existing Contingency markup. The
+        // suggestion is INFORMATIONAL — the estimator decides whether to apply it.
+        var risks = e.Risks.OrderBy(r => r.SortOrder).ThenBy(r => r.Id)
+            .Select(r => new RiskBreakdown(r.Id, r.Title, r.Category.ToString(),
+                r.ProbabilityPct, r.ImpactAmount,
+                EstimateMath.ExpectedValue(r.ProbabilityPct, r.ImpactAmount),
+                r.Note, r.SortOrder))
+            .ToList();
+        var suggestedEv = EstimateMath.Round2(risks.Sum(r => r.ExpectedValue));
+        var cost = e.DirectCost + e.IndirectCost;
+        var suggestedPct = cost > 0m
+            ? EstimateMath.Round2(suggestedEv / cost * 100m)
+            : 0m;
+
+        // ── Cash-flow S-curve over the project duration ────────────────────────
+        // Distributes the bid price (the cash that actually flows from the client
+        // over the build) across DurationMonths using a closed-form Hermite S-curve.
+        // Falls back to a single-month spike if duration is unset or 1.
+        var durationMonths = Math.Max(1, e.Project?.DurationMonths ?? 1);
+        var monthlySpend = EstimateMath.SCurveMonthlySpend(e.BidPrice, durationMonths);
+        var cashflowMonths = new List<CashFlowMonth>(durationMonths);
+        decimal running = 0m;
+        for (int m = 0; m < monthlySpend.Length; m++)
+        {
+            running = EstimateMath.Round2(running + monthlySpend[m]);
+            cashflowMonths.Add(new CashFlowMonth(m + 1, monthlySpend[m], running));
+        }
+        var cashflow = new CashFlowProjection(durationMonths, EstimateMath.Round2(e.BidPrice), cashflowMonths);
+
+        return new(
+            e.Id, e.ProjectId, e.Revision, e.Title, e.Status.ToString(), e.Currency,
+            e.DirectCost, e.IndirectCost, e.MarkupCost, e.BidPrice,
+            e.TaxRatePct, e.TaxAmount, EstimateMath.Round2(e.BidPrice + e.TaxAmount), e.AlternatesTotal,
+            // Gross margin as a % of the (pre-tax) selling price: (BidPrice − cost) / BidPrice,
+            // where cost = direct + indirect. The numerator is the markups PLUS any commercial
+            // adjustment. Surfacing it guards against the markup-on-cost vs margin-on-price error.
+            e.BidPrice > 0m ? EstimateMath.Round2((e.BidPrice - e.DirectCost - e.IndirectCost) / e.BidPrice * 100m) : 0m,
+            e.CommercialAdjustment,
+            e.PricingDate,
+            e.Sections.OrderBy(s => s.SortOrder).Select(s => new SectionBreakdown(
+                s.Id, s.Code, s.Title, s.SortOrder, s.SectionTotal,
+                s.Items.OrderBy(i => i.SortOrder).Select(i => new ItemBreakdown(
+                    i.Id, i.ItemCode, i.Description, i.Unit, i.Quantity, i.AssemblyId,
+                    i.UnitRate, i.LineTotal, i.SortOrder,
+                    BuildItemRate(i.CostComponents, typeMap).Lines, i.AreaId, i.Kind.ToString())).ToList())).ToList(),
+            e.Preliminaries.OrderBy(p => p.SortOrder).Select(p => new PrelimBreakdown(
+                p.Id, p.Description, p.Kind.ToString(), p.Amount, p.ComputedTotal, p.SortOrder)).ToList(),
+            orderedMarkups.Select(m => new MarkupBreakdown(
+                m.Id, m.Type.ToString(), m.Label, m.Percentage, m.ApplyOrder, m.ComputedAmount)).ToList(),
+            risks,
+            suggestedEv, suggestedPct,
+            cashflow,
+            rowVersion, fx);
+    }
 }

@@ -67,4 +67,7 @@ public class Estimate : IHasTenant
     public ICollection<BoqSection> Sections     { get; set; } = new List<BoqSection>();
     public ICollection<Preliminary> Preliminaries { get; set; } = new List<Preliminary>();
     public ICollection<Markup>      Markups      { get; set; } = new List<Markup>();
+    /// <summary>Risk register rows (19.2) — sum of EV produces a suggested contingency
+    /// the estimator can apply to the Contingency markup. NOT in the bid by default.</summary>
+    public ICollection<RiskItem>    Risks        { get; set; } = new List<RiskItem>();
 }
