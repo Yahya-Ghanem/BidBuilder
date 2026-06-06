@@ -31,6 +31,12 @@
          validation lives in BidBuilder.Api.Auth.SamlService. -->
     <PackageReference Include="System.Security.Cryptography.Xml" Version="8.0.3" />
 
+    <!-- Security pin: Hangfire.Core 1.8.14 pulls in Newtonsoft.Json 11.0.1 transitively,
+         which is HIGH severity (GHSA-5crp-9r3c-p9vr, JSON DoS via deeply-nested input).
+         Direct top-level reference overrides the transitive — keep at 13.0.3 or newer
+         until Hangfire upgrades its own pin. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+
     <!-- OpenAPI / Swagger UI -->
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.8.1" />
 
