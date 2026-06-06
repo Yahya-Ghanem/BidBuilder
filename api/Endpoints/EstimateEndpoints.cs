@@ -366,13 +366,7 @@ public static class EstimateEndpoints
             if (i.Quantity < 0) return Bad("Quantity cannot be negative");
             if (i.AssemblyId is not null && !await db.Assemblies.AnyAsync(a => a.Id == i.AssemblyId)) return Bad("Assembly not found");
             var compErr = await ValidateComponents(db, i.Components); if (compErr is not null) return compErr;
-            if (i.AreaId is not null)
-            {
-                // Areas are project-scoped — an item may only be tagged with an area of its
-                // OWN project, else the area roll-up silently mis-buckets it as Unassigned.
-                var areaProjectId = await db.Estimates.Where(e => e.Id == id).Select(e => e.ProjectId).FirstAsync();
-                if (!await db.Areas.AnyAsync(a => a.Id == i.AreaId && a.ProjectId == areaProjectId)) return Bad("Area not found");
-            }
+            var areaErr = await ValidateAreaAsync(db, id, i.AreaId); if (areaErr is not null) return areaErr;
             var hasComps = i.Components is { Count: > 0 };
             var item = new BoqItem
             {
@@ -395,13 +389,7 @@ public static class EstimateEndpoints
             if (i.Quantity < 0) return Bad("Quantity cannot be negative");
             if (i.AssemblyId is not null && !await db.Assemblies.AnyAsync(a => a.Id == i.AssemblyId)) return Bad("Assembly not found");
             var compErr = await ValidateComponents(db, i.Components); if (compErr is not null) return compErr;
-            if (i.AreaId is not null)
-            {
-                // Areas are project-scoped — an item may only be tagged with an area of its
-                // OWN project, else the area roll-up silently mis-buckets it as Unassigned.
-                var areaProjectId = await db.Estimates.Where(e => e.Id == id).Select(e => e.ProjectId).FirstAsync();
-                if (!await db.Areas.AnyAsync(a => a.Id == i.AreaId && a.ProjectId == areaProjectId)) return Bad("Area not found");
-            }
+            var areaErr = await ValidateAreaAsync(db, id, i.AreaId); if (areaErr is not null) return areaErr;
             item.ItemCode = i.ItemCode ?? ""; item.Description = i.Description.Trim(); item.Unit = i.Unit ?? "";
             item.Quantity = i.Quantity; item.AssemblyId = i.AssemblyId; item.AreaId = i.AreaId; item.SortOrder = i.SortOrder;
 
@@ -658,6 +646,18 @@ public static class EstimateEndpoints
     private sealed class AllowWhenFinalisedMarker { }
     private static readonly AllowWhenFinalisedMarker AllowFinalised = new();
     private static RouteHandlerBuilder AllowWhenFinalised(this RouteHandlerBuilder b) => b.WithMetadata(AllowFinalised);
+
+    /// <summary>Areas are project-scoped — a BOQ item may only be tagged with an area of
+    /// its own estimate's project, else the area roll-up silently mis-buckets it as
+    /// Unassigned. Returns null when there's no area (nothing to check) or it's valid;
+    /// a 400 otherwise.</summary>
+    private static async Task<IResult?> ValidateAreaAsync(AppDbContext db, int estimateId, int? areaId)
+    {
+        if (areaId is null) return null;
+        var areaProjectId = await db.Estimates.Where(e => e.Id == estimateId).Select(e => e.ProjectId).FirstAsync();
+        if (!await db.Areas.AnyAsync(a => a.Id == areaId && a.ProjectId == areaProjectId)) return Bad("Area not found");
+        return null;
+    }
 
     /// <summary>Validate a BOQ item's cost-component lines: no duplicate types and
     /// every referenced type exists in this tenant's catalog. Returns null when OK.</summary>

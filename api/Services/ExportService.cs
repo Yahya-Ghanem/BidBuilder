@@ -203,27 +203,18 @@ public class ExportService
         var sb = new StringBuilder();
         sb.Append('﻿'); // UTF-8 BOM — Excel opens it as UTF-8 instead of ANSI
 
-        static string Esc(string? v)
-        {
-            v ??= "";
-            if (v.IndexOfAny(new[] { ',', '"', '\n', '\r' }) >= 0
-                || (v.Length > 0 && (v[0] == ' ' || v[^1] == ' ')))
-                return "\"" + v.Replace("\"", "\"\"") + "\"";
-            return v;
-        }
-
         sb.Append("Section Code,Section Title,Item Code,Description,Unit,Qty,Unit Rate,Line Total,Currency\r\n");
         foreach (var s in e.Sections)
             foreach (var i in s.Items)
-                sb.Append(Esc(s.Code)).Append(',')
-                  .Append(Esc(s.Title)).Append(',')
-                  .Append(Esc(i.ItemCode)).Append(',')
-                  .Append(Esc(i.Description)).Append(',')
-                  .Append(Esc(i.Unit)).Append(',')
+                sb.Append(CsvEsc(s.Code)).Append(',')
+                  .Append(CsvEsc(s.Title)).Append(',')
+                  .Append(CsvEsc(i.ItemCode)).Append(',')
+                  .Append(CsvEsc(i.Description)).Append(',')
+                  .Append(CsvEsc(i.Unit)).Append(',')
                   .Append(i.Quantity.ToString("0.####", ci)).Append(',')
                   .Append(i.UnitRate.ToString("0.00", ci)).Append(',')
                   .Append(i.LineTotal.ToString("0.00", ci)).Append(',')
-                  .Append(Esc(e.Currency)).Append("\r\n");
+                  .Append(CsvEsc(e.Currency)).Append("\r\n");
 
         return Encoding.UTF8.GetBytes(sb.ToString());
     }
@@ -784,7 +775,7 @@ public class ExportService
         var reference   = Clean(o.Reference) ?? m.ProjectCode;
         var signatory   = Clean(o.Signatory) ?? "____________________";
         var amount      = $"{e.Currency} {e.BidPrice:#,##0.00}";
-        var amountWords = MoneyInWords(e.BidPrice, e.Currency);
+        var amountWords = MoneyInWords.Money(e.BidPrice, e.Currency);
 
         var doc = Document.Create(container => container.Page(page =>
         {
@@ -857,47 +848,6 @@ public class ExportService
     }
 
     private static string? Clean(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
-
-    private static readonly string[] Ones =
-        { "Zero","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve",
-          "Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen" };
-    private static readonly string[] TensWords =
-        { "","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety" };
-    private static readonly string[] Scales = { "", " Thousand", " Million", " Billion", " Trillion" };
-
-    private static string ThreeDigitWords(int n)
-    {
-        var s = "";
-        if (n >= 100) { s += Ones[n / 100] + " Hundred"; n %= 100; if (n > 0) s += " "; }
-        if (n >= 20) { s += TensWords[n / 10]; if (n % 10 > 0) s += "-" + Ones[n % 10]; }
-        else if (n > 0) s += Ones[n];
-        return s;
-    }
-
-    private static string IntToWords(long n)
-    {
-        if (n == 0) return "Zero";
-        if (n < 0) return "Minus " + IntToWords(-n);
-        var groups = new List<int>();
-        while (n > 0) { groups.Add((int)(n % 1000)); n /= 1000; }
-        var parts = new List<string>();
-        for (int i = groups.Count - 1; i >= 0; i--)
-            if (groups[i] > 0) parts.Add(ThreeDigitWords(groups[i]) + Scales[i]);
-        return string.Join(" ", parts);
-    }
-
-    /// <summary>"7065941.66 AED" → "Seven Million … Forty-One AED and Sixty-Six Fils only".</summary>
-    private static string MoneyInWords(decimal amount, string currency)
-    {
-        var whole = (long)Math.Floor(amount);
-        var frac = (int)Math.Round((amount - whole) * 100m, MidpointRounding.AwayFromZero);
-        if (frac == 100) { whole++; frac = 0; }
-        var cur = (currency ?? "").Trim().ToUpperInvariant();
-        var sub = cur == "AED" ? "Fils" : "Cents";
-        var s = $"{IntToWords(whole)} {cur}";
-        if (frac > 0) s += $" and {IntToWords(frac)} {sub}";
-        return s + " only";
-    }
 
     private static void PdfHeader(PageDescriptor page, ExportModel m, string title)
     {
