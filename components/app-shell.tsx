@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutGrid, FolderKanban, Library, Boxes, LogOut, Settings, ScrollText, Users, BarChart3, Menu, X, Receipt, Trophy, HardHat } from "lucide-react"
+import { LayoutGrid, FolderKanban, Library, Boxes, LogOut, Settings, ScrollText, Users, BarChart3, Menu, X, Receipt, Trophy, HardHat, ShieldCheck } from "lucide-react"
 import { useAuth, useRequireAuth } from "@/lib/auth"
 import { usePermissions } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
@@ -92,6 +92,16 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
             <div className="font-medium text-slate-800">{user?.name}</div>
             <div className="text-xs text-slate-500">{user?.role}</div>
           </div>
+          <Link
+            href="/account"
+            onClick={() => setNavOpen(false)}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition",
+              pathname.startsWith("/account") ? "bg-[var(--brand)]/10 text-[var(--brand)]" : "text-slate-600 hover:bg-slate-100",
+            )}
+          >
+            <ShieldCheck className="h-4 w-4" /> Account &amp; security
+          </Link>
           <button
             onClick={logout}
             className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-600 hover:bg-slate-100"
