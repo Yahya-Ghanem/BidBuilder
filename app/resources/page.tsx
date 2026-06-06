@@ -2,10 +2,10 @@
 
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Plus, Pencil, Trash2 } from "lucide-react"
+import { Plus, Pencil, Trash2, Power, PowerOff } from "lucide-react"
 import { toast } from "sonner"
 import { fetchApi } from "@/lib/api"
-import type { ResourceRow } from "@/lib/types"
+import type { ResourceRow, BulkResourceResult } from "@/lib/types"
 import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input } from "@/components/ui"
@@ -32,6 +32,8 @@ export default function ResourcesPage() {
   )
 }
 
+type BulkAction = "activate" | "deactivate" | "delete"
+
 function ResourceTable({ cfg }: { cfg: TabCfg }) {
   const qc = useQueryClient()
   const { can } = usePermissions()
@@ -40,7 +42,17 @@ function ResourceTable({ cfg }: { cfg: TabCfg }) {
   const canDelete = can("resource-library", "delete")
   const [editing, setEditing] = useState<ResourceRow | null>(null)
   const [adding, setAdding] = useState(false)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
   const { data, isLoading, error } = useQuery({ queryKey: ["res", cfg.path], queryFn: () => fetchApi<ResourceRow[]>(cfg.path) })
+
+  // Selecting rows enables bulk actions; only meaningful when the user can edit
+  // or delete. Keep selection valid as the list changes.
+  const canSelect = canEdit || canDelete
+  const rows = data ?? []
+  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id))
+  const toggle = (id: number) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const toggleAll = () => setSelected((s) => s.size === rows.length ? new Set() : new Set(rows.map((r) => r.id)))
+  const clear = () => setSelected(new Set())
 
   const del = useMutation({
     mutationFn: (id: number) => fetchApi(`${cfg.path}/${id}`, { method: "DELETE" }),
@@ -48,24 +60,59 @@ function ResourceTable({ cfg }: { cfg: TabCfg }) {
     onError: (e) => toast.error((e as Error).message),
   })
 
+  const bulk = useMutation({
+    mutationFn: (action: BulkAction) => fetchApi<BulkResourceResult>(`${cfg.path}/bulk`, {
+      method: "POST", body: JSON.stringify({ ids: [...selected], action }),
+    }),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["res", cfg.path] })
+      const done = r.action === "delete" ? `${r.deleted} deleted` : `${r.updated} ${r.action}d`
+      if (r.skipped.length) toast.warning(`${done} · ${r.skipped.length} skipped (in use by an assembly)`)
+      else toast.success(done)
+      clear()
+    },
+    onError: (e) => toast.error((e as Error).message),
+  })
+
+  const runBulk = (action: BulkAction) => {
+    if (action === "delete" && !confirm(`Delete ${selected.size} selected ${cfg.label.toLowerCase()}? Items used by an assembly are skipped.`)) return
+    bulk.mutate(action)
+  }
+
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-2">
         <span className="text-sm font-semibold">{cfg.label}</span>
         {canAdd && <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5" /> Add</Button>}
       </div>
+
+      {/* Bulk action bar — appears once rows are selected. */}
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] bg-slate-50 px-4 py-2 text-xs">
+          <span className="font-medium text-slate-600">{selected.size} selected</span>
+          {canEdit && <Button variant="outline" className="h-7 text-xs" disabled={bulk.isPending} onClick={() => runBulk("activate")}><Power className="h-3.5 w-3.5" /> Activate</Button>}
+          {canEdit && <Button variant="outline" className="h-7 text-xs" disabled={bulk.isPending} onClick={() => runBulk("deactivate")}><PowerOff className="h-3.5 w-3.5" /> Deactivate</Button>}
+          {canDelete && <Button variant="outline" className="h-7 text-xs text-rose-600 hover:bg-rose-50" disabled={bulk.isPending} onClick={() => runBulk("delete")}><Trash2 className="h-3.5 w-3.5" /> Delete</Button>}
+          <button onClick={clear} className="ml-auto text-slate-400 hover:text-slate-600">Clear</button>
+        </div>
+      )}
+
       {isLoading ? <p className="p-4 text-sm text-slate-400">Loading…</p>
         : error ? <p className="p-4 text-sm text-rose-600">{(error as Error).message}</p>
-        : !data?.length ? <p className="p-4 text-sm text-slate-400">None yet.</p>
+        : !rows.length ? <p className="p-4 text-sm text-slate-400">None yet.</p>
         : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs text-slate-500">
-              <tr><th className="px-4 py-2">Code</th><th className="px-4 py-2">Name</th><th className="px-4 py-2">Unit</th><th className="px-4 py-2 text-right">{cfg.rateLabel}</th><th className="px-2 py-2"></th></tr>
+              <tr>
+                {canSelect && <th className="px-3 py-2"><input type="checkbox" aria-label="Select all" checked={allChecked} onChange={toggleAll} /></th>}
+                <th className="px-4 py-2">Code</th><th className="px-4 py-2">Name</th><th className="px-4 py-2">Unit</th><th className="px-4 py-2 text-right">{cfg.rateLabel}</th><th className="px-2 py-2"></th>
+              </tr>
             </thead>
             <tbody>
-              {data.map((r) => (
-                <tr key={r.id} className="border-t border-[var(--border)]">
-                  <td className="px-4 py-2 font-mono text-xs">{r.code}</td>
+              {rows.map((r) => (
+                <tr key={r.id} className={`border-t border-[var(--border)] ${selected.has(r.id) ? "bg-[var(--brand)]/5" : ""} ${r.isActive ? "" : "text-slate-400"}`}>
+                  {canSelect && <td className="px-3 py-2"><input type="checkbox" aria-label={`Select ${r.code}`} checked={selected.has(r.id)} onChange={() => toggle(r.id)} /></td>}
+                  <td className="px-4 py-2 font-mono text-xs">{r.code}{!r.isActive && <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-500">inactive</span>}</td>
                   <td className="px-4 py-2">{r.name}</td>
                   <td className="px-4 py-2 text-slate-500">{r.unit}</td>
                   <td className="px-4 py-2 text-right">{money((r[cfg.rateField] as number) ?? 0)}</td>

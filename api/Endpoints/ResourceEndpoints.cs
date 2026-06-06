@@ -27,6 +27,15 @@ public record RateHistoryDto(int Id, string ResourceType, int ResourceId, DateOn
 /// <summary>Manual back-date entry: estimator records "this rate was effective from X".</summary>
 public record RateHistoryInput(DateOnly EffectiveFrom, decimal Rate, string? Source);
 
+// ── Bulk operations (20.12) ──────────────────────────────────────────────────
+/// <summary>Apply one action to many resources of a type at once.
+/// <c>Action</c> ∈ {activate, deactivate, delete}.</summary>
+public record BulkResourceRequest(int[] Ids, string Action);
+/// <summary>One resource a bulk action could not apply to, with why.</summary>
+public record BulkSkip(int Id, string Reason);
+/// <summary>Outcome of a bulk action: how many were updated/deleted and which were skipped.</summary>
+public record BulkResourceResult(string Action, int Updated, int Deleted, IReadOnlyList<BulkSkip> Skipped);
+
 /// <summary>
 /// CRUD for the tenant-shared resource library. All routes require the
 /// <c>resource-library</c> module permission for the relevant action.
@@ -231,6 +240,61 @@ public static class ResourceEndpoints
             db.ResourceRateHistory.Remove(h); await db.SaveChangesAsync();
             await queue.EnqueueResourceChangedAsync(tenant.TenantId, rt, id);
             return Results.NoContent();
+        });
+
+        // ── Bulk operations (20.12) ──────────────────────────────────────────
+        // One action across many resources of a type. activate/deactivate flip
+        // IsActive (Edit perm); delete removes them (Delete perm) but SKIPS any
+        // resource referenced by an assembly — those are reported, not orphaned.
+        // IsActive never affects a computed rate, so no cascade is needed; deleted
+        // resources have no dependents by definition, so none is needed there either.
+        grp.MapPost("/{type}/bulk", async (string type, BulkResourceRequest req, ClaimsPrincipal me, PermissionService perm, AppDbContext db) =>
+        {
+            if (!TryParseType(type, out var rt)) return BadResourceType(type);
+            var action = (req.Action ?? "").Trim().ToLowerInvariant();
+            var ids = (req.Ids ?? Array.Empty<int>()).Where(x => x > 0).Distinct().ToArray();
+            if (ids.Length == 0) return Results.Json(new { error = "No resource ids supplied." }, statusCode: 400);
+
+            switch (action)
+            {
+                case "activate":
+                case "deactivate":
+                {
+                    var g = await Guard(me, perm, ModuleAction.Edit); if (g is not null) return g;
+                    var active = action == "activate";
+                    var now = DateTime.UtcNow;
+                    int updated = rt switch
+                    {
+                        ResourceType.Labor         => await db.LaborResources.Where(r => ids.Contains(r.Id)).ExecuteUpdateAsync(s => s.SetProperty(r => r.IsActive, active).SetProperty(r => r.UpdatedAt, now)),
+                        ResourceType.Material      => await db.MaterialResources.Where(r => ids.Contains(r.Id)).ExecuteUpdateAsync(s => s.SetProperty(r => r.IsActive, active).SetProperty(r => r.UpdatedAt, now)),
+                        ResourceType.Equipment     => await db.EquipmentResources.Where(r => ids.Contains(r.Id)).ExecuteUpdateAsync(s => s.SetProperty(r => r.IsActive, active).SetProperty(r => r.UpdatedAt, now)),
+                        ResourceType.Subcontractor => await db.Subcontractors.Where(r => ids.Contains(r.Id)).ExecuteUpdateAsync(s => s.SetProperty(r => r.IsActive, active).SetProperty(r => r.UpdatedAt, now)),
+                        _ => 0,
+                    };
+                    return Results.Ok(new BulkResourceResult(action, updated, 0, Array.Empty<BulkSkip>()));
+                }
+                case "delete":
+                {
+                    var g = await Guard(me, perm, ModuleAction.Delete); if (g is not null) return g;
+                    // Resources referenced by an assembly component cannot be deleted.
+                    var blocked = await db.AssemblyComponents
+                        .Where(c => c.ResourceType == rt && ids.Contains(c.ResourceId))
+                        .Select(c => c.ResourceId).Distinct().ToListAsync();
+                    var deletable = ids.Except(blocked).ToArray();
+                    int deleted = deletable.Length == 0 ? 0 : rt switch
+                    {
+                        ResourceType.Labor         => await db.LaborResources.Where(r => deletable.Contains(r.Id)).ExecuteDeleteAsync(),
+                        ResourceType.Material      => await db.MaterialResources.Where(r => deletable.Contains(r.Id)).ExecuteDeleteAsync(),
+                        ResourceType.Equipment     => await db.EquipmentResources.Where(r => deletable.Contains(r.Id)).ExecuteDeleteAsync(),
+                        ResourceType.Subcontractor => await db.Subcontractors.Where(r => deletable.Contains(r.Id)).ExecuteDeleteAsync(),
+                        _ => 0,
+                    };
+                    var skipped = blocked.Select(id => new BulkSkip(id, "in use by an assembly")).ToList();
+                    return Results.Ok(new BulkResourceResult(action, 0, deleted, skipped));
+                }
+                default:
+                    return Results.Json(new { error = "Unknown action. Use activate|deactivate|delete." }, statusCode: 400);
+            }
         });
     }
 

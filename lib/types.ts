@@ -329,6 +329,10 @@ export interface ResourceRow {
   id: number; code: string; name: string; unit: string; isActive: boolean
   ratePerHour?: number; unitPrice?: number; wastagePct?: number; supplier?: string | null; unitRate?: number
 }
+/** 20.12 — one resource a bulk action could not apply to. */
+export interface BulkSkip { id: number; reason: string }
+/** 20.12 — outcome of a bulk activate/deactivate/delete over the resource library. */
+export interface BulkResourceResult { action: string; updated: number; deleted: number; skipped: BulkSkip[] }
 export interface AssemblyRow {
   id: number; code: string; name: string; unit: string; computedRate: number; isActive: boolean; componentCount: number
 }
