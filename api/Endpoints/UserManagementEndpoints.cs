@@ -120,6 +120,10 @@ public static class UserManagementEndpoints
             if (id == me.Id() && !i.IsActive)
                 return Conflict("You cannot deactivate your own account.");
 
+            // A role change or a deactivation must invalidate the user's outstanding
+            // tokens immediately (privilege change / access revocation), so bump the
+            // token-version stamp when either flips.
+            if (user.Role != role || user.IsActive != i.IsActive) user.TokenVersion++;
             user.Name = name; user.Email = email; user.Role = role; user.IsActive = i.IsActive;
 
             // Replace team memberships wholesale.
@@ -143,6 +147,8 @@ public static class UserManagementEndpoints
             if ((i.Password ?? "").Length < MinPasswordLength) return Bad($"Password must be at least {MinPasswordLength} characters.");
 
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(i.Password);
+            // A password reset must log out everyone holding an old token for this account.
+            user.TokenVersion++;
             await db.SaveChangesAsync();
             await audit.LogAsync(me, "user.password-reset", "User", id.ToString(), user.Email);
             return Results.NoContent();

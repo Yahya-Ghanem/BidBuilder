@@ -14,8 +14,9 @@ namespace BidBuilder.Api.Auth;
 /// </summary>
 public class JwtService(IConfiguration cfg)
 {
-    public const string TenantSlugClaim = "tenant_slug";
-    public const string TenantIdClaim   = "tenant_id";
+    public const string TenantSlugClaim   = "tenant_slug";
+    public const string TenantIdClaim     = "tenant_id";
+    public const string TokenVersionClaim = "tv";
 
     /// <summary>
     /// Issue a platform-level token for a SuperAdmin. These users have no tenant, so
@@ -44,6 +45,8 @@ public class JwtService(IConfiguration cfg)
             new("role", user.Role.ToString()),
             new(TenantSlugClaim, tenantSlug),
             new(TenantIdClaim, user.TenantId?.ToString() ?? ""),
+            // Token-version stamp for stateless revocation (see User.TokenVersion).
+            new(TokenVersionClaim, user.TokenVersion.ToString()),
         };
 
         var token = new JwtSecurityToken(

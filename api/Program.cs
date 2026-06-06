@@ -1,7 +1,9 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -94,6 +96,10 @@ if (!isDev && (jwtKey.Length < 32
                || jwtKey.StartsWith("dev-only", StringComparison.OrdinalIgnoreCase)))
     throw new InvalidOperationException(
         "Jwt:SigningKey must be a strong, non-default secret of at least 32 characters in non-Development environments.");
+// Write the resolved key back so JwtService (which reads Jwt:SigningKey from config)
+// sees the same value — this is what lets us keep NO signing key in the committed
+// appsettings.json: prod supplies it via env, dev falls back to the constant above.
+builder.Configuration["Jwt:SigningKey"] = jwtKey;
 var jwtIssuer   = builder.Configuration["Jwt:Issuer"]   ?? "bidbuilder";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "bidbuilder";
 
@@ -110,8 +116,36 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
             ValidateLifetime         = true,
+            // Tighten the default 5-minute leeway so an expired token isn't honoured
+            // for several extra minutes.
+            ClockSkew                = TimeSpan.FromSeconds(30),
             RoleClaimType            = "role",
             NameClaimType            = "name",
+        };
+        // Stateless-JWT revocation: after the signature/lifetime check passes, re-validate
+        // the token against the live user — reject it if the account was deactivated or its
+        // token-version was bumped (role change / password reset) since the token was issued.
+        // Looks the user up by primary key across tenants (IgnoreQueryFilters) because the
+        // tenant context isn't resolved yet at authentication time.
+        o.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async ctx =>
+            {
+                var sub = ctx.Principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+                if (!int.TryParse(sub, out var uid)) { ctx.Fail("Invalid token subject."); return; }
+
+                var db = ctx.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+                var user = await db.Users.IgnoreQueryFilters()
+                    .Where(u => u.Id == uid)
+                    .Select(u => new { u.IsActive, u.TokenVersion })
+                    .FirstOrDefaultAsync();
+
+                if (user is null || !user.IsActive) { ctx.Fail("Account is inactive."); return; }
+
+                var tv = ctx.Principal?.FindFirst(JwtService.TokenVersionClaim)?.Value;
+                if (!int.TryParse(tv, out var tokenVer) || tokenVer != user.TokenVersion)
+                    ctx.Fail("Token has been superseded.");
+            },
         };
     });
 builder.Services.AddAuthorization();
@@ -156,6 +190,30 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     p.WithOrigins(allowedOrigins)
      .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 
+// ── Rate limiting on the login endpoints ────────────────────────────────────────
+// Throttle credential-guessing against /api/auth/login and /api/auth/platform-login
+// (the latter is an especially high-value, unauthenticated SuperAdmin target). Fixed
+// window per client, keyed on the forwarded client IP (behind Caddy, X-Forwarded-For
+// carries the real address) so one abusive source can't lock everyone out. Limits are
+// configurable; the defaults allow normal human retries but stop a brute-force burst.
+var loginPermit = builder.Configuration.GetValue<int?>("RateLimiting:Login:PermitLimit") ?? 10;
+var loginWindow = builder.Configuration.GetValue<int?>("RateLimiting:Login:WindowSeconds") ?? 60;
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("login", ctx =>
+    {
+        var ip = ctx.Request.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',')[0].Trim();
+        if (string.IsNullOrEmpty(ip)) ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = loginPermit,
+            Window      = TimeSpan.FromSeconds(loginWindow),
+            QueueLimit  = 0,
+        });
+    });
+});
+
 var app = builder.Build();
 
 // ── Apply migrations + seed demo data on startup ──────────────────────────────
@@ -178,6 +236,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
+app.UseRateLimiter();
 
 // Authentication populates ctx.User so the tenant middleware can read the
 // tenant_slug claim; tenant resolution then runs before any endpoint/DbContext.
