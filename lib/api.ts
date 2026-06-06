@@ -6,7 +6,7 @@
 
 import type { AuthUser } from "@/lib/types"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8081"
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8081"
 
 const TOKEN_KEY = "bb_token"
 const TENANT_KEY = "bb_tenant"

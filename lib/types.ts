@@ -13,6 +13,22 @@ export interface LoginResponse {
   user: AuthUser
 }
 
+/** 20.8 — per-user TOTP two-factor state + enrolment payloads. */
+export interface TwoFactorStatus {
+  enabled: boolean
+  pending: boolean
+  recoveryCodesRemaining: number
+}
+export interface TotpSetupResponse {
+  /** base32 shared secret (also embedded in otpauthUri). */
+  secret: string
+  /** otpauth:// URI an authenticator app scans. */
+  otpauthUri: string
+}
+export interface RecoveryCodesResponse {
+  recoveryCodes: string[]
+}
+
 export interface Project {
   id: number
   code: string
