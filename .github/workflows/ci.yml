@@ -50,7 +50,9 @@ jobs:
           if-no-files-found: warn
 
   frontend:
-    name: Frontend (type-check, lint, unit tests)
+    # Keep this job name exactly "Frontend (type-check)" — it's the required status
+    # check in branch protection. It now also lints and runs unit tests.
+    name: Frontend (type-check)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
