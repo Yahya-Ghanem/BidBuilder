@@ -124,6 +124,25 @@ export interface SearchGroup { type: string; label: string; hits: SearchHit[] }
 /** 20.4 — the full search result set. */
 export interface SearchResults { query: string; groups: SearchGroup[] }
 
+/** 20.6 — a subcontractor RFQ + its returned quote, as the estimator sees it
+ * (includes the portal token/link, which the estimator re-shares). */
+export interface SubcontractorQuote {
+  id: number; projectId: number; projectCode: string; projectName: string
+  trade: string; scope: string; currency: string
+  contractorName: string; contractorEmail: string | null
+  expiresAt: string; expired: boolean; status: string
+  quotedAmount: number | null; submissionNotes: string | null; respondentName: string | null
+  submittedAt: string | null; decidedAt: string | null
+  token: string; portalPath: string; createdAt: string
+}
+/** 20.6 — the safe view an anonymous subcontractor sees at /portal/[token]. */
+export interface SubcontractorPortalView {
+  companyName: string; trade: string; scope: string; currency: string
+  contractorName: string; expiresAt: string; expired: boolean; status: string
+  quotedAmount: number | null; submissionNotes: string | null; respondentName: string | null
+  submittedAt: string | null
+}
+
 /** 20.9 — an outbound webhook subscription (secret never returned after create). */
 export interface WebhookSubscription {
   id: number; url: string; events: string; isActive: boolean; createdAt: string

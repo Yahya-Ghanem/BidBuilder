@@ -421,6 +421,7 @@ app.MapAuditEndpoints();
 app.MapNotificationEndpoints();
 app.MapSearchEndpoints();
 app.MapWebhookEndpoints();
+app.MapSubcontractorQuoteEndpoints();
 app.MapCostComponentEndpoints();
 app.MapAreaEndpoints();
 app.MapActivityEndpoints();

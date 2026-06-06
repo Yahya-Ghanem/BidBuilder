@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutGrid, FolderKanban, Library, Boxes, LogOut, Settings, ScrollText, Users, BarChart3, Menu, X, Receipt, Trophy } from "lucide-react"
+import { LayoutGrid, FolderKanban, Library, Boxes, LogOut, Settings, ScrollText, Users, BarChart3, Menu, X, Receipt, Trophy, HardHat } from "lucide-react"
 import { useAuth, useRequireAuth } from "@/lib/auth"
 import { usePermissions } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
@@ -15,6 +15,7 @@ const NAV = [
   { href: "/projects", label: "BidBuilder", icon: FolderKanban, module: "projects" },
   { href: "/resources", label: "Resource Library", icon: Library, module: "resource-library" },
   { href: "/quotes", label: "Quotes Register", icon: Receipt, module: "resource-library" },
+  { href: "/subcontractor-quotes", label: "Subcontractor Quotes", icon: HardHat, module: "projects" },
   { href: "/assemblies", label: "Assemblies", icon: Boxes, module: "assemblies" },
   { href: "/benchmarks", label: "Benchmarks", icon: BarChart3, module: "reports" },
   { href: "/analytics", label: "Bid Analytics", icon: Trophy, module: "reports" },

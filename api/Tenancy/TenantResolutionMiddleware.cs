@@ -38,6 +38,16 @@ public class TenantResolutionMiddleware(
             return;
         }
 
+        // Public subcontractor quote portal (20.6) is anonymous and carries no tenant
+        // claim/header — the request is authenticated only by the unguessable token in
+        // the URL. The handler resolves the owning tenant from that token (a globally
+        // unique value), so let it through with the tenant deliberately unresolved.
+        if (path.StartsWith("/api/portal", StringComparison.OrdinalIgnoreCase))
+        {
+            await next(ctx);
+            return;
+        }
+
         // SuperAdmins operate at the platform level with NO tenant scope. Their token
         // carries role=SuperAdmin and an empty tenant. Let them reach the /api/platform
         // endpoints with the tenant context deliberately unresolved (those endpoints

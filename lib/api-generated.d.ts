@@ -2729,6 +2729,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/portal/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PortalSubmitInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/project-types": {
         parameters: {
             query?: never;
@@ -4435,6 +4493,136 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/subcontractor-quotes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    projectId?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateSubQuoteInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/subcontractor-quotes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/subcontractor-quotes/{id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SubQuoteDecisionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webhooks": {
         parameters: {
             query?: never;
@@ -4763,6 +4951,17 @@ export interface components {
             /** Format: date-time */
             tenderDueAt?: string | null;
         };
+        CreateSubQuoteInput: {
+            contractorEmail?: string | null;
+            contractorName?: string | null;
+            currency?: string | null;
+            /** Format: int32 */
+            projectId?: number;
+            scope?: string | null;
+            trade?: string | null;
+            /** Format: int32 */
+            validDays?: number | null;
+        };
         CreateTenantInput: {
             adminEmail?: string | null;
             adminName?: string | null;
@@ -4862,6 +5061,12 @@ export interface components {
             /** Format: double */
             wastagePct?: number;
         };
+        PortalSubmitInput: {
+            /** Format: double */
+            amount?: number;
+            notes?: string | null;
+            respondentName?: string | null;
+        };
         PrelimInput: {
             /** Format: double */
             amount?: number;
@@ -4940,6 +5145,9 @@ export interface components {
             requiredApprovalsToPublish?: number | null;
             timezone?: string | null;
             website?: string | null;
+        };
+        SubQuoteDecisionInput: {
+            accept?: boolean;
         };
         SubcontractorInput: {
             code?: string | null;
