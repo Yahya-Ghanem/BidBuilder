@@ -18,7 +18,7 @@ type BidRegisterRow     = Schema<"BidRegisterRow">
  * generated types make every property optional, so a no-data render needs a fallback. */
 const EMPTY_BUCKET: BidAnalyticsBucket = { dimension: "overall", key: "All", total: 0, won: 0, lost: 0, hitRatePct: 0, avgBidVsAwardPct: null, awardedValueSum: 0, mixedCurrency: false }
 import { AppShell } from "@/components/app-shell"
-import { Card, Input } from "@/components/ui"
+import { Card, Input, TableScroll } from "@/components/ui"
 import { Modal, Field, ModalActions } from "@/components/form"
 import { usePermissions } from "@/lib/permissions"
 import { money } from "@/lib/utils"
@@ -107,7 +107,8 @@ function BucketTable({ title, rows }: { title: string; rows: BidAnalyticsBucket[
       {!rows.length ? (
         <p className="p-4 text-sm text-slate-400">No decided projects in this window.</p>
       ) : (
-        <table className="w-full text-sm">
+        <TableScroll>
+        <table className="w-full min-w-[44rem] text-sm">
           <thead className="bg-slate-50 text-left text-xs text-slate-500">
             <tr>
               <th className="px-4 py-2">Bucket</th>
@@ -141,6 +142,7 @@ function BucketTable({ title, rows }: { title: string; rows: BidAnalyticsBucket[
             ))}
           </tbody>
         </table>
+        </TableScroll>
       )}
     </Card>
   )
@@ -163,7 +165,7 @@ function Register({ rows, onChanged }: { rows: BidRegisterRow[]; onChanged: () =
         <p className="p-4 text-sm text-slate-400">No projects accessible.</p>
       ) : (
         <div className="overflow-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[64rem] text-sm">
             <thead className="bg-slate-50 text-left text-xs text-slate-500">
               <tr>
                 <th className="px-4 py-2">Project</th>

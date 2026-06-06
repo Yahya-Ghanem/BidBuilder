@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth"
 import { usePermissions } from "@/lib/permissions"
 import type { AdminUser, AdminGroup, ModuleRef, GroupPerm } from "@/lib/types"
 import { AppShell } from "@/components/app-shell"
-import { Card, Button, Input, Badge } from "@/components/ui"
+import { Card, Button, Input, Badge, TableScroll } from "@/components/ui"
 import { Modal, Field, Select } from "@/components/form"
 
 /** Standard right-aligned Cancel/submit row inside a Modal. The submit button is
@@ -71,7 +71,8 @@ function UsersCard() {
         <Button variant="outline" className="h-9" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New user</Button>
       </div>
 
-      <table className="w-full text-sm">
+      <TableScroll>
+      <table className="w-full min-w-[40rem] text-sm">
         <thead className="text-left text-xs text-slate-500">
           <tr><th className="py-1">Name</th><th className="py-1">Email</th><th className="py-1">Role</th><th className="py-1">Teams</th><th className="py-1">Status</th><th /></tr>
         </thead>
@@ -98,6 +99,7 @@ function UsersCard() {
           ))}
         </tbody>
       </table>
+      </TableScroll>
 
       {(creating || editing) && (
         <UserModal user={editing} groups={groups ?? []} onClose={() => { setCreating(false); setEditing(null) }} />
@@ -234,7 +236,8 @@ function GroupsCard() {
         <Button variant="outline" className="h-9" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New team</Button>
       </div>
 
-      <table className="w-full text-sm">
+      <TableScroll>
+      <table className="w-full min-w-[36rem] text-sm">
         <thead className="text-left text-xs text-slate-500">
           <tr><th className="py-1">Name</th><th className="py-1">Code</th><th className="py-1">Members</th><th className="py-1">Modules</th><th /></tr>
         </thead>
@@ -260,6 +263,7 @@ function GroupsCard() {
           ))}
         </tbody>
       </table>
+      </TableScroll>
 
       {(creating || editing) && <GroupModal group={editing} onClose={() => { setCreating(false); setEditing(null) }} />}
       {perms && modules && <PermissionsModal group={perms} modules={modules} onClose={() => setPerms(null)} />}

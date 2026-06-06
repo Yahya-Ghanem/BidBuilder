@@ -7,7 +7,7 @@ import { money } from "@/lib/utils"
 import type { BenchmarkResult, BenchmarkUnitGroup } from "@/lib/types"
 import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
-import { Card, Badge, statusColor } from "@/components/ui"
+import { Card, Badge, statusColor, TableScroll } from "@/components/ui"
 
 export default function BenchmarksPage() {
   return (
@@ -48,7 +48,8 @@ function ProjectsCard({ data }: { data: BenchmarkResult }) {
   return (
     <Card className="space-y-3 p-5">
       <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600"><FolderKanban className="h-4 w-4" /> Projects</h3>
-      <table className="w-full text-sm">
+      <TableScroll>
+      <table className="w-full min-w-[36rem] text-sm">
         <thead className="text-left text-xs text-slate-500">
           <tr><th className="py-1">Code</th><th className="py-1">Project</th><th className="py-1">Estimate</th><th className="py-1 text-right">Bid</th></tr>
         </thead>
@@ -67,6 +68,7 @@ function ProjectsCard({ data }: { data: BenchmarkResult }) {
           ))}
         </tbody>
       </table>
+      </TableScroll>
     </Card>
   )
 }
@@ -105,7 +107,8 @@ function UnitGroupCard({ g }: { g: BenchmarkUnitGroup }) {
       {!hasAgg && excluded === g.count && (
         <p className="text-xs text-amber-600">No aggregate — none of these currencies have a rate to {base}.</p>
       )}
-      <table className="w-full text-sm">
+      <TableScroll>
+      <table className="w-full min-w-[40rem] text-sm">
         <thead className="text-left text-xs text-slate-500">
           <tr>
             <th className="py-1">Project</th><th className="py-1">Area</th>
@@ -133,6 +136,7 @@ function UnitGroupCard({ g }: { g: BenchmarkUnitGroup }) {
           ))}
         </tbody>
       </table>
+      </TableScroll>
     </Card>
   )
 }

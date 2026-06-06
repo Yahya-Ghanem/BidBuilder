@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react"
 import { fetchApi } from "@/lib/api"
 import type { AuditPage } from "@/lib/types"
 import { AppShell } from "@/components/app-shell"
-import { Card, Badge, Button, Input } from "@/components/ui"
+import { Card, Badge, Button, Input, TableScroll } from "@/components/ui"
 import { Field, Select } from "@/components/form"
 
 const PAGE_SIZE = 50
@@ -87,7 +87,8 @@ function AuditView() {
         : items.length === 0 ? <p className="text-slate-500">{hasFilters ? "No events match these filters." : "No audit events recorded yet."}</p>
         : (
           <Card className="overflow-hidden">
-            <table className="w-full text-sm">
+            <TableScroll>
+            <table className="w-full min-w-[44rem] text-sm">
               <thead className="bg-slate-50 text-left text-xs text-slate-500">
                 <tr>
                   <th className="px-4 py-2">When (UTC)</th>
@@ -112,6 +113,7 @@ function AuditView() {
                 ))}
               </tbody>
             </table>
+            </TableScroll>
           </Card>
         )}
 

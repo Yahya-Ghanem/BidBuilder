@@ -9,7 +9,7 @@ import { fetchApi } from "@/lib/api"
 import type { AssemblyRow } from "@/lib/types"
 import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
-import { Card, Button, Input, Badge } from "@/components/ui"
+import { Card, Button, Input, Badge, TableScroll } from "@/components/ui"
 import { Modal, Field } from "@/components/form"
 import { money, cn } from "@/lib/utils"
 
@@ -52,7 +52,8 @@ export default function AssembliesPage() {
           : error ? <p className="p-4 text-sm text-rose-600">{(error as Error).message}</p>
           : !data?.length ? <p className="p-4 text-sm text-slate-400">{filter === "inactive" ? "No inactive assemblies." : filter === "active" ? "No active assemblies." : "No assemblies yet."}</p>
           : (
-            <table className="w-full text-sm">
+            <TableScroll>
+            <table className="w-full min-w-[34rem] text-sm">
               <thead className="bg-slate-50 text-left text-xs text-slate-500">
                 <tr><th className="px-4 py-2">Code</th><th className="px-4 py-2">Name</th><th className="px-4 py-2">Unit</th><th className="px-4 py-2 text-right">Components</th><th className="px-4 py-2 text-right">Unit rate</th></tr>
               </thead>
@@ -71,6 +72,7 @@ export default function AssembliesPage() {
                 ))}
               </tbody>
             </table>
+            </TableScroll>
           )}
       </Card>
       <NewAssemblyModal open={open} onClose={() => setOpen(false)} />

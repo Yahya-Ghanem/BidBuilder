@@ -275,7 +275,8 @@ function BoqView({ estimateId }: { estimateId: number }) {
             <span className="text-sm text-slate-500">{s.items.length} item(s) · {money(s.sectionTotal, c)}</span>
           </div>
           {s.items.length ? (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[32rem] text-sm">
               <thead className="text-xs text-slate-400">
                 <tr className="border-b border-[var(--border)]">
                   <th className="px-4 py-1.5 text-left font-medium">Item</th>
@@ -297,6 +298,7 @@ function BoqView({ estimateId }: { estimateId: number }) {
                 ))}
               </tbody>
             </table>
+            </div>
           ) : <p className="px-4 py-2 text-sm text-slate-400">No items.</p>}
         </Card>
       ))}
