@@ -583,6 +583,26 @@ public class ExportTests(ApiFixture fx)
             await c.DeleteAsync("/api/settings/logo");   // restore the no-logo baseline for other tests
         }
     }
+
+    // The bid submission letter generates a PDF, with and without the editable overrides.
+    [Fact]
+    public async Task Bid_letter_pdf_generates()
+    {
+        var c = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(c);
+        var eid = await Api.FirstEstimateIdAsync(c, pid);
+
+        foreach (var qs in new[] { "", "?to=Tender%20Board&toTitle=Chair&from=A.%20Estimator&fromTitle=Manager&validityDays=60&note=We%20remain%20at%20your%20disposal." })
+        {
+            var r = await c.GetAsync($"/api/estimates/{eid}/bid-letter.pdf{qs}");
+            Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+            Assert.Equal("application/pdf", r.Content.Headers.ContentType?.MediaType);
+            var bytes = await r.Content.ReadAsByteArrayAsync();
+            Assert.True(bytes.Length > 1000);
+            // PDF magic number "%PDF"
+            Assert.Equal(new byte[] { 0x25, 0x50, 0x44, 0x46 }, bytes[..4]);
+        }
+    }
 }
 
 [Collection("api")]
