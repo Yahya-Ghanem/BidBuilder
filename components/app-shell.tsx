@@ -7,6 +7,7 @@ import { useAuth, useRequireAuth } from "@/lib/auth"
 import { usePermissions } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { ProjectsTreeProvider, ProjectsSidebarTree } from "@/components/projects-tree"
+import { NotificationsBell } from "@/components/notifications-bell"
 import { useState, type ReactNode } from "react"
 
 const NAV = [
@@ -104,6 +105,9 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
             <Menu className="h-5 w-5" />
           </button>
           <h1 className="truncate text-lg font-semibold">{title}</h1>
+          <div className="ml-auto flex items-center">
+            <NotificationsBell />
+          </div>
         </header>
         <main className="flex-1 overflow-auto p-6">{children}</main>
       </div>

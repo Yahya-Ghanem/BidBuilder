@@ -353,7 +353,7 @@ public static class EstimateEndpoints
         }).AllowWhenFinalised();
 
         // PUT estimate meta (title / lifecycle status). Gated estimate-admin Edit.
-        grp.MapPut("/{id:int}", async (int id, UpdateEstimateRequest req, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AuditService audit, ITenantContext tenant) =>
+        grp.MapPut("/{id:int}", async (int id, UpdateEstimateRequest req, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AuditService audit, NotificationService notify, ITenantContext tenant) =>
         {
             var g = await Guard(me, id, Admin, ModuleAction.Edit, access, perm); if (g is not null) return g;
             var e = await db.Estimates.FirstOrDefaultAsync(x => x.Id == id); if (e is null) return NotFound();
@@ -451,6 +451,25 @@ public static class EstimateEndpoints
             // never registers a spurious publish event.
             if (newlyPublished)
                 BidBuilderTelemetry.EstimatesPublished.Add(1, new KeyValuePair<string, object?>("tenant_slug", tenant.TenantSlug ?? "unknown"));
+            // 20.3 — fan a lifecycle transition out to the people who care. Published
+            // reaches the whole project audience; UnderReview pings the approvers
+            // (tenant admins) that a sign-off is needed. The actor is excluded.
+            if (newlyPublished)
+            {
+                var audience = await notify.ProjectAudienceIdsAsync(e.ProjectId, me.Id());
+                await notify.NotifyAsync(audience, "estimate.published",
+                    $"Estimate published — Rev {e.Revision}",
+                    $"{me.Name()} published \"{e.Title}\" (Rev {e.Revision}).",
+                    $"/projects/{e.ProjectId}", "Estimate", id.ToString());
+            }
+            else if (e.Status == EstimateStatus.UnderReview && oldStatus != EstimateStatus.UnderReview)
+            {
+                var admins = await notify.TenantAdminIdsAsync(me.Id());
+                await notify.NotifyAsync(admins, "estimate.under-review",
+                    $"Approval needed — Rev {e.Revision}",
+                    $"{me.Name()} submitted \"{e.Title}\" (Rev {e.Revision}) for review.",
+                    $"/projects/{e.ProjectId}", "Estimate", id.ToString());
+            }
             // A tax-rate change shifts TaxAmount/total — recompute; otherwise the cached breakdown stands.
             // A pricing-date change shifts every assembly-rate lookup → also recompute.
             return Results.Ok((taxChanged || pricingDateChanged) ? await calc.RecomputeAsync(id) : await calc.GetAsync(id));
@@ -844,7 +863,7 @@ public static class EstimateEndpoints
         // Approving requires the TenantAdmin role — plain TenantUsers can't
         // sign off on a publish. SuperAdmins are not approvers (they're a
         // platform role, not a tenant role).
-        grp.MapPost("/{id:int}/approvals", async (int id, ApprovalInput? input, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, AuditService audit) =>
+        grp.MapPost("/{id:int}/approvals", async (int id, ApprovalInput? input, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, AuditService audit, NotificationService notify) =>
         {
             var g = await Guard(me, id, Admin, ModuleAction.Edit, access, perm); if (g is not null) return g;
             if (me.Role() != UserRole.TenantAdmin)
@@ -872,6 +891,15 @@ public static class EstimateEndpoints
                 await db.SaveChangesAsync();
                 await audit.LogAsync(me, "estimate.approval.granted", "Estimate", id.ToString(),
                     $"approved by {me.Email()}");
+                // 20.3 — let the other approvers know a sign-off landed (publish is
+                // closer). Fires only on a NEW approval (idempotent re-POST stays quiet).
+                var meta = await db.Estimates.Where(x => x.Id == id)
+                    .Select(x => new { x.ProjectId, x.Revision }).FirstOrDefaultAsync();
+                var admins = await notify.TenantAdminIdsAsync(uid);
+                await notify.NotifyAsync(admins, "estimate.approved",
+                    $"Sign-off recorded — Rev {meta?.Revision}",
+                    $"{me.Name()} approved Rev {meta?.Revision}.",
+                    meta is null ? null : $"/projects/{meta.ProjectId}", "Estimate", id.ToString());
             }
             // Return the fresh view (count, threshold, all approvers) so the UI
             // can rerender without a follow-up GET.

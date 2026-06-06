@@ -26,6 +26,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<GroupModule>    GroupModules   => Set<GroupModule>();
     public DbSet<UserGroup>      UserGroups     => Set<UserGroup>();
     public DbSet<AuditEvent>     AuditEvents    => Set<AuditEvent>();
+    // In-app notifications (20.3) — one row per recipient per event.
+    public DbSet<Notification>   Notifications  => Set<Notification>();
 
     // ── Project scoping layer (BidBuilder) ────────────────────────────────────
     public DbSet<Project>     Projects     => Set<Project>();
@@ -328,6 +330,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             // Cascade with the estimate (same lifetime as risks / preliminaries).
             b.HasOne(a => a.Estimate).WithMany(e => e.Approvals).HasForeignKey(a => a.EstimateId).OnDelete(DeleteBehavior.Cascade);
             b.HasQueryFilter(a => a.TenantId == _tenant.TenantId);
+        });
+
+        // ── Notification (20.3 in-app inbox) ─────────────────────────────────
+        mb.Entity<Notification>(b =>
+        {
+            // The unread-badge poll filters by recipient + IsRead; index it.
+            b.HasIndex(n => new { n.RecipientUserId, n.IsRead });
+            b.HasIndex(n => n.TenantId);
+            b.Property(n => n.Type).HasMaxLength(64).IsRequired();
+            b.Property(n => n.Title).HasMaxLength(200).IsRequired();
+            b.Property(n => n.Body).HasMaxLength(1000);
+            b.Property(n => n.Link).HasMaxLength(400);
+            b.Property(n => n.EntityType).HasMaxLength(64);
+            b.Property(n => n.EntityKey).HasMaxLength(64);
+            b.HasQueryFilter(n => n.TenantId == _tenant.TenantId);
         });
 
         // ── Resource library ──────────────────────────────────────────────────

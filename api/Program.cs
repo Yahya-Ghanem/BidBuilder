@@ -83,6 +83,7 @@ builder.Services.AddScoped<BidBuilder.Api.Services.RateCascadeService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.ExportService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.ImportService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.AuditService>();
+builder.Services.AddScoped<BidBuilder.Api.Services.NotificationService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.AreaRollupService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.BenchmarkService>();
 
@@ -414,6 +415,7 @@ app.MapEstimateEndpoints();
 app.MapExportEndpoints();
 app.MapSettingsEndpoints();
 app.MapAuditEndpoints();
+app.MapNotificationEndpoints();
 app.MapCostComponentEndpoints();
 app.MapAreaEndpoints();
 app.MapActivityEndpoints();
