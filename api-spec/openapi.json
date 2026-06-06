@@ -3257,6 +3257,82 @@
         ]
       }
     },
+    "/api/notifications": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "take",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "unreadOnly",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/notifications/read-all": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/notifications/unread-count": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/notifications/{id}/read": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
     "/api/ping": {
       "get": {
         "responses": {

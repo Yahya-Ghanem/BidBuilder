@@ -107,6 +107,14 @@ export interface CompareSectionRow { key: string; code: string; title: string; t
 /** 20.5 — full side-by-side comparison. */
 export interface CompareView { mixedCurrency: boolean; columns: CompareColumn[]; sections: CompareSectionRow[] }
 
+/** 20.3 — one in-app notification in the bell dropdown. */
+export interface NotificationItem {
+  id: number; type: string; title: string; body: string | null; link: string | null
+  entityType: string | null; entityKey: string | null; isRead: boolean; createdAt: string
+}
+/** 20.3 — the signed-in user's inbox page + unread total. */
+export interface NotificationList { unreadCount: number; items: NotificationItem[] }
+
 export interface ProjectTeam {
   groupId: number
   groupCode: string
