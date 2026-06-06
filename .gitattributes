@@ -1,2 +1,6 @@
 # Normalize line endings: store LF in the repo, check out native on each platform.
 * text=auto
+
+# Shell scripts must stay LF even on Windows checkouts — they run inside Linux
+# containers where a CR would break the interpreter.
+*.sh text eol=lf

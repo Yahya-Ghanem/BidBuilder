@@ -82,6 +82,37 @@ services:
         condition: service_healthy
     networks: [bbnet]
 
+  # Scheduled Postgres backups. Takes a gzipped pg_dump every BACKUP_INTERVAL_SECONDS
+  # (default daily) into the dbbackups volume, pruning dumps older than the retention
+  # window. For true off-host durability, bind-mount a host path or sync the volume to
+  # object storage — see docs/BACKUP.md.
+  db-backup:
+    image: postgres:16-alpine
+    container_name: bidbuilder-db-backup
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST:                  db
+      PGUSER:                  ${POSTGRES_USER:-bidbuilder}
+      PGPASSWORD:              ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      PGDATABASE:              ${POSTGRES_DB:-bidbuilder}
+      BACKUP_RETENTION_DAYS:   ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    volumes:
+      - ./deploy/backup:/scripts:ro
+      - dbbackups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "[backup] sidecar up; interval=${BACKUP_INTERVAL_SECONDS:-86400}s retention=${BACKUP_RETENTION_DAYS:-14}d";
+        while true; do
+          sh /scripts/backup.sh || echo "[backup] FAILED at $(date -u +%FT%TZ)";
+          sleep "${BACKUP_INTERVAL_SECONDS:-86400}";
+        done
+    networks: [bbnet]
+
   caddy:
     image: caddy:2-alpine
     container_name: bidbuilder-caddy
@@ -107,5 +138,6 @@ networks:
 
 volumes:
   dbdata:
+  dbbackups:
   caddy_data:
   caddy_config:
