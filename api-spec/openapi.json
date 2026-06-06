@@ -284,6 +284,24 @@
         },
         "type": "object"
       },
+      "BulkResourceRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "nullable": true,
+            "type": "string"
+          },
+          "ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "nullable": true,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "CloneRoomInput": {
         "additionalProperties": false,
         "properties": {
@@ -4475,6 +4493,38 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SubcontractorInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/resources/{type}/bulk": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkResourceRequest"
               }
             }
           },
