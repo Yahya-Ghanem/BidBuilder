@@ -28,6 +28,11 @@ public static class EstimateMath
     public static decimal Tax(decimal bidPrice, decimal? ratePct) =>
         ratePct is { } r && r > 0m ? Round2(bidPrice * r / 100m) : 0m;
 
+    /// <summary>The bid price that yields a desired gross margin on price:
+    /// price = cost / (1 − margin%). A margin ≥ 100% is impossible → 0.</summary>
+    public static decimal BidForTargetMargin(decimal cost, decimal targetMarginPct) =>
+        targetMarginPct >= 100m ? 0m : Round2(cost / (1m - targetMarginPct / 100m));
+
     /// <summary>
     /// Apply markup percentages in the given order, compounding on the running
     /// subtotal. Returns the per-markup amounts (aligned to input order), their

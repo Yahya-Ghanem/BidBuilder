@@ -3,7 +3,7 @@
 import { use, useState, useEffect, useRef, useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
-import { Plus, Trash2, SlidersHorizontal, RotateCcw, Copy, Upload, FileDown, FolderInput, Pencil } from "lucide-react"
+import { Plus, Trash2, SlidersHorizontal, RotateCcw, Copy, Upload, FileDown, FolderInput, Pencil, Target } from "lucide-react"
 import { toast } from "sonner"
 import { fetchApi, downloadFile, uploadFile, ApiError } from "@/lib/api"
 import type { Project, EstimateSummary, EstimateBreakdown, SectionBreakdown, ItemBreakdown, AssemblyRow, ProjectTeam, GroupOption, MarkupBreakdown, WhatIfResult, ImportResult, CurrencyRates, CostComponentType, ActivityType, ProjectType, Area, AreaRollup, AreaRollupRow } from "@/lib/types"
@@ -535,6 +535,7 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
         {e.taxAmount > 0 && <Stat label={`VAT (${e.taxRatePct ?? 0}%)`} value={money(e.taxAmount, c)} />}
         {e.taxAmount > 0 && <Stat label="Total incl. tax" value={money(e.bidPriceInclTax, c)} highlight />}
         {e.alternatesTotal > 0 && <Stat label="Alternates (excl. bid)" value={money(e.alternatesTotal, c)} />}
+        {e.commercialAdjustment !== 0 && <Stat label="Commercial adj." value={money(e.commercialAdjustment, c)} />}
       </div>
       {e.markupCost > 0 && (
         <p className="text-sm text-slate-500">Gross margin (on price): <b className="text-slate-700">{e.marginOnPricePct}%</b> <span className="text-slate-400">(markups are % on cost)</span></p>
@@ -612,6 +613,11 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
       {plmView && e.markups.length > 0 && (
         <WhatIfPanel key={e.markups.map((m) => m.id).join(",")}
           estimateId={estimateId} markups={e.markups} currency={c} canEdit={plmEdit && !locked} />
+      )}
+
+      {plmView && (
+        <TargetPanel estimateId={estimateId} currency={c} currentBid={e.bidPrice}
+          currentAdjustment={e.commercialAdjustment} canApply={plmEdit && !locked} />
       )}
     </div>
   )
@@ -712,6 +718,59 @@ function WhatIfPanel({ estimateId, markups, currency, canEdit }: {
             {apply.isPending ? "Applying…" : "Apply these margins"}
           </Button>
         </div>
+      )}
+    </Card>
+  )
+}
+
+/** Solve the commercial adjustment to land the bid on a target price (the final
+ *  "we must be at X" move). Preview is non-persisting; Apply writes the adjustment. */
+function TargetPanel({ estimateId, currency, currentBid, currentAdjustment, canApply }: {
+  estimateId: number; currency: string; currentBid: number; currentAdjustment: number; canApply: boolean
+}) {
+  const qc = useQueryClient()
+  const [target, setTarget] = useState(String(currentBid))
+  const [preview, setPreview] = useState<{ requiredAdjustment: number; targetBidPrice: number } | null>(null)
+
+  const solve = useMutation({
+    mutationFn: (apply: boolean) => fetchApi<{ requiredAdjustment: number; targetBidPrice: number }>(
+      `/api/estimates/${estimateId}/target`, { method: "POST", body: JSON.stringify({ targetPrice: Number(target || 0), apply }) }),
+    onSuccess: (r, apply) => {
+      if (apply) { toast.success("Target applied"); setPreview(null); qc.invalidateQueries({ queryKey: ["estimate", estimateId] }) }
+      else setPreview({ requiredAdjustment: r.requiredAdjustment, targetBidPrice: r.targetBidPrice })
+    },
+    onError: (err) => toast.error((err as Error).message),
+  })
+
+  const clear = useMutation({
+    mutationFn: () => fetchApi(`/api/estimates/${estimateId}/target`, { method: "POST", body: JSON.stringify({ adjustment: 0, apply: true }) }),
+    onSuccess: () => { toast.success("Adjustment cleared"); setPreview(null); qc.invalidateQueries({ queryKey: ["estimate", estimateId] }) },
+    onError: (err) => toast.error((err as Error).message),
+  })
+
+  return (
+    <Card className="p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+        <Target className="h-4 w-4 text-[var(--brand)]" /> Target price
+      </div>
+      <div className="flex items-end gap-2">
+        <Field label={`Target bid (${currency})`}><Input type="number" step="0.01" value={target} onChange={(e) => setTarget(e.target.value)} /></Field>
+        <Button variant="outline" disabled={solve.isPending} onClick={() => solve.mutate(false)}>Solve</Button>
+        {canApply && <Button disabled={solve.isPending} onClick={() => solve.mutate(true)}>Apply</Button>}
+      </div>
+      {preview && (
+        <p className="mt-2 text-sm text-slate-600">
+          Commercial adjustment{" "}
+          <b className={preview.requiredAdjustment >= 0 ? "text-emerald-600" : "text-rose-600"}>
+            {preview.requiredAdjustment >= 0 ? "+" : ""}{money(preview.requiredAdjustment, currency)}
+          </b>{" "}→ bid {money(preview.targetBidPrice, currency)}
+        </p>
+      )}
+      {currentAdjustment !== 0 && (
+        <p className="mt-2 flex items-center justify-between text-sm text-slate-500">
+          <span>Current adjustment: <b className="text-slate-700">{currentAdjustment > 0 ? "+" : ""}{money(currentAdjustment, currency)}</b></span>
+          {canApply && <button onClick={() => clear.mutate()} className="text-xs text-slate-400 hover:text-rose-600">Clear</button>}
+        </p>
       )}
     </Card>
   )

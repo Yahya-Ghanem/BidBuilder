@@ -155,6 +155,31 @@ public class CalcGoldenMasterTests(ApiFixture fx)
         Assert.Equal(1_500.00m, bd.Sections.Single().SectionTotal);   // bid lines only
     }
 
+    [Fact]
+    public async Task Target_price_back_solve_lands_the_bid_and_re_targets_without_stacking()
+    {
+        var id = await SeedGoldenEstimateAsync();
+        await fx.WithTenantDbAsync("default", async (db, _) => { await new EstimateCalculator(db).RecomputeAsync(id); });
+        var admin = await fx.AdminClientAsync();
+
+        // Preview to 80,000 → adjustment 6,146.56, NOT yet applied.
+        var preview = await (await admin.PostAsJsonAsync($"/api/estimates/{id}/target", new { targetPrice = 80_000m }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(6_146.56m, preview.GetProperty("requiredAdjustment").GetDecimal());   // 80,000 − 73,853.44
+        Assert.False(preview.GetProperty("applied").GetBoolean());
+
+        // Apply → the bid equals the target and the adjustment is recorded.
+        (await admin.PostAsJsonAsync($"/api/estimates/{id}/target", new { targetPrice = 80_000m, apply = true })).EnsureSuccessStatusCode();
+        var after = await (await admin.GetAsync($"/api/estimates/{id}")).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(80_000.00m, after.GetProperty("bidPrice").GetDecimal());
+        Assert.Equal(6_146.56m, after.GetProperty("commercialAdjustment").GetDecimal());
+
+        // Re-target REPLACES the adjustment (does not stack on the prior one).
+        (await admin.PostAsJsonAsync($"/api/estimates/{id}/target", new { targetPrice = 70_000m, apply = true })).EnsureSuccessStatusCode();
+        var after2 = await (await admin.GetAsync($"/api/estimates/{id}")).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(70_000.00m, after2.GetProperty("bidPrice").GetDecimal());
+    }
+
     private static async Task<JsonElement> Reconcile(HttpClient c, int id, bool commit)
     {
         var resp = await c.PostAsync($"/api/estimates/{id}/reconcile?commit={(commit ? "true" : "false")}", null);

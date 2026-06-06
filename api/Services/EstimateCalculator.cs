@@ -9,7 +9,7 @@ public record EstimateBreakdown(
     int Id, int ProjectId, int Revision, string Title, string Status, string Currency,
     decimal DirectCost, decimal IndirectCost, decimal MarkupCost, decimal BidPrice,
     decimal? TaxRatePct, decimal TaxAmount, decimal BidPriceInclTax, decimal AlternatesTotal,
-    decimal MarginOnPricePct,
+    decimal MarginOnPricePct, decimal CommercialAdjustment,
     List<SectionBreakdown> Sections, List<PrelimBreakdown> Preliminaries, List<MarkupBreakdown> Markups,
     string RowVersion, FxView? Fx);
 
@@ -33,6 +33,12 @@ public record WhatIfMarkupLine(string Type, string? Label, decimal Percentage, i
 public record WhatIfResult(
     decimal DirectCost, decimal IndirectCost, decimal MarkupCost,
     decimal BidPrice, decimal BaselineBidPrice, List<WhatIfMarkupLine> Markups);
+
+// ── Target-price back-solve (commercial adjustment) ───────────────────────────
+/// <summary>Result of solving the commercial adjustment to hit a target: the current
+/// bid, the target bid, the existing adjustment, the adjustment required to land on
+/// the target, and whether it was persisted.</summary>
+public record TargetSolve(decimal CurrentBidPrice, decimal TargetBidPrice, decimal CurrentAdjustment, decimal RequiredAdjustment, bool Applied);
 
 // ── Reconcile (drift detection between cached and freshly-computed totals) ─────
 /// <summary>The four cached roll-up totals of an estimate.</summary>
@@ -167,8 +173,9 @@ public class EstimateCalculator(AppDbContext db)
         e.DirectCost      = EstimateMath.Round2(direct);
         e.IndirectCost    = EstimateMath.Round2(indirect);
         e.MarkupCost      = EstimateMath.Round2(markupTotal);
-        // Bid = markupable + excluded (provisional/PC pass-through) + indirect + markups.
-        e.BidPrice        = EstimateMath.Round2(direct + indirect + markupTotal);
+        // Bid = markupable + excluded (provisional/PC pass-through) + indirect + markups
+        //     + the commercial adjustment (the final ± lump sum to land on a target).
+        e.BidPrice        = EstimateMath.Round2(direct + indirect + markupTotal + e.CommercialAdjustment);
         e.AlternatesTotal = EstimateMath.Round2(alternates);
         // Tax sits OUTSIDE the markup cascade — computed on the finished (pre-tax) bid price.
         e.TaxAmount       = EstimateMath.Tax(e.BidPrice, e.TaxRatePct);
@@ -300,6 +307,35 @@ public class EstimateCalculator(AppDbContext db)
             lines);
     }
 
+    /// <summary>
+    /// Solve the commercial adjustment needed to land on a target — the final
+    /// "we must be at AED X" move. The target may be an explicit ± lump sum, an
+    /// absolute bid price, or a desired gross margin-on-price. Returns a non-persisting
+    /// preview unless <paramref name="apply"/>, in which case the adjustment is saved and
+    /// the estimate recomputed so its bid equals the target. Uses the cached cost totals.
+    /// </summary>
+    public async Task<TargetSolve?> SolveTargetAsync(int estimateId, decimal? targetPrice, decimal? targetMarginPct, decimal? explicitAdjustment, bool apply)
+    {
+        var e = await db.Estimates.AsNoTracking().FirstOrDefaultAsync(x => x.Id == estimateId);
+        if (e is null) return null;
+
+        var bidExclAdj = e.BidPrice - e.CommercialAdjustment;   // the bid before any adjustment
+        decimal targetBid, required;
+        if (explicitAdjustment is { } adj) { required = EstimateMath.Round2(adj); targetBid = EstimateMath.Round2(bidExclAdj + required); }
+        else if (targetPrice is { } tp)    { targetBid = EstimateMath.Round2(tp); required = EstimateMath.Round2(tp - bidExclAdj); }
+        else if (targetMarginPct is { } m) { targetBid = EstimateMath.BidForTargetMargin(e.DirectCost + e.IndirectCost, m); required = EstimateMath.Round2(targetBid - bidExclAdj); }
+        else return null;
+
+        if (apply)
+        {
+            var tracked = await db.Estimates.FirstAsync(x => x.Id == estimateId);
+            tracked.CommercialAdjustment = required;
+            await db.SaveChangesAsync();
+            await RecomputeAsync(estimateId);
+        }
+        return new TargetSolve(e.BidPrice, targetBid, e.CommercialAdjustment, required, apply);
+    }
+
     /// <summary>Read-only breakdown without recomputing (uses cached values).</summary>
     public async Task<EstimateBreakdown?> GetAsync(int estimateId)
     {
@@ -318,11 +354,11 @@ public class EstimateCalculator(AppDbContext db)
         e.Id, e.ProjectId, e.Revision, e.Title, e.Status.ToString(), e.Currency,
         e.DirectCost, e.IndirectCost, e.MarkupCost, e.BidPrice,
         e.TaxRatePct, e.TaxAmount, EstimateMath.Round2(e.BidPrice + e.TaxAmount), e.AlternatesTotal,
-        // Gross margin as a % of the (pre-tax) selling price: (BidPrice − cost) / BidPrice.
-        // Since BidPrice − (direct+indirect) == MarkupCost, this is MarkupCost / BidPrice.
-        // Surfacing it next to the markup %s guards against the classic markup-on-cost vs
-        // margin-on-price confusion.
-        e.BidPrice > 0m ? EstimateMath.Round2(e.MarkupCost / e.BidPrice * 100m) : 0m,
+        // Gross margin as a % of the (pre-tax) selling price: (BidPrice − cost) / BidPrice,
+        // where cost = direct + indirect. The numerator is the markups PLUS any commercial
+        // adjustment. Surfacing it guards against the markup-on-cost vs margin-on-price error.
+        e.BidPrice > 0m ? EstimateMath.Round2((e.BidPrice - e.DirectCost - e.IndirectCost) / e.BidPrice * 100m) : 0m,
+        e.CommercialAdjustment,
         e.Sections.OrderBy(s => s.SortOrder).Select(s => new SectionBreakdown(
             s.Id, s.Code, s.Title, s.SortOrder, s.SectionTotal,
             s.Items.OrderBy(i => i.SortOrder).Select(i => new ItemBreakdown(

@@ -19,6 +19,7 @@ public record CloneRoomInput(string? Name);
 public record PrelimInput(string Description, string Kind, decimal Amount, int SortOrder);
 public record MarkupInput(string Type, string? Label, decimal Percentage, int ApplyOrder);
 public record WhatIfRequest(List<MarkupInput> Markups);
+public record TargetRequest(decimal? TargetPrice, decimal? TargetMarginPct, decimal? Adjustment, bool Apply = false);
 public record ImportResultDto(int SectionsAdded, int ItemsAdded, EstimateBreakdown Estimate);
 
 /// <summary>
@@ -306,6 +307,23 @@ public static class EstimateEndpoints
                 .Select(m => new WhatIfMarkupInput(m.Type, m.Label, m.Percentage, m.ApplyOrder)).ToList());
             return result is null ? NotFound() : Results.Ok(result);
         }).AllowWhenFinalised();   // non-persisting preview — safe on a finalised revision
+
+        // POST target — solve the commercial adjustment to land on a target price /
+        // margin / explicit lump sum. Preview by default (prelims-markups View); ?apply
+        // via Apply=true persists the adjustment (Edit) and recomputes. Not marked
+        // AllowWhenFinalised, so a finalised revision is locked (revert to Draft to retarget).
+        grp.MapPost("/{id:int}/target", async (int id, TargetRequest req, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, EstimateCalculator calc, AuditService audit) =>
+        {
+            var g = await Guard(me, id, Prelims, req.Apply ? ModuleAction.Edit : ModuleAction.View, access, perm); if (g is not null) return g;
+            if (req.TargetPrice is null && req.TargetMarginPct is null && req.Adjustment is null)
+                return Bad("Provide a target price, target margin %, or an explicit adjustment.");
+            if (req.TargetPrice is < 0) return Bad("Target price cannot be negative.");
+            if (req.TargetMarginPct is { } m && (m < 0 || m >= 100)) return Bad("Target margin must be between 0 and 100.");
+            var r = await calc.SolveTargetAsync(id, req.TargetPrice, req.TargetMarginPct, req.Adjustment, req.Apply);
+            if (r is null) return NotFound();
+            if (req.Apply) await audit.LogAsync(me, "estimate.target", "Estimate", id.ToString(), $"commercial adjustment {r.RequiredAdjustment:#,##0.00} → bid {r.TargetBidPrice:#,##0.00}");
+            return Results.Ok(r);
+        });
 
         // GET a ready-to-fill .xlsx import template (boq View).
         grp.MapGet("/import-template.xlsx", async (ClaimsPrincipal me, PermissionService perm, ImportService import) =>
