@@ -3,7 +3,7 @@ import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Copy, FolderInput, Plus, Trash2 } from "lucide-react"
+import { Copy, FolderInput, GitCompareArrows, Plus, Trash2 } from "lucide-react"
 import { fetchApi } from "@/lib/api"
 import { usePermissions } from "@/lib/permissions"
 import type { EstimateSummary, Project } from "@/lib/types"
@@ -11,6 +11,7 @@ import { Card, Button, Input } from "@/components/ui"
 import { Field, Modal, Select } from "@/components/form"
 import { money } from "@/lib/utils"
 import { EstimateEditor } from "./estimate-editor"
+import { CompareRevisions } from "./compare"
 
 /** Estimate revision picker: pick a revision, create blank / duplicate, view & edit it.
  *  The displayed revision is whatever the user picked OR the latest if none. */
@@ -23,6 +24,7 @@ export function EstimatesSection({ projectId }: { projectId: number }) {
   const estimates = useQuery({ queryKey: ["estimates", projectId], queryFn: () => fetchApi<EstimateSummary[]>(`/api/projects/${projectId}/estimates`) })
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [copyOpen, setCopyOpen] = useState(false)
+  const [compareOpen, setCompareOpen] = useState(false)
   const router = useRouter()
 
   const list = estimates.data ?? []
@@ -68,8 +70,9 @@ export function EstimatesSection({ projectId }: { projectId: number }) {
             ))}
           </Select>
         </div>
-        {(canManage || canDelete) && (
-          <div className="flex gap-2">
+        {(canManage || canDelete || list.length >= 2) && (
+          <div className="flex flex-wrap gap-2">
+            {list.length >= 2 && <Button variant={compareOpen ? "primary" : "outline"} className="h-8 text-xs" onClick={() => setCompareOpen((o) => !o)}><GitCompareArrows className="h-4 w-4" /> Compare</Button>}
             {canManage && <Button variant="outline" className="h-8 text-xs" disabled={createBlank.isPending} onClick={() => createBlank.mutate(`Revision ${(list[list.length - 1]?.revision ?? 0) + 1}`)}><Plus className="h-4 w-4" /> New</Button>}
             {canManage && <Button variant="outline" className="h-8 text-xs" disabled={clone.isPending || currentId == null} onClick={() => currentId != null && clone.mutate(currentId)}><Copy className="h-4 w-4" /> Duplicate</Button>}
             {canManage && <Button variant="outline" className="h-8 text-xs" disabled={currentId == null} onClick={() => setCopyOpen(true)}><FolderInput className="h-4 w-4" /> Copy to…</Button>}
@@ -82,6 +85,8 @@ export function EstimatesSection({ projectId }: { projectId: number }) {
           </div>
         )}
       </Card>
+
+      {compareOpen && list.length >= 2 && <CompareRevisions estimates={list} onClose={() => setCompareOpen(false)} />}
 
       {currentId != null && <EstimateEditor key={currentId} estimateId={currentId} canEditMeta={canEditMeta} />}
 

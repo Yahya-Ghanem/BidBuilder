@@ -42,6 +42,26 @@ public record ApprovalRow(int Id, int ApproverUserId, string ApproverEmail, stri
 /// many are currently recorded, and who has approved.</summary>
 public record ApprovalsView(int RequiredApprovals, int CurrentApprovals, IReadOnlyList<ApprovalRow> Approvals);
 
+// ── Bid comparison (20.5) ────────────────────────────────────────────────────
+/// <summary>20.5 — one estimate column in a side-by-side bid comparison. Carries
+/// the headline roll-up totals so the client can render rows + compute deltas.
+/// ProjectCode/Name are included so cross-project comparisons read clearly.</summary>
+public record CompareColumn(
+    int EstimateId, int ProjectId, string ProjectCode, string ProjectName,
+    int Revision, string Title, string Status, string Currency,
+    decimal DirectCost, decimal IndirectCost, decimal MarkupCost, decimal BidPrice,
+    decimal? TaxRatePct, decimal TaxAmount, decimal BidPriceInclTax,
+    decimal AlternatesTotal, decimal MarginOnPricePct, decimal CommercialAdjustment);
+/// <summary>20.5 — one section aligned across the compared estimates. <c>Totals[i]</c>
+/// is the section total in column <c>i</c>, or null when that estimate has no
+/// matching section. Sections are matched by Code (case-insensitive) when present,
+/// else by Title — so "Rev 1 §A" lines up with "Rev 2 §A".</summary>
+public record CompareSectionRow(string Key, string Code, string Title, decimal?[] Totals);
+/// <summary>20.5 — full side-by-side comparison. <c>MixedCurrency</c> is true when
+/// the compared estimates aren't all in one currency, so cross-column deltas are
+/// not money-comparable and the UI should warn instead of subtracting.</summary>
+public record CompareView(bool MixedCurrency, IReadOnlyList<CompareColumn> Columns, IReadOnlyList<CompareSectionRow> Sections);
+
 /// <summary>
 /// Estimate editing: BOQ sections/items, preliminaries, markups, and the
 /// recompute → bid price roll-up. Every route requires access to the owning
@@ -227,6 +247,81 @@ public static class EstimateEndpoints
             var g = await Guard(me, id, Boq, ModuleAction.View, access, perm); if (g is not null) return g;
             var bd = await calc.GetAsync(id);
             return bd is null ? NotFound() : Results.Ok(bd);
+        });
+
+        // GET compare — side-by-side comparison of 2–4 estimate revisions (20.5).
+        // Each estimate is access-checked individually (404 hides existence) so a
+        // user can only compare what they could already open one at a time; a single
+        // boq View gate covers the capability. Read-only: uses the cached breakdown
+        // (GetAsync), so it never recomputes or writes. The status-lock + If-Match
+        // filters are no-ops here (GET, and no "id" route value). Section totals are
+        // aligned across columns by section code so deltas line up row-for-row.
+        grp.MapGet("/compare", async (int[] ids, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc) =>
+        {
+            if (!await perm.CanAsync(me, Boq, ModuleAction.View))
+                return Results.Json(new { error = "Missing 'View' permission on boq" }, statusCode: 403);
+            // Preserve caller order; drop duplicate ids (comparing a revision with itself is meaningless).
+            var ordered = (ids ?? Array.Empty<int>()).Distinct().ToList();
+            if (ordered.Count < 2) return Bad("Select at least two estimates to compare.");
+            if (ordered.Count > 4) return Bad("You can compare at most four estimates at once.");
+
+            var breakdowns = new List<EstimateBreakdown>(ordered.Count);
+            foreach (var eid in ordered)
+            {
+                if (!await access.CanAccessEstimateAsync(me, eid))
+                    return Results.NotFound(new { error = $"Estimate {eid} not found or not accessible" });
+                var bd = await calc.GetAsync(eid);
+                if (bd is null) return Results.NotFound(new { error = $"Estimate {eid} not found" });
+                breakdowns.Add(bd);
+            }
+
+            var projIds = breakdowns.Select(b => b.ProjectId).Distinct().ToList();
+            var projMeta = await db.Projects.Where(p => projIds.Contains(p.Id))
+                .Select(p => new { p.Id, p.Code, p.Name })
+                .ToDictionaryAsync(p => p.Id, p => (p.Code, p.Name));
+
+            var columns = breakdowns.Select(b =>
+            {
+                projMeta.TryGetValue(b.ProjectId, out var pm);
+                return new CompareColumn(
+                    b.Id, b.ProjectId, pm.Code ?? "", pm.Name ?? "",
+                    b.Revision, b.Title, b.Status, b.Currency,
+                    b.DirectCost, b.IndirectCost, b.MarkupCost, b.BidPrice,
+                    b.TaxRatePct, b.TaxAmount, b.BidPriceInclTax,
+                    b.AlternatesTotal, b.MarginOnPricePct, b.CommercialAdjustment);
+            }).ToList();
+
+            var mixedCurrency = breakdowns.Select(b => b.Currency)
+                .Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
+
+            // Align sections into rows: union of section keys across all columns, in
+            // first-seen order. Totals[] is a shared reference array, so writing into a
+            // copied tuple's array still updates the row. Multiple sections sharing a code
+            // within one estimate accumulate into the same cell.
+            var n = ordered.Count;
+            var order = new List<string>();
+            var rows = new Dictionary<string, (string Code, string Title, decimal?[] Totals)>();
+            for (int i = 0; i < n; i++)
+            {
+                foreach (var s in breakdowns[i].Sections.OrderBy(s => s.SortOrder).ThenBy(s => s.Id))
+                {
+                    var key = !string.IsNullOrWhiteSpace(s.Code)
+                        ? "c:" + s.Code.Trim().ToUpperInvariant()
+                        : "t:" + s.Title.Trim().ToLowerInvariant();
+                    if (!rows.TryGetValue(key, out var row))
+                    {
+                        row = (s.Code, s.Title, new decimal?[n]);
+                        rows[key] = row;
+                        order.Add(key);
+                    }
+                    row.Totals[i] = (row.Totals[i] ?? 0m) + s.SectionTotal;
+                }
+            }
+            var sections = order
+                .Select(k => { var r = rows[k]; return new CompareSectionRow(k, r.Code, r.Title, r.Totals); })
+                .ToList();
+
+            return Results.Ok(new CompareView(mixedCurrency, columns, sections));
         });
 
         // POST recompute (explicit refresh).
