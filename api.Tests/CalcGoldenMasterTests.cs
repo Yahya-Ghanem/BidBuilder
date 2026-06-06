@@ -117,6 +117,41 @@ public class CalcGoldenMasterTests(ApiFixture fx)
         Assert.Equal(ExpectedBid, clean.GetProperty("before").GetProperty("bidPrice").GetDecimal());
     }
 
+    [Fact]
+    public async Task Line_kinds_bucket_correctly_provisional_not_marked_up_alternate_excluded()
+    {
+        int id = 0;
+        EstimateBreakdown bd = null!;
+        await fx.WithTenantDbAsync("default", async (db, _) =>
+        {
+            var project = new Project { Code = $"GMK-{System.Guid.NewGuid():N}"[..12], Name = "Kinds", Currency = "AED", DurationMonths = 1, Status = ProjectStatus.Draft };
+            db.Projects.Add(project);
+            await db.SaveChangesAsync();
+            var est = new Estimate { ProjectId = project.Id, Revision = 1, Title = "K", Status = EstimateStatus.Draft, Currency = "AED" };
+            db.Estimates.Add(est);
+            await db.SaveChangesAsync();
+            var sec = new BoqSection { EstimateId = est.Id, Code = "A", Title = "A", SortOrder = 1 };
+            db.BoqSections.Add(sec);
+            await db.SaveChangesAsync();
+            db.BoqItems.Add(new BoqItem { SectionId = sec.Id, Description = "Normal",      Unit = "no", Quantity = 1m, UnitRate = 1_000m, SortOrder = 1, Kind = BoqItemKind.Normal });
+            db.BoqItems.Add(new BoqItem { SectionId = sec.Id, Description = "Provisional",  Unit = "no", Quantity = 1m, UnitRate = 500m,   SortOrder = 2, Kind = BoqItemKind.ProvisionalSum });
+            db.BoqItems.Add(new BoqItem { SectionId = sec.Id, Description = "Alternate",    Unit = "no", Quantity = 1m, UnitRate = 999m,   SortOrder = 3, Kind = BoqItemKind.Alternate });
+            db.Markups.Add(new Markup { EstimateId = est.Id, Type = MarkupType.Profit, Percentage = 10m, ApplyOrder = 1 });
+            await db.SaveChangesAsync();
+            id = est.Id;
+        });
+        await fx.WithTenantDbAsync("default", async (db, _) =>
+        {
+            bd = (await new EstimateCalculator(db).RecomputeAsync(id))!;
+        });
+
+        Assert.Equal(1_500.00m, bd.DirectCost);        // Normal 1000 + Provisional 500 (alternate excluded)
+        Assert.Equal(100.00m,   bd.MarkupCost);        // 10% of the markupable 1000 ONLY — not 1500
+        Assert.Equal(1_600.00m, bd.BidPrice);          // 1500 + 100
+        Assert.Equal(999.00m,   bd.AlternatesTotal);   // carried separately, out of the bid
+        Assert.Equal(1_500.00m, bd.Sections.Single().SectionTotal);   // bid lines only
+    }
+
     private static async Task<JsonElement> Reconcile(HttpClient c, int id, bool commit)
     {
         var resp = await c.PostAsync($"/api/estimates/{id}/reconcile?commit={(commit ? "true" : "false")}", null);

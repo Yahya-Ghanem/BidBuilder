@@ -534,6 +534,7 @@ function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEd
         <Stat label={e.taxAmount > 0 ? "Bid (excl. tax)" : "Bid price"} value={money(e.bidPrice, c)} highlight={e.taxAmount <= 0} />
         {e.taxAmount > 0 && <Stat label={`VAT (${e.taxRatePct ?? 0}%)`} value={money(e.taxAmount, c)} />}
         {e.taxAmount > 0 && <Stat label="Total incl. tax" value={money(e.bidPriceInclTax, c)} highlight />}
+        {e.alternatesTotal > 0 && <Stat label="Alternates (excl. bid)" value={money(e.alternatesTotal, c)} />}
       </div>
       {e.fx && (
         <p className="text-sm text-slate-500">
@@ -748,6 +749,15 @@ function SectionBlock({ section, currency, assemblies, costTypes, areas, open, o
   )
 }
 
+const ITEM_KINDS = [
+  ["Normal", "Normal"],
+  ["ProvisionalSum", "Provisional Sum"],
+  ["PcSum", "PC Sum"],
+  ["Daywork", "Daywork"],
+  ["Alternate", "Alternate"],
+] as const
+const kindLabel = (k: string) => ITEM_KINDS.find(([v]) => v === k)?.[1] ?? k
+
 function ItemRow({ item, currency, costTypes, areas, canEdit, canDelete, onUpd, onDel }: { item: ItemBreakdown; currency: string; costTypes: CostComponentType[]; areas: Area[]; canEdit: boolean; canDelete: boolean; onUpd: (v: any) => void; onDel: () => void }) {
   const adHoc = item.assemblyId == null
   const hasComps = item.components.length > 0
@@ -756,7 +766,7 @@ function ItemRow({ item, currency, costTypes, areas, canEdit, canDelete, onUpd, 
   // (the PUT replaces components wholesale).
   const base = {
     id: item.id, itemCode: item.itemCode, description: item.description, unit: item.unit,
-    assemblyId: item.assemblyId, unitRate: item.unitRate, sortOrder: item.sortOrder, areaId: item.areaId,
+    assemblyId: item.assemblyId, unitRate: item.unitRate, sortOrder: item.sortOrder, areaId: item.areaId, kind: item.kind,
     components: hasComps ? item.components.map((c) => ({ typeId: c.typeId, value: c.value, quantity: c.quantity ?? undefined, rate: c.rate ?? undefined })) : undefined,
   }
   const areaName = areas.find((a) => a.id === item.areaId)?.name
@@ -764,18 +774,27 @@ function ItemRow({ item, currency, costTypes, areas, canEdit, canDelete, onUpd, 
     <tr className="border-t border-[var(--border)]">
       <td className="px-4 py-1.5">
         {item.description}
+        {item.kind !== "Normal" && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">{kindLabel(item.kind)}</span>}
         {hasComps && (
           <div className="text-xs text-slate-400">
             {item.components.map((c) => `${c.code} ${c.calcKind === "Percent" ? c.value + "%" : (c.quantity != null && c.rate != null ? `${c.quantity}×${c.rate}` : c.value)}`).join(" + ")}
           </div>
         )}
-        {canEdit && areas.length > 0
-          ? <select value={item.areaId ?? ""} onChange={(ev) => onUpd({ ...base, quantity: item.quantity, areaId: ev.target.value === "" ? null : Number(ev.target.value) })}
-                    className="mt-1 rounded border border-[var(--border)] bg-white px-1 py-0.5 text-xs text-slate-500">
-              <option value="">— no area —</option>
-              {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        <div className="mt-1 flex items-center gap-1">
+          {canEdit && areas.length > 0
+            ? <select value={item.areaId ?? ""} onChange={(ev) => onUpd({ ...base, quantity: item.quantity, areaId: ev.target.value === "" ? null : Number(ev.target.value) })}
+                      className="rounded border border-[var(--border)] bg-white px-1 py-0.5 text-xs text-slate-500">
+                <option value="">— no area —</option>
+                {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            : areaName && <span className="text-xs text-slate-400">📍 {areaName}</span>}
+          {canEdit && (
+            <select value={item.kind} onChange={(ev) => onUpd({ ...base, quantity: item.quantity, kind: ev.target.value })}
+                    title="Line kind" className="rounded border border-[var(--border)] bg-white px-1 py-0.5 text-xs text-slate-500">
+              {ITEM_KINDS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
             </select>
-          : areaName && <div className="text-xs text-slate-400">📍 {areaName}</div>}
+          )}
+        </div>
       </td>
       <td className="px-2 py-1.5 text-slate-500">{item.unit}</td>
       <td className="px-2 py-1.5 text-right">
@@ -813,7 +832,7 @@ function ItemRow({ item, currency, costTypes, areas, canEdit, canDelete, onUpd, 
 
 function AddItemForm({ assemblies, costTypes, areas, onAdd }: { assemblies: AssemblyRow[]; costTypes: CostComponentType[]; areas: Area[]; onAdd: (v: any) => void }) {
   const BUILDUP = "__buildup__"
-  const [f, setF] = useState({ description: "", unit: "", quantity: "1", assemblyId: "", unitRate: "0", areaId: "" })
+  const [f, setF] = useState({ description: "", unit: "", quantity: "1", assemblyId: "", unitRate: "0", areaId: "", kind: "Normal" })
   const [comps, setComps] = useState<CompInput[]>([])
   const [modal, setModal] = useState(false)
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value })
@@ -827,12 +846,12 @@ function AddItemForm({ assemblies, costTypes, areas, onAdd }: { assemblies: Asse
       assemblyId: useAsm ? Number(f.assemblyId) : null,
       unitRate: useAsm || useBuildup ? 0 : Number(f.unitRate || 0),
       components: useBuildup ? comps : undefined,
-      areaId: f.areaId === "" ? null : Number(f.areaId), sortOrder: 0,
+      areaId: f.areaId === "" ? null : Number(f.areaId), kind: f.kind, sortOrder: 0,
     })
-    setF({ description: "", unit: "", quantity: "1", assemblyId: "", unitRate: "0", areaId: f.areaId }); setComps([])
+    setF({ description: "", unit: "", quantity: "1", assemblyId: "", unitRate: "0", areaId: f.areaId, kind: "Normal" }); setComps([])
   }
   return (
-    <div className="grid grid-cols-[1fr_60px_60px_1fr_90px_110px_auto] items-end gap-2 bg-slate-50 px-4 py-3 text-sm">
+    <div className="grid grid-cols-[1fr_60px_60px_1fr_90px_110px_110px_auto] items-end gap-2 bg-slate-50 px-4 py-3 text-sm">
       <Field label="Description"><Input value={f.description} onChange={set("description")} /></Field>
       <Field label="Unit"><Input value={f.unit} onChange={set("unit")} /></Field>
       <Field label="Qty"><Input type="number" step="0.0001" value={f.quantity} onChange={set("quantity")} /></Field>
@@ -850,6 +869,11 @@ function AddItemForm({ assemblies, costTypes, areas, onAdd }: { assemblies: Asse
         <Select value={f.areaId} onChange={set("areaId")}>
           <option value="">— none —</option>
           {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </Select>
+      </Field>
+      <Field label="Kind">
+        <Select value={f.kind} onChange={set("kind")}>
+          {ITEM_KINDS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
         </Select>
       </Field>
       <Button variant="outline" onClick={submit}><Plus className="h-4 w-4" /></Button>

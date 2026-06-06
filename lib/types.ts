@@ -114,6 +114,7 @@ export interface ItemBreakdown {
   quantity: number; assemblyId: number | null; unitRate: number; lineTotal: number; sortOrder: number
   components: ItemCostComponentBreakdown[]
   areaId: number | null
+  kind: string
 }
 
 export interface Area { id: number; parentAreaId: number | null; name: string; code: string | null; kind: string; sortOrder: number; quantity: number; unit: string | null }
@@ -148,7 +149,7 @@ export interface FxView {
 export interface EstimateBreakdown {
   id: number; projectId: number; revision: number; title: string; status: string; currency: string
   directCost: number; indirectCost: number; markupCost: number; bidPrice: number
-  taxRatePct: number | null; taxAmount: number; bidPriceInclTax: number
+  taxRatePct: number | null; taxAmount: number; bidPriceInclTax: number; alternatesTotal: number
   sections: SectionBreakdown[]; preliminaries: PrelimBreakdown[]; markups: MarkupBreakdown[]
   rowVersion: string
   fx: FxView | null

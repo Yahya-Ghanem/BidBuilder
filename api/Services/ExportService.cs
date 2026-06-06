@@ -39,6 +39,25 @@ public class ExportService
     private static readonly XLColor MatColor    = XLColor.FromArgb(0xF5, 0x9E, 0x0B); // amber-500 — material bars
     private static readonly XLColor ManColor    = XLColor.FromArgb(0x3B, 0x82, 0xF6); // blue-500  — manpower bars
 
+    /// <summary>Human label for a non-Normal BOQ line kind ("" for Normal).</summary>
+    private static string KindLabel(string kind) => kind switch
+    {
+        "ProvisionalSum" => "Provisional Sum",
+        "PcSum"          => "PC Sum",
+        "Daywork"        => "Daywork",
+        "Alternate"      => "Alternate",
+        _                => "",
+    };
+
+    /// <summary>Append a bracketed kind tag to a line description so provisional/PC/alternate
+    /// lines are unmistakable on the exported BOQ (a provisional sum that reads as normal work
+    /// invites a marked-up, rejected tender).</summary>
+    private static string WithKind(string description, string kind)
+    {
+        var k = KindLabel(kind);
+        return k.Length == 0 ? description : $"{description}  [{k}]";
+    }
+
     /// <summary>Brand-fill a header row range (bold white on teal, centred).</summary>
     private static void StyleHeader(IXLRange r)
     {
@@ -125,6 +144,11 @@ public class ExportService
             Line("TOTAL incl. tax", e.BidPriceInclTax, bold: true);
             sumLast = r - 1;
         }
+        if (e.AlternatesTotal > 0m)
+        {
+            Line("Alternates (excluded from bid)", e.AlternatesTotal);
+            sumLast = r - 1;
+        }
         if (e.Fx is not null)
         {
             sum.Cell(r, 1).Value = $"≈ in {e.Fx.SecondaryCurrency}  (1 {e.Currency} = {e.Fx.Rate:#,##0.######} {e.Fx.SecondaryCurrency}{(e.Fx.Frozen ? ", frozen" : "")})";
@@ -161,7 +185,7 @@ public class ExportService
             {
                 var fill = band ? BandFill : XLColor.White;
                 boq.Cell(row, 1).Value = i.ItemCode;
-                boq.Cell(row, 2).Value = i.Description;
+                boq.Cell(row, 2).Value = WithKind(i.Description, i.Kind);
                 boq.Cell(row, 3).Value = i.Unit;
                 boq.Cell(row, 4).Value = i.Quantity; boq.Cell(row, 4).Style.NumberFormat.Format = "#,##0.####";
                 boq.Cell(row, 5).Value = i.UnitRate;  boq.Cell(row, 5).Style.NumberFormat.Format = "#,##0.00";
@@ -210,7 +234,7 @@ public class ExportService
         var sb = new StringBuilder();
         sb.Append('﻿'); // UTF-8 BOM — Excel opens it as UTF-8 instead of ANSI
 
-        sb.Append("Section Code,Section Title,Item Code,Description,Unit,Qty,Unit Rate,Line Total,Currency\r\n");
+        sb.Append("Section Code,Section Title,Item Code,Description,Unit,Qty,Unit Rate,Line Total,Currency,Kind\r\n");
         foreach (var s in e.Sections)
             foreach (var i in s.Items)
                 sb.Append(CsvEsc(s.Code)).Append(',')
@@ -221,7 +245,8 @@ public class ExportService
                   .Append(i.Quantity.ToString("0.####", ci)).Append(',')
                   .Append(i.UnitRate.ToString("0.00", ci)).Append(',')
                   .Append(i.LineTotal.ToString("0.00", ci)).Append(',')
-                  .Append(CsvEsc(e.Currency)).Append("\r\n");
+                  .Append(CsvEsc(e.Currency)).Append(',')
+                  .Append(CsvEsc(i.Kind)).Append("\r\n");
 
         return Encoding.UTF8.GetBytes(sb.ToString());
     }
@@ -287,7 +312,7 @@ public class ExportService
                                 table.Cell().Padding(3).Text(i.ItemCode);
                                 table.Cell().Padding(3).Column(dc =>
                                 {
-                                    dc.Item().Text(i.Description);
+                                    dc.Item().Text(WithKind(i.Description, i.Kind));
                                     if (i.Components.Count > 0)
                                         dc.Item().Text(string.Join("   +   ", i.Components.Select(comp =>
                                             comp.CalcKind == "Percent" ? $"{comp.Name} {comp.Value:#,##0.##}%"
@@ -351,6 +376,8 @@ public class ExportService
                             t.Item().Text($"VAT ({e.TaxRatePct:#,##0.##}%): {Money(e.TaxAmount)}");
                             t.Item().Text($"TOTAL incl. tax: {Money(e.BidPriceInclTax)}").FontSize(13).Bold().FontColor(Colors.Teal.Darken2);
                         }
+                        if (e.AlternatesTotal > 0m)
+                            t.Item().Text($"Alternates (excluded): {Money(e.AlternatesTotal)}").FontColor(Colors.Grey.Darken1);
                         if (e.Fx is not null)
                             t.Item().Text($"≈ {e.Fx.SecondaryCurrency} {e.Fx.ConvertedBidPrice:#,##0.00}  (1 {e.Currency} = {e.Fx.Rate:#,##0.######} {e.Fx.SecondaryCurrency}{(e.Fx.Frozen ? ", frozen" : "")})")
                                 .FontSize(8).FontColor(Colors.Grey.Darken1);

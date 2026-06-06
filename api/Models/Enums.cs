@@ -52,6 +52,22 @@ public enum CostCalcKind
     Percent = 1,  // a percentage of the Amount-kind subtotal (Waste, Overheads …)
 }
 
+/// <summary>
+/// How a BOQ line participates in the bid build-up. <see cref="Normal"/> and
+/// <see cref="Daywork"/> are priced work that markups apply to. <see cref="ProvisionalSum"/>
+/// and <see cref="PcSum"/> are carried in the bid at net cost but EXCLUDED from markup
+/// (marking them up is a classic rejected-tender error). <see cref="Alternate"/> lines are
+/// carried for the client's option but EXCLUDED from the base tender total.
+/// </summary>
+public enum BoqItemKind
+{
+    Normal         = 0,
+    ProvisionalSum = 1,   // in the bid, not marked up
+    PcSum          = 2,   // prime-cost sum — in the bid, not marked up
+    Daywork        = 3,   // priced work — marked up like Normal
+    Alternate      = 4,   // excluded from the base tender (carried separately)
+}
+
 /// <summary>The level a project Area node represents (a display label only;
 /// the tree itself nests arbitrarily via ParentAreaId).</summary>
 public enum AreaKind
