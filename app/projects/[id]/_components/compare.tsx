@@ -49,7 +49,7 @@ export function CompareRevisions({ estimates, onClose }: { estimates: EstimateSu
           <GitCompareArrows className="h-4 w-4 text-[var(--brand)]" /> Compare revisions
         </h3>
         {onClose && (
-          <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Close comparison">
+          <button onClick={onClose} className="rounded p-1 text-muted hover:bg-slate-100 hover:text-slate-600" title="Close comparison">
             <X className="h-4 w-4" />
           </button>
         )}
@@ -69,14 +69,14 @@ export function CompareRevisions({ estimates, onClose }: { estimates: EstimateSu
                              : "border-[var(--border)] text-slate-600 hover:border-slate-400"}`}>
               {on && <span className="grid h-4 w-4 place-items-center rounded-full bg-[var(--brand)] text-[10px] font-bold text-white">{idx + 1}</span>}
               Rev {e.revision}
-              <span className="text-slate-400">· {e.status}</span>
+              <span className="text-muted">· {e.status}</span>
             </button>
           )
         })}
       </div>
 
-      {!enough && <p className="text-xs text-slate-400">Select 2–4 revisions to compare.</p>}
-      {enough && isLoading && <p className="text-sm text-slate-400">Comparing…</p>}
+      {!enough && <p className="text-xs text-muted">Select 2–4 revisions to compare.</p>}
+      {enough && isLoading && <p className="text-sm text-muted">Comparing…</p>}
       {enough && error && <p className="text-sm text-rose-600">{(error as Error).message}</p>}
       {enough && data && <CompareTable view={data} />}
     </Card>
@@ -92,14 +92,14 @@ function CompareTable({ view }: { view: CompareView }) {
       <table className="w-full min-w-[640px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-[var(--border)]">
-            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Metric</th>
+            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">Metric</th>
             {columns.map((c, i) => (
               <th key={c.estimateId} className="px-3 py-2 text-right align-bottom">
                 <div className="flex flex-col items-end gap-1">
                   <span className="font-semibold text-slate-700">Rev {c.revision}</span>
                   <Badge className={statusColor(c.status)}>{c.status}</Badge>
-                  {i === 0 && <span className="text-[10px] uppercase tracking-wide text-slate-400">baseline</span>}
-                  <span className="max-w-[12rem] truncate text-[11px] font-normal text-slate-400" title={c.title}>{c.title}</span>
+                  {i === 0 && <span className="text-[10px] uppercase tracking-wide text-muted">baseline</span>}
+                  <span className="max-w-[12rem] truncate text-[11px] font-normal text-muted" title={c.title}>{c.title}</span>
                 </div>
               </th>
             ))}
@@ -116,13 +116,13 @@ function CompareTable({ view }: { view: CompareView }) {
 
           {sections.length > 0 && (
             <tr className="border-t border-[var(--border)] bg-slate-50/60">
-              <td colSpan={columns.length + 1} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Sections</td>
+              <td colSpan={columns.length + 1} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted">Sections</td>
             </tr>
           )}
           {sections.map((s) => (
             <tr key={s.key} className="border-t border-[var(--border)]">
               <td className="px-3 py-1.5 text-slate-600">
-                {s.code && <span className="mr-1 text-slate-400">{s.code}</span>}{s.title}
+                {s.code && <span className="mr-1 text-muted">{s.code}</span>}{s.title}
               </td>
               {columns.map((c, i) => (
                 <Cell key={c.estimateId} value={s.totals[i]} baseline={s.totals[0]} currency={c.currency} isBaseline={i === 0} mixed={mixedCurrency} />
@@ -137,7 +137,7 @@ function CompareTable({ view }: { view: CompareView }) {
           These revisions use different currencies — figures are shown in each revision&apos;s own currency and deltas are hidden (they aren&apos;t directly comparable).
         </p>
       )}
-      <p className="mt-2 text-[11px] text-slate-400">Deltas are measured against Rev {baseline.revision} (the baseline column).</p>
+      <p className="mt-2 text-[11px] text-muted">Deltas are measured against Rev {baseline.revision} (the baseline column).</p>
     </div>
   )
 }
@@ -197,7 +197,7 @@ function Cell({ value, baseline, currency, isBaseline, mixed }: {
  *  a lower bid is usually the “better” option to highlight). */
 function Delta({ value, baseline }: { value: number; baseline: number }) {
   const d = value - baseline
-  if (Math.abs(d) < 0.005) return <span className="ml-1.5 text-[11px] text-slate-400">=</span>
+  if (Math.abs(d) < 0.005) return <span className="ml-1.5 text-[11px] text-muted">=</span>
   const pct = baseline !== 0 ? (d / Math.abs(baseline)) * 100 : null
   return (
     <span className={`ml-1.5 block text-[11px] ${d > 0 ? "text-rose-600" : "text-emerald-600"}`}>

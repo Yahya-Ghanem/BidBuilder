@@ -53,12 +53,12 @@ export function TeamsPanel({ projectId }: { projectId: number }) {
         <Users className="h-4 w-4 text-[var(--brand)]" /> Teams
       </div>
 
-      {assigned.length === 0 && <p className="text-sm text-slate-400">No teams assigned yet.</p>}
+      {assigned.length === 0 && <p className="text-sm text-muted">No teams assigned yet.</p>}
       <div className="space-y-1">
         {assigned.map((t) => (
           <div key={t.groupId} className="flex items-center justify-between rounded-md border border-[var(--border)] px-3 py-2 text-sm">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-xs text-slate-400">{t.groupCode}</span>
+              <span className="font-mono text-xs text-muted">{t.groupCode}</span>
               <span className="font-medium text-slate-700">{t.groupName}</span>
               {t.isLead && <Badge className="bg-[var(--brand)]/10 text-[var(--brand)]">Lead</Badge>}
             </div>
@@ -77,7 +77,7 @@ export function TeamsPanel({ projectId }: { projectId: number }) {
 
       {isAdmin && <AssignTeam available={available} busy={assign.isPending} onAssign={(v) => assign.mutate(v)} />}
       {isAdmin && available.length === 0 && groups.data && (
-        <p className="mt-2 text-xs text-slate-400">All teams are already assigned.</p>
+        <p className="mt-2 text-xs text-muted">All teams are already assigned.</p>
       )}
     </Card>
   )

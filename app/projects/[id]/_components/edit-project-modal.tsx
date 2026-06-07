@@ -69,7 +69,7 @@ export function EditProjectModal({ project, onClose }: { project: Project; onClo
           <Field label="Tender due"><Input type="date" value={f.tenderDueAt} onChange={set("tenderDueAt")} /></Field>
           <Field label="Status"><Select value={f.status} onChange={set("status")}>{STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</Select></Field>
         </div>
-        <p className="text-xs text-slate-400">Changing the duration re-prices time-related preliminaries on this project&apos;s draft estimates.</p>
+        <p className="text-xs text-muted">Changing the duration re-prices time-related preliminaries on this project&apos;s draft estimates.</p>
       </form>
       <div className="mt-4 flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>

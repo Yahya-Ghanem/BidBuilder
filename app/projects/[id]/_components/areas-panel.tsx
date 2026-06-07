@@ -36,13 +36,13 @@ export function AreasPanel({ projectId }: { projectId: number }) {
         <div className="flex items-center justify-between rounded py-1 pr-2 hover:bg-slate-50" style={{ paddingLeft: depth * 18 + 4 }}>
           <span className="flex items-center text-sm">
             <CollapseToggle open={open} hasChildren={kids.length > 0} onToggle={() => toggle(area.id)} />
-            {area.code && <span className="mr-1 font-mono text-xs text-slate-400">{area.code}</span>}
-            {area.name}<span className="ml-2 text-xs text-slate-400">{area.kind}{area.quantity > 0 ? ` · ${area.quantity}${area.unit ? ` ${area.unit}` : ""}` : ""}{kids.length > 0 && !open ? ` · ${kids.length}` : ""}</span>
+            {area.code && <span className="mr-1 font-mono text-xs text-muted">{area.code}</span>}
+            {area.name}<span className="ml-2 text-xs text-muted">{area.kind}{area.quantity > 0 ? ` · ${area.quantity}${area.unit ? ` ${area.unit}` : ""}` : ""}{kids.length > 0 && !open ? ` · ${kids.length}` : ""}</span>
           </span>
           <div className="flex gap-1">
-            {canAdd && <button onClick={() => setModal({ parentAreaId: area.id })} className="rounded p-1 text-slate-400 hover:text-[var(--brand)]" title="Add sub-area"><Plus className="h-3.5 w-3.5" /></button>}
-            {canEdit && <button onClick={() => setModal({ parentAreaId: area.parentAreaId, area })} className="rounded p-1 text-slate-400 hover:text-slate-700" title="Edit"><Pencil className="h-3.5 w-3.5" /></button>}
-            {canDelete && <button onClick={() => { if (confirm(`Delete area "${area.name}"?`)) del.mutate(area.id) }} className="rounded p-1 text-slate-400 hover:text-rose-600" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>}
+            {canAdd && <button onClick={() => setModal({ parentAreaId: area.id })} className="rounded p-1 text-muted hover:text-[var(--brand)]" title="Add sub-area"><Plus className="h-3.5 w-3.5" /></button>}
+            {canEdit && <button onClick={() => setModal({ parentAreaId: area.parentAreaId, area })} className="rounded p-1 text-muted hover:text-slate-700" title="Edit"><Pencil className="h-3.5 w-3.5" /></button>}
+            {canDelete && <button onClick={() => { if (confirm(`Delete area "${area.name}"?`)) del.mutate(area.id) }} className="rounded p-1 text-muted hover:text-rose-600" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>}
           </div>
         </div>
         {open && kids.map((k) => <Node key={k.id} area={k} depth={depth + 1} />)}
@@ -60,7 +60,7 @@ export function AreasPanel({ projectId }: { projectId: number }) {
         </div>
       </div>
       {(areas?.length ?? 0) === 0
-        ? <p className="text-xs text-slate-400">No areas yet. Break the project into areas, sub-areas and units — BOQ items tagged to them roll up by location.</p>
+        ? <p className="text-xs text-muted">No areas yet. Break the project into areas, sub-areas and units — BOQ items tagged to them roll up by location.</p>
         : <div>{childrenOf(null).map((r) => <Node key={r.id} area={r} depth={0} />)}</div>}
       {modal && <AreaModal projectId={projectId} parentAreaId={modal.parentAreaId} area={modal.area} onClose={() => setModal(null)} onSaved={() => { inval(); setModal(null) }} />}
     </Card>
@@ -98,7 +98,7 @@ function AreaModal({ projectId, parentAreaId, area, onClose, onSaved }: { projec
           <Field label="Quantity"><Input type="number" step="0.0001" min={0} value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="e.g. 120" /></Field>
           <Field label="Measure unit"><Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="m², unit, key…" maxLength={16} /></Field>
         </div>
-        <p className="text-xs text-slate-400">Optional. Used to report cost per unit/m² on the area roll-up — it never changes the bid.</p>
+        <p className="text-xs text-muted">Optional. Used to report cost per unit/m² on the area roll-up — it never changes the bid.</p>
       </div>
       <div className="mt-4 flex justify-end gap-2"><Button variant="outline" onClick={onClose}>Cancel</Button><Button disabled={busy} onClick={save}>{busy ? "Saving…" : "Save"}</Button></div>
     </Modal>

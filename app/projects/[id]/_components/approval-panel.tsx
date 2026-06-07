@@ -74,7 +74,7 @@ export function ApprovalPanel({ estimateId, status }: { estimateId: number; stat
       </div>
 
       {data.approvals.length === 0 ? (
-        <p className="text-xs text-slate-400">{t("ed.appr.none")}</p>
+        <p className="text-xs text-muted">{t("ed.appr.none")}</p>
       ) : (
         <ul className="space-y-1 text-sm">
           {data.approvals.map((a) => (
@@ -82,12 +82,12 @@ export function ApprovalPanel({ estimateId, status }: { estimateId: number; stat
               <span className="flex min-w-0 items-center gap-2">
                 <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
                 <span className="truncate text-slate-700">{a.approverName || a.approverEmail}</span>
-                <span className="truncate text-xs text-slate-400">{new Date(a.approvedAt).toLocaleString()}</span>
+                <span className="truncate text-xs text-muted">{new Date(a.approvedAt).toLocaleString()}</span>
                 {a.note && <span className="truncate text-xs text-slate-500" title={a.note}>· {a.note}</span>}
               </span>
               {(user?.id === a.approverUserId || isAdmin) && (
                 <button onClick={() => { if (confirm(t("ed.appr.revokeConfirm"))) revoke.mutate(a.id) }}
-                        className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" title={t("ed.appr.revoke")}>
+                        className="rounded p-1 text-muted hover:bg-rose-50 hover:text-rose-600" title={t("ed.appr.revoke")}>
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               )}
@@ -114,7 +114,7 @@ export function ApprovalPanel({ estimateId, status }: { estimateId: number; stat
       {isAdmin && !isFinalised && myApproval && (
         <p className="mt-2 text-xs text-slate-500">{t("ed.appr.signed")}</p>
       )}
-      {!isAdmin && <p className="mt-2 text-xs text-slate-400">{t("ed.appr.adminOnly")}</p>}
+      {!isAdmin && <p className="mt-2 text-xs text-muted">{t("ed.appr.adminOnly")}</p>}
     </Card>
   )
 }

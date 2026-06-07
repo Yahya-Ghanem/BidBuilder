@@ -65,9 +65,9 @@ function Row({
       title={title}
     >
       {hasChildren
-        ? <span className="shrink-0 text-slate-400">{open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}</span>
+        ? <span className="shrink-0 text-muted">{open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}</span>
         : <span className="inline-block w-3.5 shrink-0" />}
-      <span className="shrink-0 text-slate-400">{icon}</span>
+      <span className="shrink-0 text-muted">{icon}</span>
       <span className="truncate font-medium">{label}</span>
       {hint && <span className="truncate text-xs text-slate-500">{hint}</span>}
     </div>
@@ -244,7 +244,7 @@ function AreasView({ projectId }: { projectId: number }) {
       return (
         <div key={a.id}>
           <div className="flex items-center gap-2 border-t border-[var(--border)] py-1.5 text-sm" style={{ paddingLeft: depth * 20 + 8 }}>
-            <Folder className="h-4 w-4 text-slate-400" />
+            <Folder className="h-4 w-4 text-muted" />
             {a.code && <span className="font-mono text-xs text-slate-500">{a.code}</span>}
             <span className="text-slate-800">{a.name}</span>
             <span className="text-xs text-slate-500">{a.kind}</span>
@@ -327,7 +327,7 @@ function ActivitiesView({ estimateId, projectId }: { estimateId: number; project
       return (
         <div key={a.id}>
           <div className="flex items-center gap-2 border-t border-[var(--border)] py-1.5 text-sm" style={{ paddingLeft: depth * 18 + 8 }}>
-            <Folder className="h-4 w-4 text-slate-400" />
+            <Folder className="h-4 w-4 text-muted" />
             <span className="text-slate-800">{a.name}</span>
             <span className="text-xs text-slate-500">{a.kind}{acts.length ? ` · ${acts.length} activit${acts.length > 1 ? "ies" : "y"}` : ""}</span>
           </div>
@@ -374,9 +374,9 @@ function CostByAreaView({ estimateId }: { estimateId: number }) {
           <div className="grid grid-cols-[1fr_110px_130px_120px] items-center gap-2 border-t border-[var(--border)] py-1.5 text-sm" style={{ paddingLeft: depth * 18 + 8 }}>
             <span className="flex items-center gap-1.5">
               {has
-                ? <button onClick={() => toggle(a.id)} className="text-slate-400 hover:text-slate-600">{open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}</button>
+                ? <button onClick={() => toggle(a.id)} className="text-muted hover:text-slate-600">{open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}</button>
                 : <span className="inline-block w-3.5" />}
-              <Folder className="h-4 w-4 text-slate-400" />
+              <Folder className="h-4 w-4 text-muted" />
               <span className="text-slate-800">{a.name}</span>
               <span className="text-xs text-slate-500">{a.kind}{!open && has ? ` · ${kids.length} sub-area(s)` : ""}</span>
             </span>

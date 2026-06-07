@@ -44,7 +44,7 @@ function Detail({ projectId }: { projectId: number }) {
   const [editing, setEditing] = useState(false)
   const project = useQuery({ queryKey: ["project", projectId], queryFn: () => fetchApi<Project>(`/api/projects/${projectId}`) })
 
-  if (project.isLoading) return <p className="text-slate-400">{t("common.loading")}</p>
+  if (project.isLoading) return <p className="text-muted">{t("common.loading")}</p>
   if (project.error) return <p className="text-rose-600">{(project.error as Error).message}</p>
   const p = project.data!
 
@@ -58,7 +58,7 @@ function Detail({ projectId }: { projectId: number }) {
       <Card className="sticky top-0 z-20 p-4 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <span className="font-mono text-xs text-slate-400">{p.code}{p.projectTypeName ? ` · ${p.projectTypeName}` : ""}</span>
+            <span className="font-mono text-xs text-muted">{p.code}{p.projectTypeName ? ` · ${p.projectTypeName}` : ""}</span>
             <h2 className="truncate text-lg font-bold text-slate-800">{p.name}</h2>
             <p className="text-xs text-slate-500">
               {p.clientName ?? "—"} · {p.location ?? "—"}

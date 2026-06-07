@@ -38,11 +38,11 @@ export function SectionBlock({ section, currency, assemblies, costTypes, areas, 
         <span className="flex items-center gap-1.5 font-semibold text-slate-700">
           <CollapseToggle open={open} hasChildren={section.items.length > 0} onToggle={onToggle} />
           {section.code} {section.title}
-          {!open && section.items.length > 0 && <span className="text-xs font-normal text-slate-400">· {section.items.length} item(s)</span>}
+          {!open && section.items.length > 0 && <span className="text-xs font-normal text-muted">· {section.items.length} item(s)</span>}
         </span>
         <div className="flex items-center gap-3">
           <Money className="font-semibold" value={section.sectionTotal} currency={currency} />
-          {canDelete && <button onClick={onDelSection} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
+          {canDelete && <button onClick={onDelSection} className="rounded p-1 text-muted hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
         </div>
       </div>
       {open && (
@@ -142,7 +142,7 @@ export function ItemRow({ item, currency, costTypes, areas, canEdit, canDelete, 
         {item.description}
         {item.kind !== "Normal" && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">{kindLabel(item.kind)}</span>}
         {hasComps && (
-          <div className="text-xs text-slate-400">
+          <div className="text-xs text-muted">
             {item.components.map((c) => `${c.code} ${c.calcKind === "Percent" ? c.value + "%" : (c.quantity != null && c.rate != null ? `${c.quantity}×${c.rate}` : c.value)}`).join(" + ")}
           </div>
         )}
@@ -153,7 +153,7 @@ export function ItemRow({ item, currency, costTypes, areas, canEdit, canDelete, 
                 <option value="">— no area —</option>
                 {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
-            : areaName && <span className="text-xs text-slate-400">📍 {areaName}</span>}
+            : areaName && <span className="text-xs text-muted">📍 {areaName}</span>}
           {canEdit && (
             <select value={item.kind} onChange={(ev) => onUpd({ ...base, quantity: item.quantity, kind: ev.target.value })}
                     title="Line kind" className="rounded border border-[var(--border)] bg-white px-1 py-0.5 text-xs text-slate-500">
@@ -180,11 +180,11 @@ export function ItemRow({ item, currency, costTypes, areas, canEdit, canDelete, 
         <div className="flex items-center justify-end gap-1">
           {adHoc && canEdit && (
             <button onClick={() => setBuildup(true)} title="Unit-rate build-up"
-                    className={cn("rounded p-1 hover:bg-slate-100", hasComps ? "text-[var(--brand)]" : "text-slate-400")}>
+                    className={cn("rounded p-1 hover:bg-slate-100", hasComps ? "text-[var(--brand)]" : "text-muted")}>
               <Layers className="h-3.5 w-3.5" />
             </button>
           )}
-          {canDelete && <button onClick={onDel} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
+          {canDelete && <button onClick={onDel} className="rounded p-1 text-muted hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
         </div>
       </td>
       {buildup && (

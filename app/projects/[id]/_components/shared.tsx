@@ -94,7 +94,7 @@ export function DeltaBadge({
     >
       <Icon className="h-3 w-3" aria-hidden />
       <span>{formatted}</span>
-      <span className="text-slate-400">vs {vsLabel}</span>
+      <span className="text-muted">vs {vsLabel}</span>
     </div>
   )
 }
@@ -112,7 +112,7 @@ export function NewPill({ vsLabel }: { vsLabel: string }) {
       className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-info"
     >
       <span className="rounded bg-info-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">New</span>
-      <span className="text-slate-400">vs {vsLabel}</span>
+      <span className="text-muted">vs {vsLabel}</span>
     </div>
   )
 }
@@ -124,7 +124,7 @@ export function Row({ left, right, onDelete }: { left: string; right: string; on
       <span className="text-slate-600">{left}</span>
       <div className="flex items-center gap-2">
         <span className="font-medium">{right}</span>
-        {onDelete && <button onClick={onDelete} className="rounded p-1 text-slate-400 hover:bg-danger-soft hover:text-danger"><Trash2 className="h-3 w-3" /></button>}
+        {onDelete && <button onClick={onDelete} className="rounded p-1 text-muted hover:bg-danger-soft hover:text-danger"><Trash2 className="h-3 w-3" /></button>}
       </div>
     </div>
   )
@@ -135,7 +135,7 @@ export function Row({ left, right, onDelete }: { left: string; right: string; on
 export function CollapseToggle({ open, hasChildren, onToggle }: { open: boolean; hasChildren: boolean; onToggle: () => void }) {
   if (!hasChildren) return <span className="inline-block w-[18px]" />
   return (
-    <button onClick={onToggle} className="rounded p-0.5 text-slate-400 hover:text-slate-700" title={open ? "Collapse" : "Expand"}>
+    <button onClick={onToggle} className="rounded p-0.5 text-muted hover:text-slate-700" title={open ? "Collapse" : "Expand"}>
       {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
     </button>
   )

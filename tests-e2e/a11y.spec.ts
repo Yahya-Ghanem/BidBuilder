@@ -14,15 +14,16 @@ import AxeBuilder from "@axe-core/playwright"
  * literally cannot operate the surface (unlabeled inputs/selects, buttons with
  * no accessible name) — those ARE shippable blockers.
  *
+ * 26.2 — "serious" impact violations are now gated BY DEFAULT (the slate-400
+ * → --muted sweep closed the deferred 24.4 debt). Set A11Y_INCLUDE_SERIOUS=0
+ * locally to *opt out* if iterating on a separate cosmetic refactor and you
+ * temporarily don't want the serious bar to block — the default is on.
+ *
  * NOT yet gated (deliberate, tracked):
  *   • /projects (list) and /projects/[id] (detail). These surfaces have a long
  *     tail of icon-only buttons + selects from earlier increments that need
  *     a dedicated cleanup pass. Easier to land the gate + iterate forward than
  *     bundle a wide cosmetic sweep into the gate-enable PR.
- *   • "serious" impact violations. Mostly color-contrast on the slate-400 muted
- *     palette — a real signal but a whole-app cosmetic refactor that earns its
- *     own PR (a new --muted CSS var bumped to AA contrast). Set
- *     A11Y_INCLUDE_SERIOUS=1 locally to see those today.
  *
  * Test-only rule disables:
  *   • region — the /login layout intentionally omits a top-level <main>
@@ -34,7 +35,10 @@ import AxeBuilder from "@axe-core/playwright"
  * (testDir = tests-e2e, all *.spec.ts).
  */
 
-const INCLUDE_SERIOUS = process.env.A11Y_INCLUDE_SERIOUS === "1"
+// 26.2 — Default ON. Opt out with A11Y_INCLUDE_SERIOUS=0 if you specifically
+// need the lower bar (e.g. wide cosmetic refactor in flight). Anything OTHER
+// than the literal string "0" keeps the serious bar enabled.
+const INCLUDE_SERIOUS = process.env.A11Y_INCLUDE_SERIOUS !== "0"
 
 function axe(page: import("@playwright/test").Page) {
   return new AxeBuilder({ page })

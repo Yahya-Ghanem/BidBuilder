@@ -130,7 +130,7 @@ export function StatCards({ e, areas }: { e: EstimateBreakdown; areas: Area[] | 
               aria-label={t("stat.perUnit.aria", { unit })}
             />
             <span>{t("stat.perUnit.toggle", { unit })}</span>
-            <span className="text-slate-400">({divisor.toLocaleString(undefined, { maximumFractionDigits: 2 })} {unit})</span>
+            <span className="text-muted">({divisor.toLocaleString(undefined, { maximumFractionDigits: 2 })} {unit})</span>
           </label>
         </div>
       )}

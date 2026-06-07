@@ -56,7 +56,7 @@ export function TargetPanel({ estimateId, currency, currentBid, currentAdjustmen
       {currentAdjustment !== 0 && (
         <p className="mt-2 flex items-center justify-between text-sm text-slate-500">
           <span>{t("ed.target.current")} <b className="text-slate-700">{currentAdjustment > 0 ? "+" : ""}<Money value={currentAdjustment} currency={currency} /></b></span>
-          {canApply && <button onClick={() => clear.mutate()} className="text-xs text-slate-400 hover:text-rose-600">{t("ed.target.clear")}</button>}
+          {canApply && <button onClick={() => clear.mutate()} className="text-xs text-muted hover:text-rose-600">{t("ed.target.clear")}</button>}
         </p>
       )}
     </Card>

@@ -26,11 +26,11 @@ export function AreaRollupPanel({ estimateId, currency, canExport, onExport }: {
         <div className="flex items-center justify-between py-1 text-sm" style={{ paddingLeft: depth * 18 }}>
           <span className="flex items-center">
             <CollapseToggle open={open} hasChildren={kids.length > 0} onToggle={() => toggle(a.id)} />
-            {a.name} <span className="ml-1 text-xs text-slate-400">{a.kind}{a.itemCount ? ` · ${a.itemCount} item${a.itemCount > 1 ? "s" : ""}` : ""}{a.quantity > 0 ? ` · ${a.quantity}${a.unit ? ` ${a.unit}` : ""}` : ""}{!open && kids.length > 0 ? ` · ${kids.length} sub-area${kids.length > 1 ? "s" : ""}` : ""}</span>
+            {a.name} <span className="ml-1 text-xs text-muted">{a.kind}{a.itemCount ? ` · ${a.itemCount} item${a.itemCount > 1 ? "s" : ""}` : ""}{a.quantity > 0 ? ` · ${a.quantity}${a.unit ? ` ${a.unit}` : ""}` : ""}{!open && kids.length > 0 ? ` · ${kids.length} sub-area${kids.length > 1 ? "s" : ""}` : ""}</span>
           </span>
           <span className="text-right">
             <Money className="font-medium" value={a.rollupTotal} currency={currency} />
-            {a.costPerUnit != null && <span className="ml-2 text-xs text-slate-400"><Money value={a.costPerUnit} currency={currency} />/{a.unit || "unit"}</span>}
+            {a.costPerUnit != null && <span className="ml-2 text-xs text-muted"><Money value={a.costPerUnit} currency={currency} />/{a.unit || "unit"}</span>}
           </span>
         </div>
         {open && kids.map((k) => <RollupRow key={k.id} a={k} depth={depth + 1} />)}

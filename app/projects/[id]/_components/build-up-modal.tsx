@@ -55,13 +55,13 @@ export function BuildUpModal({ open, onClose, costTypes, currency, initial, onSa
   return (
     <Modal open={open} onClose={onClose} title="Cost build-up">
       <div className="space-y-2">
-        {active.length === 0 && <p className="text-sm text-slate-400">No active cost-component types. Add some in Settings.</p>}
-        <div className="grid grid-cols-[1fr_84px_96px_96px] items-center gap-2 text-xs text-slate-400">
+        {active.length === 0 && <p className="text-sm text-muted">No active cost-component types. Add some in Settings.</p>}
+        <div className="grid grid-cols-[1fr_84px_96px_96px] items-center gap-2 text-xs text-muted">
           <span>Component</span><span className="text-right">Qty / %</span><span className="text-right">Rate</span><span className="text-right">Amount</span>
         </div>
         {active.map((t) => (
           <div key={t.id} className="grid grid-cols-[1fr_84px_96px_96px] items-center gap-2">
-            <span className="text-sm">{t.name} <span className="text-xs text-slate-400">{t.calcKind === "Percent" ? "%" : "qty × rate"}</span></span>
+            <span className="text-sm">{t.name} <span className="text-xs text-muted">{t.calcKind === "Percent" ? "%" : "qty × rate"}</span></span>
             {t.calcKind === "Percent" ? (
               <>
                 <Input type="number" step="0.0001" value={pct[t.id] ?? ""} placeholder="0"
