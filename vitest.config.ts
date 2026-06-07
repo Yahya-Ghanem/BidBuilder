@@ -9,10 +9,19 @@ export default defineConfig({
     alias: { "@": fileURLToPath(new URL("./", import.meta.url)) },
   },
   test: {
-    environment: "node",
-    // app/**/*.test.ts added in 25.5 so the StatCards divisor helper can be
-    // unit-tested next to its source. lib/ remains the home for shared helpers;
-    // app/ tests should be small + pure (no React rendering).
-    include: ["lib/**/*.test.ts", "tests/**/*.test.ts", "app/**/*.test.ts"],
+    // jsdom needed by 26.4 — DataTable test uses @testing-library/react which
+    // requires window/document. Node remains the default for everything else
+    // via the per-test `@vitest-environment` pragma when needed; jsdom is the
+    // safe default since it's a superset (Node globals still available).
+    environment: "jsdom",
+    // app/**/*.test.ts (25.5) for StatCards-side helpers.
+    // components/**/*.test.{ts,tsx} (26.4) for the DataTable primitive and
+    // future component tests that exercise React rendering directly.
+    include: [
+      "lib/**/*.test.ts",
+      "tests/**/*.test.ts",
+      "app/**/*.test.ts",
+      "components/**/*.test.{ts,tsx}",
+    ],
   },
 })
