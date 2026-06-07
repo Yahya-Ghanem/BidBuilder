@@ -10,19 +10,110 @@
  * concurrency If-Match header) lets every sibling component live in its own
  * focused file without duplicating helpers.
  */
-import { useEffect, useRef, useState } from "react"
-import { ChevronDown, ChevronRight, Trash2 } from "lucide-react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
+import { ChevronDown, ChevronRight, Trash2, TrendingDown, TrendingUp, Minus } from "lucide-react"
 import type { QueryClient } from "@tanstack/react-query"
 import type { EstimateBreakdown } from "@/lib/types"
 import { Card, Button } from "@/components/ui"
+import { cn } from "@/lib/utils"
 
-/** Headline number card (Direct cost, Bid price, etc.). */
-export function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+/** Headline number card (Direct cost, Bid price, etc.). The optional
+ *  `delta` slot is rendered under the value — 25.5 wires a <DeltaBadge>
+ *  there to show "↑ 4.2% vs Rev 1" trend deltas against the prior revision,
+ *  or a <NewPill> when this card had no comparable prior value. */
+export function Stat({ label, value, highlight, delta }: { label: string; value: string; highlight?: boolean; delta?: ReactNode }) {
   return (
     <Card className={highlight ? "p-4 ring-2 ring-[var(--brand)]" : "p-4"}>
       <div className="text-xs text-slate-500">{label}</div>
       <div className={highlight ? "text-lg font-bold text-[var(--brand)]" : "text-lg font-semibold"}>{value}</div>
+      {delta}
     </Card>
+  )
+}
+
+// 25.5 — Numbers above this cap on the trend badge get clamped to ">N%" so a
+// runaway prior revision (e.g. a sub-cent base scaled up 1000× by a real
+// estimate) doesn't render as a 9-digit percent that wraps the card.
+const DELTA_CLAMP = 999
+
+/** 25.5 — Trend badge against a prior revision.
+ *
+ *  Renders `↑ 4.2% vs Rev 1` with a color that reflects whether the movement
+ *  is "good for the user". The CALLER decides which direction is better:
+ *  cost-style cards (direct / indirect) lower-is-better; revenue-style cards
+ *  (bid / bid incl. tax / markups — markups ARE the contractor's margin
+ *  envelope and the same money that lands in the bid) higher-is-better.
+ *
+ *  The ±0.05% noise band reads as "no meaningful change" and paints neutral
+ *  so estimators don't chase rounding noise. Inside the band the sign
+ *  character is stripped (no "+0.0%" / "-0.0%" artifacts) and the icon flips
+ *  to Minus for a consistent grey-dash-zero look.
+ *
+ *  Pct may be null when |previous| was effectively zero (the backend's
+ *  sub-cent guard) — that's the "card had no comparable prior value" case.
+ *  We render NOTHING here for null; the caller (StatCards) shows a separate
+ *  <NewPill> in that slot so the user can tell the case apart from "this is
+ *  revision 1".
+ */
+export function DeltaBadge({
+  pct, lowerIsBetter, vsLabel, ariaLabel,
+}: {
+  pct: number | null
+  /** True for cost cards (less is better). False for bid + markups cards (more is better). */
+  lowerIsBetter: boolean
+  /** What goes after "vs", e.g. "Rev 1" or "Rev 2". */
+  vsLabel: string
+  /** Optional accessible label override; default reads the rendered text. */
+  ariaLabel?: string
+}) {
+  if (pct == null) return null
+  const noise = Math.abs(pct) < 0.05
+  // If pct < 0 (lower) AND lowerIsBetter ⇒ good. If pct > 0 (higher) AND
+  // !lowerIsBetter ⇒ also good. (Inside the noise band the tone forces
+  // neutral, so this only affects directional badges.)
+  const better = pct < 0 ? lowerIsBetter : !lowerIsBetter
+  const tone = noise
+    ? "text-slate-500"
+    : better
+      ? "text-emerald-700"
+      : "text-rose-700"
+  const Icon = noise ? Minus : pct > 0 ? TrendingUp : TrendingDown
+  const clamped = Math.min(Math.abs(pct), DELTA_CLAMP)
+  const overCap = Math.abs(pct) > DELTA_CLAMP
+  // Sign: stripped inside the noise band so a "+0.0%" doesn't shout "uplift"
+  // and a "-0.0%" doesn't shout "drop" when the tone says "no change".
+  const sign = noise ? "" : pct > 0 ? "+" : "−"
+  // ">" prefix when over the cap so the user sees the value was huge without
+  // committing the card to a 9-digit string they have to mentally parse.
+  const formatted = `${overCap ? ">" : ""}${sign}${clamped.toFixed(1)}%`
+  return (
+    <div
+      role="status"
+      aria-label={ariaLabel ?? `${formatted} vs ${vsLabel}`}
+      className={cn("mt-1 inline-flex items-center gap-1 text-xs font-medium", tone)}
+    >
+      <Icon className="h-3 w-3" aria-hidden />
+      <span>{formatted}</span>
+      <span className="text-slate-400">vs {vsLabel}</span>
+    </div>
+  )
+}
+
+/** 25.5 — "NEW" pill rendered under a stat card whose prior revision had no
+ *  comparable value (server-side: |previous| < 0.005). Differentiates the
+ *  case "card first appeared on this revision" from "no prior revision at
+ *  all" (the latter renders no pill — the entire stat row has no delta slot
+ *  populated). Says NEW to non-technical estimators rather than "∞%". */
+export function NewPill({ vsLabel }: { vsLabel: string }) {
+  return (
+    <div
+      role="status"
+      aria-label={`New since ${vsLabel}`}
+      className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-sky-700"
+    >
+      <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">New</span>
+      <span className="text-slate-400">vs {vsLabel}</span>
+    </div>
   )
 }
 

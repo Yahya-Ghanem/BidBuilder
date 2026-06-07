@@ -15,7 +15,32 @@ public record EstimateBreakdown(
     List<RiskBreakdown> Risks,
     decimal SuggestedContingencyAmount, decimal SuggestedContingencyPct,
     CashFlowProjection CashFlow,
-    string RowVersion, FxView? Fx);
+    string RowVersion, FxView? Fx,
+    /// <summary>25.5 — Percent change vs. the immediately-prior revision (N-1 by
+    /// <see cref="Estimate.Revision"/>), or null when this is the first revision.
+    /// Each per-card percent is null when the prior value was zero (div-by-0 guard).
+    /// Estimators iterate prices across revisions; surfacing the direction +
+    /// magnitude turns the wall of bid numbers into a story.</summary>
+    PreviousRevisionDelta? PreviousDelta);
+
+/// <summary>25.5 — Percent change of each cached total against the immediately-
+/// prior revision in the same project (largest <see cref="Estimate.Revision"/>
+/// number strictly less than this one — handles gaps from middle-revision
+/// deletes). <c>Positive = current is HIGHER than previous</c>, regardless of
+/// the sign of either value (we divide by |previous|, so a -100 → -50 move
+/// reads as +50% — went up — rather than the -50% an unguarded ratio would
+/// produce). The frontend decides which direction is "better" (cost cards =
+/// lower; bid + markups = higher). Per-card percent is null when |previous|
+/// was effectively zero (below half a cent), which prevents the "∞%" footgun
+/// from a tiny-but-nonzero prior total; the frontend reads null as "card
+/// first appeared on this revision" and shows a "NEW" pill instead.</summary>
+public record PreviousRevisionDelta(
+    int FromRevision,
+    decimal? DirectCostPct,
+    decimal? IndirectCostPct,
+    decimal? MarkupCostPct,
+    decimal? BidPricePct,
+    decimal? BidPriceInclTaxPct);
 
 /// <summary>One row of the risk register, plus its expected value (EV = p/100 × impact).</summary>
 public record RiskBreakdown(int Id, string Title, string Category, decimal ProbabilityPct,
@@ -76,7 +101,10 @@ public class EstimateCalculator(AppDbContext db, RateEngine engine)
         if (e is null) return null;
         var (ordered, typeMap) = await ComputeAsync(e);
         await db.SaveChangesAsync();
-        return Build(e, ordered, RowVersionOf(e), await BuildFxAsync(e), typeMap);
+        // 25.5 — fetch N-1 AFTER SaveChangesAsync so we compare against committed
+        // cached totals, not a possibly-stale tracked entity.
+        var prevDelta = await ComputePreviousDeltaAsync(e);
+        return Build(e, ordered, RowVersionOf(e), await BuildFxAsync(e), typeMap, prevDelta);
     }
 
     /// <summary>
@@ -377,11 +405,71 @@ public class EstimateCalculator(AppDbContext db, RateEngine engine)
             .FirstOrDefaultAsync(x => x.Id == estimateId);
         if (e is null) return null;
         var typeMap = await db.CostComponentTypes.AsNoTracking().ToDictionaryAsync(t => t.Id, t => t);
-        return Build(e, e.Markups.OrderBy(m => m.ApplyOrder).ToList(), RowVersionOf(e), await BuildFxAsync(e), typeMap);
+        var prevDelta = await ComputePreviousDeltaAsync(e);
+        return Build(e, e.Markups.OrderBy(m => m.ApplyOrder).ToList(), RowVersionOf(e), await BuildFxAsync(e), typeMap, prevDelta);
+    }
+
+    /// <summary>25.5 — Compute the percent change of each cached total against
+    /// the IMMEDIATELY-PRIOR revision in the same project (the largest Revision
+    /// number strictly less than <paramref name="cur"/>.Revision). We use
+    /// "largest &lt; cur" rather than strict "Revision − 1" so a deleted middle
+    /// revision (project history {1, 3} after deleting Rev 2) still compares
+    /// Rev 3 against Rev 1 — silently dropping the badge would tell the
+    /// estimator "no prior" when one in fact exists. Superseded revisions are
+    /// NOT skipped: they're part of the history and are what an estimator who
+    /// looks at the current bid naturally compares to.
+    ///
+    /// Per-card percent is null when the prior value was effectively zero
+    /// (below half a cent). The frontend reads null as "the card existed for
+    /// the first time on this revision" and renders a "NEW" pill instead of
+    /// a badge so the user can tell that case apart from "no prior revision".</summary>
+    private async Task<PreviousRevisionDelta?> ComputePreviousDeltaAsync(Estimate cur)
+    {
+        if (cur.Revision <= 1) return null;
+        // Lightweight projection — we only need the five cached totals, not the
+        // full graph. The AppDbContext global query filter scopes this query to
+        // the request's tenant automatically. ORDER BY Revision DESC + LIMIT 1
+        // skips gaps caused by middle-revision deletes (see EstimateEndpoints
+        // DELETE handler — no renumbering on delete).
+        var prev = await db.Estimates
+            .Where(x => x.ProjectId == cur.ProjectId && x.Revision < cur.Revision)
+            .OrderByDescending(x => x.Revision)
+            .Select(x => new
+            {
+                x.Revision,
+                x.DirectCost,
+                x.IndirectCost,
+                x.MarkupCost,
+                x.BidPrice,
+                x.TaxAmount,
+            })
+            .FirstOrDefaultAsync();
+        if (prev is null) return null;
+
+        // 25.5 — Pct contract: positive = current is HIGHER than previous,
+        // regardless of the sign of previous. Dividing by |previous| (not
+        // `previous` directly) prevents a sign-flip when previous is negative
+        // (BidPrice can go negative via a large negative CommercialAdjustment).
+        // The "effectively zero" threshold (< 0.005, i.e. sub-cent at 2dp)
+        // catches the tiny-prev → 999900% footgun the doc-comment promises
+        // to prevent without false-positives on legitimately small totals.
+        static decimal? Pct(decimal current, decimal previous)
+        {
+            var absPrev = Math.Abs(previous);
+            return absPrev < 0.005m ? null : EstimateMath.Round2((current - previous) / absPrev * 100m);
+        }
+
+        return new PreviousRevisionDelta(
+            prev.Revision,
+            Pct(cur.DirectCost, prev.DirectCost),
+            Pct(cur.IndirectCost, prev.IndirectCost),
+            Pct(cur.MarkupCost, prev.MarkupCost),
+            Pct(cur.BidPrice, prev.BidPrice),
+            Pct(cur.BidPrice + cur.TaxAmount, prev.BidPrice + prev.TaxAmount));
     }
 
     private static EstimateBreakdown Build(Estimate e, List<Markup> orderedMarkups, string rowVersion, FxView? fx,
-        IReadOnlyDictionary<int, CostComponentType> typeMap)
+        IReadOnlyDictionary<int, CostComponentType> typeMap, PreviousRevisionDelta? previousDelta = null)
     {
         // ── Risk register → expected-value sum → suggested contingency (19.2) ──
         // EV per row = probability/100 × impact; the suggestion is EV / (direct+indirect)
@@ -437,6 +525,7 @@ public class EstimateCalculator(AppDbContext db, RateEngine engine)
             risks,
             suggestedEv, suggestedPct,
             cashflow,
-            rowVersion, fx);
+            rowVersion, fx,
+            previousDelta);
     }
 }
