@@ -95,6 +95,17 @@ services:
       # First-run admin seed (no default credential ships to prod). Omit to skip.
       Seed__AdminPassword: ${SEED_ADMIN_PASSWORD:-}
       Seed__AdminEmail:    ${SEED_ADMIN_EMAIL:-admin@bidbuilder.local}
+      # Outbound email (21.1) — off unless Email__Enabled=true + host/From set. Same-origin
+      # links default to PUBLIC_URL. The password is a secret; supply it via the environment.
+      Email__Enabled:     ${EMAIL_ENABLED:-false}
+      Email__Host:        ${EMAIL_HOST:-}
+      Email__Port:        ${EMAIL_PORT:-587}
+      Email__Username:    ${EMAIL_USERNAME:-}
+      Email__Password:    ${EMAIL_PASSWORD:-}
+      Email__UseSsl:      ${EMAIL_USE_SSL:-true}
+      Email__FromAddress: ${EMAIL_FROM_ADDRESS:-}
+      Email__FromName:    ${EMAIL_FROM_NAME:-BidBuilder}
+      Email__AppBaseUrl:  ${EMAIL_APP_BASE_URL:-${PUBLIC_URL}}
     # Liveness probe on /healthz (no DB dependency) so a transient Postgres outage
     # doesn't get a healthy API killed, while web/Caddy still wait for it to come up.
     healthcheck:

@@ -67,6 +67,11 @@ public sealed class ApiFixture : IAsyncLifetime
     /// <see cref="IWebhookSender"/> for the whole test host (harmless to non-webhook tests).</summary>
     public static readonly CapturingWebhookSender Webhooks = new();
 
+    /// <summary>21.1 — captures outbound emails in-memory so tests can assert
+    /// delivery + content without a real SMTP server. Reports itself configured so
+    /// the email code paths run regardless of the (absent) Email config section.</summary>
+    public static readonly CapturingEmailSender Emails = new();
+
     private sealed class Factory : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -76,6 +81,8 @@ public sealed class ApiFixture : IAsyncLifetime
             {
                 s.RemoveAll<IWebhookSender>();
                 s.AddSingleton<IWebhookSender>(Webhooks);
+                s.RemoveAll<IEmailSender>();
+                s.AddSingleton<IEmailSender>(Emails);
             });
         }
     }

@@ -17,7 +17,12 @@ public record SettingsDto(
     /// Zero = no approval workflow (legacy behavior).</summary>
     int RequiredApprovalsToPublish,
     /// <summary>20.11 — the tenant's vanity host, or null if none is registered.</summary>
-    string? CustomDomain);
+    string? CustomDomain,
+    /// <summary>21.1 — whether this tenant emails notification copies (admin-toggleable).</summary>
+    bool NotificationEmailsEnabled,
+    /// <summary>21.1 — read-only: whether the platform's SMTP transport is configured.
+    /// When false, the tenant toggle has no effect (nothing is sent).</summary>
+    bool EmailConfigured);
 
 /// <summary>20.11 — set (non-empty) or clear (null/empty) the tenant's custom domain.</summary>
 public record CustomDomainInput(string? Domain);
@@ -27,7 +32,9 @@ public record SettingsInput(
     string? Timezone, string? BaseCurrency, decimal DefaultOverheadPct, decimal DefaultProfitPct, decimal DefaultContingencyPct,
     decimal DefaultTaxRatePct,
     /// <summary>20.2 — null leaves the existing value alone (back-compat).</summary>
-    int? RequiredApprovalsToPublish);
+    int? RequiredApprovalsToPublish,
+    /// <summary>21.1 — null leaves the existing value alone (back-compat).</summary>
+    bool? NotificationEmailsEnabled);
 
 public record CurrencyRateDto(string Code, decimal RateToBase, DateTime UpdatedAt);
 public record CurrencyRatesDto(string BaseCurrency, List<CurrencyRateDto> Rates);
@@ -44,14 +51,14 @@ public static class SettingsEndpoints
     {
         var grp = app.MapGroup("/api/settings").RequireAuthorization();
 
-        grp.MapGet("/", async (AppDbContext db, ITenantContext tc) =>
+        grp.MapGet("/", async (AppDbContext db, ITenantContext tc, EmailService email) =>
         {
             var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tc.TenantId);
             var s = await db.TenantSettings.FirstOrDefaultAsync();
-            return Results.Ok(ToDto(tenant?.Name ?? "BidBuilder", s, tenant?.CustomDomain));
+            return Results.Ok(ToDto(tenant?.Name ?? "BidBuilder", s, tenant?.CustomDomain, email.Configured));
         });
 
-        grp.MapPut("/", async (SettingsInput i, ClaimsPrincipal me, AppDbContext db, ITenantContext tc) =>
+        grp.MapPut("/", async (SettingsInput i, ClaimsPrincipal me, AppDbContext db, ITenantContext tc, EmailService email) =>
         {
             if (!me.IsAdmin())
                 return Results.Json(new { error = "Only a tenant admin can edit settings" }, statusCode: 403);
@@ -85,11 +92,12 @@ public static class SettingsEndpoints
             s.DefaultContingencyPct = i.DefaultContingencyPct;
             s.DefaultTaxRatePct = i.DefaultTaxRatePct;
             if (i.RequiredApprovalsToPublish is { } reqAps) s.RequiredApprovalsToPublish = reqAps;
+            if (i.NotificationEmailsEnabled is { } emailsOn) s.NotificationEmailsEnabled = emailsOn;
             s.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
             var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tc.TenantId);
-            return Results.Ok(ToDto(tenant?.Name ?? "BidBuilder", s, tenant?.CustomDomain));
+            return Results.Ok(ToDto(tenant?.Name ?? "BidBuilder", s, tenant?.CustomDomain, email.Configured));
         });
 
         // ── Custom domain (20.11) ────────────────────────────────────────────
@@ -98,7 +106,7 @@ public static class SettingsEndpoints
         // workspaces can't claim the same host. The middleware resolves a request with
         // no token/header to this tenant when the request Host matches. DNS + TLS for
         // the host are an ops concern (see docs/DEPLOYMENT.md).
-        grp.MapPut("/custom-domain", async (CustomDomainInput i, ClaimsPrincipal me, AppDbContext db, ITenantContext tc, AuditService audit) =>
+        grp.MapPut("/custom-domain", async (CustomDomainInput i, ClaimsPrincipal me, AppDbContext db, ITenantContext tc, AuditService audit, EmailService email) =>
         {
             if (!me.IsAdmin())
                 return Results.Json(new { error = "Only a tenant admin can change the custom domain" }, statusCode: 403);
@@ -127,7 +135,28 @@ public static class SettingsEndpoints
                 domain is null ? $"cleared (was {old ?? "none"})" : $"set to {domain}");
 
             var s = await db.TenantSettings.FirstOrDefaultAsync();
-            return Results.Ok(ToDto(tenant.Name, s, tenant.CustomDomain));
+            return Results.Ok(ToDto(tenant.Name, s, tenant.CustomDomain, email.Configured));
+        });
+
+        // ── Email notifications (21.1) ───────────────────────────────────────
+        // Send a test email to the calling admin to verify the platform SMTP transport
+        // end-to-end. Returns whether a transport is configured and whether the message
+        // was actually accepted by the SMTP server. Tenant admin only. The tenant toggle
+        // is bypassed here on purpose — a "send test" should work even with notification
+        // emails turned off, so the admin can validate config before enabling.
+        grp.MapPost("/email/test", async (ClaimsPrincipal me, EmailService email) =>
+        {
+            if (!me.IsAdmin())
+                return Results.Json(new { error = "Only a tenant admin can send a test email" }, statusCode: 403);
+            if (!email.Configured)
+                return Results.Ok(new { configured = false, sent = false });
+
+            var to = me.Email();
+            var sent = await email.SendAsync(to, me.Name(),
+                "BidBuilder test email",
+                "This is a test email from BidBuilder. If you received it, your SMTP settings are working.",
+                respectTenantToggle: false);
+            return Results.Ok(new { configured = true, sent });
         });
 
         // ── Company logo ─────────────────────────────────────────────────────
@@ -258,14 +287,16 @@ public static class SettingsEndpoints
         return false;
     }
 
-    private static SettingsDto ToDto(string companyName, TenantSettings? s, string? customDomain = null) => new(
+    private static SettingsDto ToDto(string companyName, TenantSettings? s, string? customDomain, bool emailConfigured) => new(
         companyName, s?.Website, s?.ContactEmail, s?.Phone, s?.Address, s?.City, s?.Country,
         s?.Timezone ?? "UTC", s?.BaseCurrency ?? "AED",
         s?.DefaultOverheadPct ?? 0, s?.DefaultProfitPct ?? 0, s?.DefaultContingencyPct ?? 0,
         s?.DefaultTaxRatePct ?? 0,
         s?.LogoBytes is { Length: > 0 },
         s?.RequiredApprovalsToPublish ?? 0,
-        customDomain);
+        customDomain,
+        s?.NotificationEmailsEnabled ?? true,
+        emailConfigured);
 
     /// <summary>Validate a hostname for use as a custom domain. Lowercased, 1–253 chars,
     /// dot-separated DNS labels (letters/digits/hyphens, no leading/trailing hyphen),
