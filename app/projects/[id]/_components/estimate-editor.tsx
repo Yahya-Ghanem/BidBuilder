@@ -181,7 +181,7 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
         <div className="flex items-center gap-3">
           <h3 className="text-sm font-semibold text-slate-600">{e.title} — {t("ed.rev")} {e.revision}</h3>
           {canEditMeta
-            ? <Select className="w-auto py-1 text-xs" value={e.status} onChange={(ev) => updateMeta.mutate({ title: e.title, status: ev.target.value })}>
+            ? <Select className="w-auto py-1 text-sm" value={e.status} onChange={(ev) => updateMeta.mutate({ title: e.title, status: ev.target.value })}>
                 <option value="Draft">{t("ed.status.draft")}</option>
                 <option value="UnderReview">{t("ed.status.review")}</option>
                 <option value="Published">{t("ed.status.published")}</option>
@@ -194,7 +194,7 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
             return (
               <label className="flex items-center gap-1 text-xs text-slate-500">
                 {t("ed.showIn")}
-                <Select className="w-auto py-1 text-xs" value={e.fx?.secondaryCurrency ?? ""}
+                <Select className="w-auto py-1 text-sm" value={e.fx?.secondaryCurrency ?? ""}
                         onChange={(ev) => updateMeta.mutate({ title: e.title, secondaryCurrency: ev.target.value })}>
                   <option value="">{t("ed.none")}</option>
                   {codes.map((x) => <option key={x} value={x}>{x}</option>)}
@@ -233,7 +233,7 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
              Same destinations, same handlers — only the affordance changes. */
           <DropdownButton
             ariaLabel={t("ed.export.aria")}
-            className="h-8 text-xs"
+            className="h-8 text-sm"
             label={<><FileDown className="h-4 w-4" /> {t("ed.export")}</>}
             items={[
               { key: "xlsx", label: <><FileSpreadsheet className="h-4 w-4" /> {t("ed.export.excel")}</>, onSelect: () => dl("xlsx") },
@@ -309,8 +309,8 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
                         <>
                           <input ref={fileRef} type="file" accept=".xlsx" className="hidden"
                             onChange={(ev) => { const f = ev.target.files?.[0]; if (f) importMut.mutate(f); ev.target.value = "" }} />
-                          <Button variant="ghost" className="h-7 px-2 text-xs" onClick={downloadTemplate}><FileDown className="h-3.5 w-3.5" /> {t("ed.boq.template")}</Button>
-                          <Button variant="ghost" className="h-7 px-2 text-xs" disabled={importMut.isPending} onClick={() => fileRef.current?.click()}>
+                          <Button variant="ghost" className="h-7 px-2 text-sm" onClick={downloadTemplate}><FileDown className="h-3.5 w-3.5" /> {t("ed.boq.template")}</Button>
+                          <Button variant="ghost" className="h-7 px-2 text-sm" disabled={importMut.isPending} onClick={() => fileRef.current?.click()}>
                             <Upload className="h-3.5 w-3.5" /> {importMut.isPending ? t("ed.boq.importing") : t("ed.boq.import")}
                           </Button>
                           <AddSection onAdd={(v) => addSection.mutate(v)} />

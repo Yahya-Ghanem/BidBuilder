@@ -55,9 +55,9 @@ export function AreaRollupPanel({ estimateId, currency, canExport, onExport }: {
                   </button>
                 ))}
               </div>
-              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("xlsx", level)}><FileSpreadsheet className="h-4 w-4" /> Excel</Button>
-              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("csv", level)}><Table className="h-4 w-4" /> CSV</Button>
-              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("pdf", level)}><FileText className="h-4 w-4" /> PDF</Button>
+              <Button variant="outline" className="h-8 text-sm" onClick={() => onExport("xlsx", level)}><FileSpreadsheet className="h-4 w-4" /> Excel</Button>
+              <Button variant="outline" className="h-8 text-sm" onClick={() => onExport("csv", level)}><Table className="h-4 w-4" /> CSV</Button>
+              <Button variant="outline" className="h-8 text-sm" onClick={() => onExport("pdf", level)}><FileText className="h-4 w-4" /> PDF</Button>
             </>
           )}
           {parentIds.size > 0 && <ExpandCollapseAll onExpand={expandAll} onCollapse={() => collapseAll(parentIds)} />}

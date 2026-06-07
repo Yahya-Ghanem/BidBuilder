@@ -148,7 +148,7 @@ export function EstimatesSection({ projectId }: { projectId: number }) {
         {actionItems.length > 0 && (
           <DropdownButton
             ariaLabel={t("rev.actions.aria")}
-            className="h-8 text-xs"
+            className="h-8 text-sm"
             label={t("rev.actions")}
             items={actionItems}
           />

@@ -280,7 +280,7 @@ function BoqView({ estimateId }: { estimateId: number }) {
           {s.items.length ? (
             <div className="overflow-x-auto">
             <table className="w-full min-w-[32rem] text-sm">
-              <thead className="text-xs text-slate-500">
+              <thead className="text-sm text-slate-500">
                 <tr className="border-b border-[var(--border)]">
                   <th className="px-4 py-1.5 text-left font-medium">Item</th>
                   <th className="px-2 py-1.5 text-right font-medium">Qty</th>
@@ -422,7 +422,7 @@ function PreliminariesView({ estimateId }: { estimateId: number }) {
     <Card className="overflow-hidden">
       <h3 className="border-b border-[var(--border)] bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">Preliminaries</h3>
       <table className="w-full text-sm">
-        <thead className="text-xs text-slate-500"><tr className="border-b border-[var(--border)]"><th className="px-4 py-1.5 text-left font-medium">Description</th><th className="px-2 py-1.5 text-left font-medium">Kind</th><th className="px-4 py-1.5 text-right font-medium">Amount</th></tr></thead>
+        <thead className="text-sm text-slate-500"><tr className="border-b border-[var(--border)]"><th className="px-4 py-1.5 text-left font-medium">Description</th><th className="px-2 py-1.5 text-left font-medium">Kind</th><th className="px-4 py-1.5 text-right font-medium">Amount</th></tr></thead>
         <tbody>
           {data.preliminaries.map((p) => (
             <tr key={p.id} className="border-b border-[var(--border)] last:border-0">
@@ -448,7 +448,7 @@ function MarkupsView({ estimateId }: { estimateId: number }) {
     <Card className="overflow-hidden">
       <h3 className="border-b border-[var(--border)] bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">Markups</h3>
       <table className="w-full text-sm">
-        <thead className="text-xs text-slate-500"><tr className="border-b border-[var(--border)]"><th className="px-4 py-1.5 text-left font-medium">Markup</th><th className="px-2 py-1.5 text-right font-medium">%</th><th className="px-4 py-1.5 text-right font-medium">Amount</th></tr></thead>
+        <thead className="text-sm text-slate-500"><tr className="border-b border-[var(--border)]"><th className="px-4 py-1.5 text-left font-medium">Markup</th><th className="px-2 py-1.5 text-right font-medium">%</th><th className="px-4 py-1.5 text-right font-medium">Amount</th></tr></thead>
         <tbody>
           {data.markups.map((m) => (
             <tr key={m.id} className="border-b border-[var(--border)] last:border-0">

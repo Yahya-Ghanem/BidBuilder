@@ -51,7 +51,7 @@ export function RiskAndCashFlowPanel({ estimateId, currency, risks, suggestedAmo
             <span className="font-semibold tabular-nums">{suggestedPct.toFixed(2)}%</span>
           </div>
           {canEdit && (
-            <Button variant="outline" className="h-8 text-xs" disabled={applyContingency.isPending || risks.length === 0}
+            <Button variant="outline" className="h-8 text-sm" disabled={applyContingency.isPending || risks.length === 0}
               onClick={() => applyContingency.mutate()}>
               Apply as Contingency markup
             </Button>
