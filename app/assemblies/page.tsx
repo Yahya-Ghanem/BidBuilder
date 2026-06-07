@@ -13,6 +13,8 @@ import { Card, Button, Input, Badge, TableScroll } from "@/components/ui"
 import { Modal, Field } from "@/components/form"
 import { Money } from "@/components/money"
 import { cn } from "@/lib/utils"
+import { EmptyState } from "@/components/empty-state"
+import { AssembliesIllustration } from "@/components/empty-state-illustrations"
 
 type StatusFilter = "active" | "all" | "inactive"
 
@@ -51,7 +53,23 @@ export default function AssembliesPage() {
       <Card className="overflow-hidden">
         {isLoading ? <p className="p-4 text-sm text-muted">Loading…</p>
           : error ? <p className="p-4 text-sm text-rose-600">{(error as Error).message}</p>
-          : !data?.length ? <p className="p-4 text-sm text-muted">{filter === "inactive" ? "No inactive assemblies." : filter === "active" ? "No active assemblies." : "No assemblies yet."}</p>
+          : !data?.length ? (
+            // The "active / inactive" filter variants get a plain message —
+            // they're not the FIRST-TIME case (the user already created
+            // assemblies, just filtered them out). The first-time case (no
+            // filter, no data) is the EmptyState the ROADMAP §26.5 cares
+            // about.
+            filter === "inactive" ? <p className="p-4 text-sm text-muted">No inactive assemblies.</p>
+            : filter === "active" ? <p className="p-4 text-sm text-muted">No active assemblies.</p>
+            : (
+              <EmptyState
+                illustration={<AssembliesIllustration className="h-24 w-32" />}
+                title="Group a recipe"
+                body="An assembly bundles resources (e.g. ‘1 m³ concrete = 0.4 ton cement + 1.8 ton sand + 2 hours labour’). Build one to reuse across projects."
+                cta={canAdd ? <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> New assembly</Button> : undefined}
+              />
+            )
+          )
           : (
             <TableScroll>
             <table className="w-full min-w-[34rem] text-sm">
