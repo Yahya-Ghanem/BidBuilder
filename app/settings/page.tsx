@@ -63,7 +63,7 @@ function SettingsForm() {
   })
 
   if (isLoading || !f) return <p className="text-slate-400">{t("adm.loading")}</p>
-  if (error) return <p className="text-rose-600">{(error as Error).message}</p>
+  if (error) return <p className="text-danger">{(error as Error).message}</p>
 
   const ro = !isAdmin
   // The "Save settings" affordance is shared between the Company and Workspace
@@ -302,8 +302,8 @@ function EmailCard({ f, setF, ro, isAdmin }: { f: TenantSettings; setF: (s: Tena
 
       <p className="text-xs">
         {f.emailConfigured
-          ? <span className="text-emerald-600">{t("adm.email.configured")}</span>
-          : <span className="text-amber-600">{t("adm.email.notConfigured")}</span>}
+          ? <span className="text-success">{t("adm.email.configured")}</span>
+          : <span className="text-warning">{t("adm.email.notConfigured")}</span>}
       </p>
 
       {isAdmin && (
@@ -395,7 +395,7 @@ function ProjectTypeRow({ type, isAdmin, busy, setBusy }: { type: ProjectType; i
         {isAdmin && (
           <div className="flex justify-end gap-1">
             <Button variant="outline" aria-label={`Save ${type.name}`} className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={save}><Check className="h-3.5 w-3.5" /></Button>
-            {!type.builtin && <Button variant="outline" aria-label={`Remove ${type.name}`} className="h-7 px-2 text-xs text-rose-600" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
+            {!type.builtin && <Button variant="outline" aria-label={`Remove ${type.name}`} className="h-7 px-2 text-xs text-danger" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
           </div>
         )}
       </td>
@@ -480,7 +480,7 @@ function ActivityRow({ activity, isAdmin, busy, setBusy }: { activity: ActivityT
         {isAdmin && (
           <div className="flex justify-end gap-1">
             <Button variant="outline" aria-label={`Save ${activity.name}`} className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={save}><Check className="h-3.5 w-3.5" /></Button>
-            {!activity.builtin && <Button variant="outline" aria-label={`Remove ${activity.name}`} className="h-7 px-2 text-xs text-rose-600" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
+            {!activity.builtin && <Button variant="outline" aria-label={`Remove ${activity.name}`} className="h-7 px-2 text-xs text-danger" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
           </div>
         )}
       </td>
@@ -592,7 +592,7 @@ function CostTypeRow({ type, isAdmin, busy, setBusy }: { type: CostComponentType
         {isAdmin && (
           <div className="flex justify-end gap-1">
             <Button variant="outline" aria-label={`Save ${type.code}`} className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={save}><Check className="h-3.5 w-3.5" /></Button>
-            {!type.builtin && <Button variant="outline" aria-label={`Remove ${type.code}`} className="h-7 px-2 text-xs text-rose-600" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
+            {!type.builtin && <Button variant="outline" aria-label={`Remove ${type.code}`} className="h-7 px-2 text-xs text-danger" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
           </div>
         )}
       </td>
@@ -690,7 +690,7 @@ function RateRow({ rate, base, isAdmin, busy, onSave, onRemove }: {
         {isAdmin && (
           <div className="flex justify-end gap-1">
             <Button variant="outline" aria-label={`Save ${rate.code} rate`} className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={() => onSave(Number(v))}><Check className="h-3.5 w-3.5" /></Button>
-            <Button variant="outline" aria-label={`Remove ${rate.code} rate`} className="h-7 px-2 text-xs text-rose-600" disabled={busy} onClick={onRemove}><Trash2 className="h-3.5 w-3.5" /></Button>
+            <Button variant="outline" aria-label={`Remove ${rate.code} rate`} className="h-7 px-2 text-xs text-danger" disabled={busy} onClick={onRemove}><Trash2 className="h-3.5 w-3.5" /></Button>
           </div>
         )}
       </td>
@@ -768,7 +768,7 @@ function LogoCard({ hasLogo, isAdmin }: { hasLogo: boolean; isAdmin: boolean }) 
               <Upload className="h-4 w-4" /> {hasLogo ? "Replace" : "Upload"}
             </Button>
             {hasLogo && (
-              <Button variant="outline" className="h-8 text-xs text-rose-600" disabled={busy} onClick={remove}>
+              <Button variant="outline" className="h-8 text-xs text-danger" disabled={busy} onClick={remove}>
                 <Trash2 className="h-4 w-4" /> Remove
               </Button>
             )}
