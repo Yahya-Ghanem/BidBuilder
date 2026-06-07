@@ -9,6 +9,7 @@ import { usePermissions } from "@/lib/permissions"
 import { Badge, Button, statusColor } from "@/components/ui"
 import { Select } from "@/components/form"
 import { money } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 import { ExpandCollapseAll, Row, Stat, useCollapse, type CompInput } from "./shared"
 import { AddItemForm as _UnusedAddItemForm, AddSection, SectionBlock } from "./boq"
 import { WhatIfPanel } from "./what-if"
@@ -34,6 +35,7 @@ void _UnusedAddItemForm
  *  cognitive scope, not visual tabs (a tender estimator doesn't want to
  *  page through tabs while iterating). The split landed in 19.6. */
 export function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEditMeta: boolean }) {
+  const t = useT()
   const qc = useQueryClient()
   const { can } = usePermissions()
   const boqAdd = can("boq", "add"), boqEdit = can("boq", "edit"), boqDelete = can("boq", "delete")
@@ -156,13 +158,13 @@ export function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h3 className="text-sm font-semibold text-slate-600">{e.title} — Rev {e.revision}</h3>
+          <h3 className="text-sm font-semibold text-slate-600">{e.title} — {t("ed.rev")} {e.revision}</h3>
           {canEditMeta
             ? <Select className="w-auto py-1 text-xs" value={e.status} onChange={(ev) => updateMeta.mutate({ title: e.title, status: ev.target.value })}>
-                <option value="Draft">Draft</option>
-                <option value="UnderReview">UnderReview</option>
-                <option value="Published">Published</option>
-                <option value="Superseded">Superseded</option>
+                <option value="Draft">{t("ed.status.draft")}</option>
+                <option value="UnderReview">{t("ed.status.review")}</option>
+                <option value="Published">{t("ed.status.published")}</option>
+                <option value="Superseded">{t("ed.status.superseded")}</option>
               </Select>
             : <Badge className={statusColor(e.status)}>{e.status}</Badge>}
           {canEditMeta && fxRates && (() => {
@@ -170,10 +172,10 @@ export function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number
               .filter((x, i, arr) => arr.indexOf(x) === i && x.toUpperCase() !== e.currency.toUpperCase())
             return (
               <label className="flex items-center gap-1 text-xs text-slate-500">
-                Show in
+                {t("ed.showIn")}
                 <Select className="w-auto py-1 text-xs" value={e.fx?.secondaryCurrency ?? ""}
                         onChange={(ev) => updateMeta.mutate({ title: e.title, secondaryCurrency: ev.target.value })}>
-                  <option value="">— none —</option>
+                  <option value="">{t("ed.none")}</option>
                   {codes.map((x) => <option key={x} value={x}>{x}</option>)}
                 </Select>
               </label>
@@ -181,7 +183,7 @@ export function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number
           })()}
           {canEditMeta && (
             <label className="flex items-center gap-1 text-xs text-slate-500">
-              VAT %
+              {t("ed.vatPct")}
               <input type="number" step="0.01" min={0} max={100} defaultValue={e.taxRatePct ?? 0}
                      className="w-16 rounded-md border border-[var(--border)] px-2 py-1 text-xs outline-none focus:border-[var(--brand)]"
                      onBlur={(ev) => { const v = Number(ev.target.value); if (v !== (e.taxRatePct ?? 0)) updateMeta.mutate({ title: e.title, taxRatePct: v }) }} />
@@ -189,7 +191,7 @@ export function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number
           )}
           {canEditMeta && (
             <label className="flex items-center gap-1 text-xs text-slate-500" title="Price as-of: resolves resource rates from ResourceRateHistory (most-recent snapshot ≤ date). Empty = live rate.">
-              Priced as-of
+              {t("ed.pricedAsOf")}
               <input type="date" defaultValue={e.pricingDate ?? ""}
                      className="rounded-md border border-[var(--border)] px-2 py-1 text-xs outline-none focus:border-[var(--brand)]"
                      onBlur={(ev) => {
@@ -199,50 +201,50 @@ export function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number
                        else updateMeta.mutate({ title: e.title, pricingDate: v })
                      }} />
               {e.pricingDate && (
-                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium uppercase text-amber-800">historical pricing</span>
+                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium uppercase text-amber-800">{t("ed.historicalPricing")}</span>
               )}
             </label>
           )}
         </div>
         {canReports && (
           <div className="flex gap-2">
-            <Button variant="outline" className="h-8 text-xs" onClick={() => dl("xlsx")}><FileSpreadsheet className="h-4 w-4" /> Excel</Button>
-            <Button variant="outline" className="h-8 text-xs" onClick={() => dl("csv")}><Table className="h-4 w-4" /> CSV</Button>
-            <Button variant="outline" className="h-8 text-xs" onClick={() => dl("pdf")}><FileText className="h-4 w-4" /> PDF</Button>
-            <Button variant="outline" className="h-8 text-xs" onClick={() => setBidLetter(true)}><FileText className="h-4 w-4" /> Bid Letter</Button>
+            <Button variant="outline" className="h-8 text-xs" onClick={() => dl("xlsx")}><FileSpreadsheet className="h-4 w-4" /> {t("ed.export.excel")}</Button>
+            <Button variant="outline" className="h-8 text-xs" onClick={() => dl("csv")}><Table className="h-4 w-4" /> {t("ed.export.csv")}</Button>
+            <Button variant="outline" className="h-8 text-xs" onClick={() => dl("pdf")}><FileText className="h-4 w-4" /> {t("ed.export.pdf")}</Button>
+            <Button variant="outline" className="h-8 text-xs" onClick={() => setBidLetter(true)}><FileText className="h-4 w-4" /> {t("ed.export.bidLetter")}</Button>
           </div>
         )}
       </div>
       {locked && (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          This revision is <b>{e.status}</b> and locked. Set its status to <b>Draft</b> to edit the BOQ, preliminaries or markups.
+          {t("ed.lockedBanner", { status: e.status })}
         </div>
       )}
       <div className="grid gap-4 sm:grid-cols-4">
-        <Stat label="Direct cost" value={money(e.directCost, c)} />
-        <Stat label="Indirect (prelims)" value={money(e.indirectCost, c)} />
-        <Stat label="Markups" value={money(e.markupCost, c)} />
-        <Stat label={e.taxAmount > 0 ? "Bid (excl. tax)" : "Bid price"} value={money(e.bidPrice, c)} highlight={e.taxAmount <= 0} />
-        {e.taxAmount > 0 && <Stat label={`VAT (${e.taxRatePct ?? 0}%)`} value={money(e.taxAmount, c)} />}
-        {e.taxAmount > 0 && <Stat label="Total incl. tax" value={money(e.bidPriceInclTax, c)} highlight />}
-        {e.alternatesTotal > 0 && <Stat label="Alternates (excl. bid)" value={money(e.alternatesTotal, c)} />}
-        {e.commercialAdjustment !== 0 && <Stat label="Commercial adj." value={money(e.commercialAdjustment, c)} />}
+        <Stat label={t("ed.stat.directCost")} value={money(e.directCost, c)} />
+        <Stat label={t("ed.stat.indirect")} value={money(e.indirectCost, c)} />
+        <Stat label={t("ed.stat.markups")} value={money(e.markupCost, c)} />
+        <Stat label={e.taxAmount > 0 ? t("ed.stat.bidExclTax") : t("ed.stat.bidPrice")} value={money(e.bidPrice, c)} highlight={e.taxAmount <= 0} />
+        {e.taxAmount > 0 && <Stat label={t("ed.stat.vat", { pct: e.taxRatePct ?? 0 })} value={money(e.taxAmount, c)} />}
+        {e.taxAmount > 0 && <Stat label={t("ed.stat.totalInclTax")} value={money(e.bidPriceInclTax, c)} highlight />}
+        {e.alternatesTotal > 0 && <Stat label={t("ed.stat.alternates")} value={money(e.alternatesTotal, c)} />}
+        {e.commercialAdjustment !== 0 && <Stat label={t("ed.stat.commercialAdj")} value={money(e.commercialAdjustment, c)} />}
       </div>
       {e.markupCost > 0 && (
-        <p className="text-sm text-slate-500">Gross margin (on price): <b className="text-slate-700">{e.marginOnPricePct}%</b> <span className="text-slate-400">(markups are % on cost)</span></p>
+        <p className="text-sm text-slate-500">{t("ed.grossMargin")} <b className="text-slate-700">{e.marginOnPricePct}%</b> <span className="text-slate-400">{t("ed.markupsOnCost")}</span></p>
       )}
       {e.fx && (
         <p className="text-sm text-slate-500">
           ≈ <b className="text-slate-700">{money(e.fx.convertedBidPrice, e.fx.secondaryCurrency)}</b>
           {" "}· 1 {c} = {e.fx.rate.toLocaleString(undefined, { maximumFractionDigits: 6 })} {e.fx.secondaryCurrency}
-          {" "}· {e.fx.frozen ? `frozen${e.fx.frozenAt ? " " + e.fx.frozenAt.slice(0, 10) : ""}` : "live rate"}
+          {" "}· {e.fx.frozen ? `${t("ed.fx.frozen")}${e.fx.frozenAt ? " " + e.fx.frozenAt.slice(0, 10) : ""}` : t("ed.fx.live")}
         </p>
       )}
 
       {/* BOQ */}
       <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-white">
         <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-2">
-          <span className="text-sm font-semibold">Bill of Quantities</span>
+          <span className="text-sm font-semibold">{t("ed.boq.heading")}</span>
           <div className="flex items-center gap-2">
             {e.sections.length > 0 && (
               <ExpandCollapseAll onExpand={boqCollapse.expandAll} onCollapse={() => boqCollapse.collapseAll(e.sections.map((s) => s.id))} />
@@ -251,9 +253,9 @@ export function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number
               <>
                 <input ref={fileRef} type="file" accept=".xlsx" className="hidden"
                   onChange={(ev) => { const f = ev.target.files?.[0]; if (f) importMut.mutate(f); ev.target.value = "" }} />
-                <Button variant="ghost" className="h-7 px-2 text-xs" onClick={downloadTemplate}><FileDown className="h-3.5 w-3.5" /> Template</Button>
+                <Button variant="ghost" className="h-7 px-2 text-xs" onClick={downloadTemplate}><FileDown className="h-3.5 w-3.5" /> {t("ed.boq.template")}</Button>
                 <Button variant="ghost" className="h-7 px-2 text-xs" disabled={importMut.isPending} onClick={() => fileRef.current?.click()}>
-                  <Upload className="h-3.5 w-3.5" /> {importMut.isPending ? "Importing…" : "Import"}
+                  <Upload className="h-3.5 w-3.5" /> {importMut.isPending ? t("ed.boq.importing") : t("ed.boq.import")}
                 </Button>
                 <AddSection onAdd={(v) => addSection.mutate(v)} />
               </>
@@ -267,9 +269,9 @@ export function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number
             onAddItem={(v) => addItem.mutate({ ...(v as Record<string, unknown>), sectionId: s.id } as { sectionId: number } & Record<string, unknown>)}
             onUpdItem={(v) => updItem.mutate(v as { id: number } & Record<string, unknown>)}
             onDelItem={(iid) => delItem.mutate(iid)}
-            onDelSection={() => { if (confirm(`Delete section "${s.title}"?`)) delSection.mutate(s.id) }} />
+            onDelSection={() => { if (confirm(t("ed.boq.deleteSectionConfirm", { title: s.title }))) delSection.mutate(s.id) }} />
         ))}
-        {!e.sections.length && <p className="px-4 py-3 text-sm text-slate-400">No sections yet — add one above.</p>}
+        {!e.sections.length && <p className="px-4 py-3 text-sm text-slate-400">{t("ed.boq.empty")}</p>}
       </div>
 
       {(areas.data?.length ?? 0) > 0 && (
@@ -289,14 +291,14 @@ export function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number
       {/* Prelims + markups */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-lg border border-[var(--border)] bg-white p-4">
-          <div className="mb-2 text-sm font-semibold">Preliminaries</div>
+          <div className="mb-2 text-sm font-semibold">{t("ed.prelims")}</div>
           {e.preliminaries.map((p) => (
             <Row key={p.id} left={`${p.description} (${p.kind})`} right={money(p.computedTotal, c)} onDelete={editPlmDelete ? () => delPrelim.mutate(p.id) : undefined} />
           ))}
           {editPlmAdd && <AddPrelim onAdd={(v) => addPrelim.mutate(v)} />}
         </div>
         <div className="rounded-lg border border-[var(--border)] bg-white p-4">
-          <div className="mb-2 text-sm font-semibold">Markups</div>
+          <div className="mb-2 text-sm font-semibold">{t("ed.stat.markups")}</div>
           {e.markups.map((m) => (
             <Row key={m.id} left={`${m.type} (${m.percentage}%)`} right={money(m.computedAmount, c)} onDelete={editPlmDelete ? () => delMarkup.mutate(m.id) : undefined} />
           ))}

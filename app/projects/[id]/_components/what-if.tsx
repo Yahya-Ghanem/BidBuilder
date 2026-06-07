@@ -7,6 +7,7 @@ import { fetchApi } from "@/lib/api"
 import type { MarkupBreakdown, WhatIfResult } from "@/lib/types"
 import { Card, Button, Input } from "@/components/ui"
 import { money } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 import { Row } from "./shared"
 
 /** Non-persisting margin preview: tweak markup %s and see the bid price move.
@@ -14,6 +15,7 @@ import { Row } from "./shared"
 export function WhatIfPanel({ estimateId, markups, currency, canEdit }: {
   estimateId: number; markups: MarkupBreakdown[]; currency: string; canEdit: boolean
 }) {
+  const t = useT()
   const qc = useQueryClient()
   const original = Object.fromEntries(markups.map((m) => [m.id, String(m.percentage)]))
   const [draft, setDraft] = useState<Record<number, string>>(original)
@@ -51,7 +53,7 @@ export function WhatIfPanel({ estimateId, markups, currency, canEdit }: {
           })
       }
     },
-    onSuccess: () => { toast.success("Margins applied"); qc.invalidateQueries({ queryKey: ["estimate", estimateId] }) },
+    onSuccess: () => { toast.success(t("ed.whatif.applied")); qc.invalidateQueries({ queryKey: ["estimate", estimateId] }) },
     onError: (err) => toast.error((err as Error).message),
   })
 
@@ -62,16 +64,16 @@ export function WhatIfPanel({ estimateId, markups, currency, canEdit }: {
     <Card className="p-4">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-          <SlidersHorizontal className="h-4 w-4 text-[var(--brand)]" /> What-if margin
+          <SlidersHorizontal className="h-4 w-4 text-[var(--brand)]" /> {t("ed.whatif.title")}
         </div>
         {changed && (
           <button onClick={() => setDraft(original)} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600">
-            <RotateCcw className="h-3 w-3" /> Reset
+            <RotateCcw className="h-3 w-3" /> {t("ed.whatif.reset")}
           </button>
         )}
       </div>
 
-      <Row left="Direct + indirect (base)" right={money((result?.directCost ?? 0) + (result?.indirectCost ?? 0), currency)} />
+      <Row left={t("ed.whatif.base")} right={money((result?.directCost ?? 0) + (result?.indirectCost ?? 0), currency)} />
       {markups.map((m) => {
         const line = result?.markups.find((x) => x.applyOrder === m.applyOrder && x.type === m.type)
         return (
@@ -88,12 +90,12 @@ export function WhatIfPanel({ estimateId, markups, currency, canEdit }: {
       })}
 
       <div className="mt-2 flex items-center justify-between border-t-2 border-[var(--border)] pt-2">
-        <span className="text-sm font-semibold text-slate-700">Projected bid price</span>
-        <div className="text-right">
+        <span className="text-sm font-semibold text-slate-700">{t("ed.whatif.projected")}</span>
+        <div className="text-end">
           <div className="text-lg font-bold text-[var(--brand)]">{money(result?.bidPrice ?? 0, currency)}</div>
           {Math.abs(delta) >= 0.01 && (
             <div className={delta > 0 ? "text-xs text-emerald-600" : "text-xs text-rose-600"}>
-              {delta > 0 ? "+" : ""}{money(delta, currency)} vs current
+              {delta > 0 ? "+" : ""}{money(delta, currency)} {t("ed.whatif.delta")}
             </div>
           )}
         </div>
@@ -102,7 +104,7 @@ export function WhatIfPanel({ estimateId, markups, currency, canEdit }: {
       {canEdit && (
         <div className="mt-3 flex justify-end">
           <Button disabled={!changed || apply.isPending} onClick={() => apply.mutate()}>
-            {apply.isPending ? "Applying…" : "Apply these margins"}
+            {apply.isPending ? t("ed.whatif.applying") : t("ed.whatif.apply")}
           </Button>
         </div>
       )}
