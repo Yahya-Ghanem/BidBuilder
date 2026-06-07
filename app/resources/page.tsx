@@ -11,24 +11,26 @@ import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input, TableScroll } from "@/components/ui"
 import { Modal, Field } from "@/components/form"
 import { money } from "@/lib/utils"
+import { useI18n } from "@/lib/i18n"
 
 type Kind = "labor" | "materials" | "equipment" | "subcontractors"
 /** API enum value sent in the rate-suggestion query (matches C# ResourceType). */
 type ResourceApiType = "Labor" | "Material" | "Equipment" | "Subcontractor"
-interface TabCfg { key: Kind; label: string; path: string; rateField: "ratePerHour" | "unitPrice" | "unitRate"; rateLabel: string; material?: boolean; apiType: ResourceApiType }
+interface TabCfg { key: Kind; labelKey: string; path: string; rateField: "ratePerHour" | "unitPrice" | "unitRate"; rateLabelKey: string; material?: boolean; apiType: ResourceApiType }
 
 const TABS: TabCfg[] = [
-  { key: "labor",          label: "Labor",          path: "/api/resources/labor",          rateField: "ratePerHour", rateLabel: "Rate / hour", apiType: "Labor"         },
-  { key: "materials",      label: "Materials",      path: "/api/resources/materials",      rateField: "unitPrice",   rateLabel: "Unit price",   material: true, apiType: "Material"  },
-  { key: "equipment",      label: "Equipment",      path: "/api/resources/equipment",      rateField: "ratePerHour", rateLabel: "Rate / hour", apiType: "Equipment"     },
-  { key: "subcontractors", label: "Subcontractors", path: "/api/resources/subcontractors", rateField: "unitRate",    rateLabel: "Unit rate",    apiType: "Subcontractor" },
+  { key: "labor",          labelKey: "resources.labor",          path: "/api/resources/labor",          rateField: "ratePerHour", rateLabelKey: "resources.ratePerHour", apiType: "Labor"         },
+  { key: "materials",      labelKey: "resources.materials",      path: "/api/resources/materials",      rateField: "unitPrice",   rateLabelKey: "resources.unitPrice",   material: true, apiType: "Material"  },
+  { key: "equipment",      labelKey: "resources.equipment",      path: "/api/resources/equipment",      rateField: "ratePerHour", rateLabelKey: "resources.ratePerHour", apiType: "Equipment"     },
+  { key: "subcontractors", labelKey: "resources.subcontractors", path: "/api/resources/subcontractors", rateField: "unitRate",    rateLabelKey: "resources.unitRate",    apiType: "Subcontractor" },
 ]
 
 export default function ResourcesPage() {
+  const { t } = useI18n()
   return (
-    <AppShell title="Resource Library">
+    <AppShell title={t("nav.resources")}>
       <div className="grid gap-6 lg:grid-cols-2">
-        {TABS.map((t) => <ResourceTable key={t.key} cfg={t} />)}
+        {TABS.map((tab) => <ResourceTable key={tab.key} cfg={tab} />)}
       </div>
     </AppShell>
   )
@@ -38,6 +40,7 @@ type BulkAction = "activate" | "deactivate" | "delete"
 
 function ResourceTable({ cfg }: { cfg: TabCfg }) {
   const qc = useQueryClient()
+  const { t, locale } = useI18n()
   const { can } = usePermissions()
   const canAdd = can("resource-library", "add")
   const canEdit = can("resource-library", "edit")
@@ -58,7 +61,7 @@ function ResourceTable({ cfg }: { cfg: TabCfg }) {
 
   const del = useMutation({
     mutationFn: (id: number) => fetchApi(`${cfg.path}/${id}`, { method: "DELETE" }),
-    onSuccess: () => { toast.success("Deleted"); qc.invalidateQueries({ queryKey: ["res", cfg.path] }) },
+    onSuccess: () => { toast.success(t("resources.deleted")); qc.invalidateQueries({ queryKey: ["res", cfg.path] }) },
     onError: (e) => toast.error((e as Error).message),
   })
 
@@ -68,7 +71,7 @@ function ResourceTable({ cfg }: { cfg: TabCfg }) {
     }),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["res", cfg.path] })
-      const done = r.action === "delete" ? `${r.deleted} deleted` : `${r.updated} ${r.action}d`
+      const done = r.action === "delete" ? `${r.deleted} ${t("resources.deleted").toLowerCase()}` : `${r.updated} ${r.action}d`
       if (r.skipped.length) toast.warning(`${done} · ${r.skipped.length} skipped (in use by an assembly)`)
       else toast.success(done)
       clear()
@@ -77,52 +80,52 @@ function ResourceTable({ cfg }: { cfg: TabCfg }) {
   })
 
   const runBulk = (action: BulkAction) => {
-    if (action === "delete" && !confirm(`Delete ${selected.size} selected ${cfg.label.toLowerCase()}? Items used by an assembly are skipped.`)) return
+    if (action === "delete" && !confirm(t("resources.bulkDeleteConfirm", { n: selected.size, kind: t(cfg.labelKey).toLowerCase() }))) return
     bulk.mutate(action)
   }
 
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-2">
-        <span className="text-sm font-semibold">{cfg.label}</span>
-        {canAdd && <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5" /> Add</Button>}
+        <span className="text-sm font-semibold">{t(cfg.labelKey)}</span>
+        {canAdd && <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5" /> {t("common.add")}</Button>}
       </div>
 
       {/* Bulk action bar — appears once rows are selected. */}
       {selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] bg-slate-50 px-4 py-2 text-xs">
-          <span className="font-medium text-slate-600">{selected.size} selected</span>
-          {canEdit && <Button variant="outline" className="h-7 text-xs" disabled={bulk.isPending} onClick={() => runBulk("activate")}><Power className="h-3.5 w-3.5" /> Activate</Button>}
-          {canEdit && <Button variant="outline" className="h-7 text-xs" disabled={bulk.isPending} onClick={() => runBulk("deactivate")}><PowerOff className="h-3.5 w-3.5" /> Deactivate</Button>}
-          {canDelete && <Button variant="outline" className="h-7 text-xs text-rose-600 hover:bg-rose-50" disabled={bulk.isPending} onClick={() => runBulk("delete")}><Trash2 className="h-3.5 w-3.5" /> Delete</Button>}
-          <button onClick={clear} className="ml-auto text-slate-400 hover:text-slate-600">Clear</button>
+          <span className="font-medium text-slate-600">{t("resources.selected", { n: selected.size })}</span>
+          {canEdit && <Button variant="outline" className="h-7 text-xs" disabled={bulk.isPending} onClick={() => runBulk("activate")}><Power className="h-3.5 w-3.5" /> {t("common.activate")}</Button>}
+          {canEdit && <Button variant="outline" className="h-7 text-xs" disabled={bulk.isPending} onClick={() => runBulk("deactivate")}><PowerOff className="h-3.5 w-3.5" /> {t("common.deactivate")}</Button>}
+          {canDelete && <Button variant="outline" className="h-7 text-xs text-rose-600 hover:bg-rose-50" disabled={bulk.isPending} onClick={() => runBulk("delete")}><Trash2 className="h-3.5 w-3.5" /> {t("common.delete")}</Button>}
+          <button onClick={clear} className="ms-auto text-slate-400 hover:text-slate-600">{t("common.clear")}</button>
         </div>
       )}
 
-      {isLoading ? <p className="p-4 text-sm text-slate-400">Loading…</p>
+      {isLoading ? <p className="p-4 text-sm text-slate-400">{t("common.loading")}</p>
         : error ? <p className="p-4 text-sm text-rose-600">{(error as Error).message}</p>
-        : !rows.length ? <p className="p-4 text-sm text-slate-400">None yet.</p>
+        : !rows.length ? <p className="p-4 text-sm text-slate-400">{t("resources.none")}</p>
         : (
           <TableScroll>
           <table className="w-full min-w-[34rem] text-sm">
-            <thead className="bg-slate-50 text-left text-xs text-slate-500">
+            <thead className="bg-slate-50 text-start text-xs text-slate-500">
               <tr>
-                {canSelect && <th className="px-3 py-2"><input type="checkbox" aria-label="Select all" checked={allChecked} onChange={toggleAll} /></th>}
-                <th className="px-4 py-2">Code</th><th className="px-4 py-2">Name</th><th className="px-4 py-2">Unit</th><th className="px-4 py-2 text-right">{cfg.rateLabel}</th><th className="px-2 py-2"></th>
+                {canSelect && <th className="px-3 py-2"><input type="checkbox" aria-label={t("common.add")} checked={allChecked} onChange={toggleAll} /></th>}
+                <th className="px-4 py-2">{t("resources.colCode")}</th><th className="px-4 py-2">{t("resources.colName")}</th><th className="px-4 py-2">{t("resources.colUnit")}</th><th className="px-4 py-2 text-end">{t(cfg.rateLabelKey)}</th><th className="px-2 py-2"></th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id} className={`border-t border-[var(--border)] ${selected.has(r.id) ? "bg-[var(--brand)]/5" : ""} ${r.isActive ? "" : "text-slate-400"}`}>
                   {canSelect && <td className="px-3 py-2"><input type="checkbox" aria-label={`Select ${r.code}`} checked={selected.has(r.id)} onChange={() => toggle(r.id)} /></td>}
-                  <td className="px-4 py-2 font-mono text-xs">{r.code}{!r.isActive && <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-500">inactive</span>}</td>
+                  <td className="px-4 py-2 font-mono text-xs">{r.code}{!r.isActive && <span className="ms-1 rounded bg-slate-100 px-1 text-[10px] text-slate-500">{t("resources.inactive")}</span>}</td>
                   <td className="px-4 py-2">{r.name}</td>
                   <td className="px-4 py-2 text-slate-500">{r.unit}</td>
-                  <td className="px-4 py-2 text-right">{money((r[cfg.rateField] as number) ?? 0)}</td>
+                  <td className="px-4 py-2 text-end">{money((r[cfg.rateField] as number) ?? 0, "AED", locale)}</td>
                   <td className="px-2 py-2">
                     <div className="flex justify-end gap-1">
                       {canEdit && <button onClick={() => setEditing(r)} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><Pencil className="h-3.5 w-3.5" /></button>}
-                      {canDelete && <button onClick={() => { if (confirm(`Delete ${r.code}?`)) del.mutate(r.id) }} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
+                      {canDelete && <button onClick={() => { if (confirm(t("resources.deleteConfirm", { code: r.code }))) del.mutate(r.id) }} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
                       {!canEdit && !canDelete && <span className="text-xs text-slate-300">—</span>}
                     </div>
                   </td>
@@ -141,6 +144,7 @@ function ResourceTable({ cfg }: { cfg: TabCfg }) {
 
 function ResourceEditor({ cfg, row, onClose }: { cfg: TabCfg; row: ResourceRow | null; onClose: () => void }) {
   const qc = useQueryClient()
+  const { t, locale } = useI18n()
   const editing = row !== null
   const [f, setF] = useState({
     code: row?.code ?? "",
@@ -159,7 +163,7 @@ function ResourceEditor({ cfg, row, onClose }: { cfg: TabCfg; row: ResourceRow |
   async function fetchSuggestion() {
     const name = f.name.trim()
     const unit = (f.unit || cfg.rateField === "ratePerHour" ? "hr" : "unit").trim()
-    if (!name) { toast.error("Enter a resource name first"); return }
+    if (!name) { toast.error(t("resources.aiEnterName")); return }
     setSuggestion({ loading: true, data: null, error: null })
     try {
       const params = new URLSearchParams({ name, unit, type: cfg.apiType })
@@ -173,7 +177,7 @@ function ResourceEditor({ cfg, row, onClose }: { cfg: TabCfg; row: ResourceRow |
   function applyRate(rate: number) {
     setF((prev) => ({ ...prev, rate: String(rate) }))
     setSuggestion(null)
-    toast.success("Rate applied")
+    toast.success(t("resources.rateApplied"))
   }
 
   const mut = useMutation({
@@ -186,7 +190,7 @@ function ResourceEditor({ cfg, row, onClose }: { cfg: TabCfg; row: ResourceRow |
         body: JSON.stringify(body),
       })
     },
-    onSuccess: () => { toast.success(editing ? "Updated" : "Created"); qc.invalidateQueries({ queryKey: ["res", cfg.path] }); onClose() },
+    onSuccess: () => { toast.success(editing ? t("resources.updated") : t("resources.created")); qc.invalidateQueries({ queryKey: ["res", cfg.path] }); onClose() },
     onError: (e) => toast.error((e as Error).message),
   })
 
@@ -196,21 +200,21 @@ function ResourceEditor({ cfg, row, onClose }: { cfg: TabCfg; row: ResourceRow |
   }
 
   return (
-    <Modal open onClose={onClose} title={`${editing ? "Edit" : "Add"} ${cfg.label.replace(/s$/, "")}`}>
+    <Modal open onClose={onClose} title={t(editing ? "resources.editTitle" : "resources.addTitle", { kind: t(cfg.labelKey) })}>
       <form id="res-form" onSubmit={(e) => { e.preventDefault(); mut.mutate() }} className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Code *"><Input value={f.code} onChange={set("code")} disabled={editing} required /></Field>
-          <Field label="Unit"><Input value={f.unit} onChange={set("unit")} /></Field>
+          <Field label={`${t("resources.fCode")} *`}><Input value={f.code} onChange={set("code")} disabled={editing} required /></Field>
+          <Field label={t("resources.fUnit")}><Input value={f.unit} onChange={set("unit")} /></Field>
         </div>
-        <Field label="Name *"><Input value={f.name} onChange={set("name")} required /></Field>
+        <Field label={`${t("resources.fName")} *`}><Input value={f.name} onChange={set("name")} required /></Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label={`${cfg.rateLabel} *`}>
+          <Field label={`${t(cfg.rateLabelKey)} *`}>
             {/* Rate input row with AI suggest button */}
             <div className="flex items-center gap-2">
               <Input type="number" step="0.0001" min={0} value={f.rate} onChange={set("rate")} required className="flex-1" />
               <button
                 type="button"
-                title="AI rate suggestion — get a benchmark or historical rate for this resource"
+                title={t("resources.aiTitle")}
                 disabled={suggestion?.loading}
                 onClick={fetchSuggestion}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border)] text-slate-400 transition hover:border-[var(--brand)] hover:text-[var(--brand)] disabled:opacity-40"
@@ -219,7 +223,7 @@ function ResourceEditor({ cfg, row, onClose }: { cfg: TabCfg; row: ResourceRow |
               </button>
             </div>
           </Field>
-          {cfg.material && <Field label="Wastage %"><Input type="number" step="0.01" min={0} value={f.wastagePct} onChange={set("wastagePct")} /></Field>}
+          {cfg.material && <Field label={t("resources.fWastage")}><Input type="number" step="0.01" min={0} value={f.wastagePct} onChange={set("wastagePct")} /></Field>}
         </div>
 
         {/* AI suggestion panel — shown after the button is clicked */}
@@ -227,7 +231,7 @@ function ResourceEditor({ cfg, row, onClose }: { cfg: TabCfg; row: ResourceRow |
           <div className="rounded-md border border-[var(--border)] bg-slate-50 p-3 text-xs">
             {suggestion.loading && (
               <p className="flex items-center gap-2 text-slate-500">
-                <Sparkles className="h-3.5 w-3.5 animate-pulse text-[var(--brand)]" /> Fetching suggestion…
+                <Sparkles className="h-3.5 w-3.5 animate-pulse text-[var(--brand)]" /> {t("resources.aiFetching")}
               </p>
             )}
             {suggestion.error && <p className="text-rose-600">{suggestion.error}</p>}
@@ -237,7 +241,7 @@ function ResourceEditor({ cfg, row, onClose }: { cfg: TabCfg; row: ResourceRow |
                 <>
                   <div className="mb-2 flex items-center justify-between">
                     <span className="font-medium text-slate-700">
-                      Suggested: <span className="font-mono">{money(s.suggestedRate)}</span>
+                      {t("resources.aiSuggested")} <span className="font-mono">{money(s.suggestedRate, "AED", locale)}</span>
                     </span>
                     <div className="flex items-center gap-2">
                       {confidenceChip(s.confidence)}
@@ -249,7 +253,7 @@ function ResourceEditor({ cfg, row, onClose }: { cfg: TabCfg; row: ResourceRow |
                       {s.comparables.slice(0, 5).map((c, i) => (
                         <li key={i} className="flex items-center justify-between text-slate-500">
                           <span className="truncate max-w-[55%]">{c.name}</span>
-                          <span className="font-mono text-slate-700">{money(c.rate)}/{c.unit}</span>
+                          <span className="font-mono text-slate-700">{money(c.rate, "AED", locale)}/{c.unit}</span>
                         </li>
                       ))}
                     </ul>
@@ -260,11 +264,11 @@ function ResourceEditor({ cfg, row, onClose }: { cfg: TabCfg; row: ResourceRow |
                       onClick={() => applyRate(s.suggestedRate)}
                       className="flex items-center gap-1 rounded-md bg-[var(--brand)] px-2.5 py-1 text-white hover:opacity-90"
                     >
-                      <Check className="h-3 w-3" /> Apply {money(s.suggestedRate)}
+                      <Check className="h-3 w-3" /> {t("resources.aiApply", { amount: money(s.suggestedRate, "AED", locale) })}
                     </button>
                   )}
                   {s.suggestedRate === 0 && (
-                    <p className="text-slate-400">No suggestion available for this resource name. Try a more specific name (e.g. "Mason", "Concrete C30", "Excavator 20t").</p>
+                    <p className="text-slate-400">{t("resources.aiNone")}</p>
                   )}
                 </>
               )
@@ -272,11 +276,11 @@ function ResourceEditor({ cfg, row, onClose }: { cfg: TabCfg; row: ResourceRow |
           </div>
         )}
 
-        {cfg.material && <Field label="Supplier"><Input value={f.supplier} onChange={set("supplier")} /></Field>}
+        {cfg.material && <Field label={t("resources.fSupplier")}><Input value={f.supplier} onChange={set("supplier")} /></Field>}
       </form>
       <div className="mt-4 flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-        <Button type="submit" form="res-form" disabled={mut.isPending}>{mut.isPending ? "Saving…" : "Save"}</Button>
+        <Button type="button" variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
+        <Button type="submit" form="res-form" disabled={mut.isPending}>{mut.isPending ? t("common.saving") : t("common.save")}</Button>
       </div>
     </Modal>
   )
