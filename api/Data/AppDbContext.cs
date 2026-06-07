@@ -34,6 +34,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     // Programmatic API keys (21.2) — hashed, tenant-scoped, act-as-creator credentials.
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
 
+    // Reusable estimate templates (21.3) — JSON snapshots of an estimate's structure.
+    public DbSet<EstimateTemplate> EstimateTemplates => Set<EstimateTemplate>();
+
     // ── Project scoping layer (BidBuilder) ────────────────────────────────────
     public DbSet<Project>     Projects     => Set<Project>();
     public DbSet<ProjectTeam> ProjectTeams => Set<ProjectTeam>();
@@ -383,6 +386,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.Property(k => k.Prefix).HasMaxLength(24).IsRequired();
             b.Property(k => k.KeyHash).HasMaxLength(64).IsRequired();
             b.HasQueryFilter(k => k.TenantId == _tenant.TenantId);
+        });
+
+        // ── EstimateTemplate (21.3 reusable templates) ────────────────────────
+        mb.Entity<EstimateTemplate>(b =>
+        {
+            b.HasIndex(t => t.TenantId);
+            b.Property(t => t.Name).HasMaxLength(160).IsRequired();
+            b.Property(t => t.Description).HasMaxLength(1000);
+            b.Property(t => t.PayloadJson).HasColumnType("jsonb").IsRequired();
+            b.HasQueryFilter(t => t.TenantId == _tenant.TenantId);
         });
 
         // ── Resource library ──────────────────────────────────────────────────

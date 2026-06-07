@@ -121,6 +121,16 @@ export interface ApiKeyCreated {
   secret: string
 }
 
+/** 21.3 — A reusable estimate template (structure snapshot; counts for the list). */
+export interface EstimateTemplate {
+  id: number
+  name: string
+  description: string | null
+  sectionCount: number
+  itemCount: number
+  createdAt: string
+}
+
 /** 20.2 — One recorded sign-off on an estimate revision. */
 export interface ApprovalRow {
   id: number; approverUserId: number; approverEmail: string; approverName: string

@@ -100,6 +100,7 @@ builder.Services.AddScoped<BidBuilder.Api.Services.WebhookDispatcher>();
 builder.Services.AddScoped<BidBuilder.Api.Services.AreaRollupService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.BenchmarkService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.RateSuggestionService>();
+builder.Services.AddScoped<BidBuilder.Api.Services.EstimateTemplateService>();
 
 // ── FluentValidation (19.7) ───────────────────────────────────────────────────
 // Auto-register every IValidator<T> in the API assembly so the ValidationFilter
@@ -442,6 +443,7 @@ app.MapResourceEndpoints();
 app.MapQuoteEndpoints();
 app.MapAssemblyEndpoints();
 app.MapEstimateEndpoints();
+app.MapEstimateTemplateEndpoints();
 app.MapExportEndpoints();
 app.MapSettingsEndpoints();
 app.MapAuditEndpoints();
