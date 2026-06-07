@@ -8,6 +8,7 @@ import { fetchApi } from "@/lib/api"
 import type { SubcontractorQuote, Project } from "@/lib/types"
 import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
+import { useT } from "@/lib/i18n"
 import { Card, Button, Input, TableScroll } from "@/components/ui"
 import { Modal, Field, ModalActions, Select, Textarea } from "@/components/form"
 import { Money } from "@/components/money"
@@ -45,6 +46,7 @@ function StatusBadge({ status, expired }: { status: string; expired: boolean }) 
 }
 
 function Register() {
+  const t = useT()
   const qc = useQueryClient()
   const { can } = usePermissions()
   const canAdd = can("projects", "add")
@@ -90,7 +92,7 @@ function Register() {
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-2">
         <span className="text-sm font-semibold">Requests for quote</span>
-        {canAdd && <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5" /> New request</Button>}
+        {canAdd && <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5" /> {t("empty.subQuotes.cta")}</Button>}
       </div>
 
       {isLoading ? <p className="p-4 text-sm text-muted">Loading…</p>
@@ -98,9 +100,9 @@ function Register() {
         : !data?.length ? (
           <EmptyState
             illustration={<SubcontractorQuotesIllustration className="h-24 w-32" />}
-            title="Invite a subcontractor"
-            body="Send a portal link to a subcontractor. They quote against your scope on a public page; their bid pulls back into your estimate."
-            cta={canAdd ? <Button onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> New request</Button> : undefined}
+            title={t("empty.subQuotes.title")}
+            body={t("empty.subQuotes.body")}
+            cta={canAdd ? <Button onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> {t("empty.subQuotes.cta")}</Button> : undefined}
           />
         )
         : (

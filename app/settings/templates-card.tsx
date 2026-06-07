@@ -95,8 +95,8 @@ export function TemplatesCard() {
       ) : !list.data?.length ? (
         <EmptyState
           illustration={<TemplatesIllustration className="h-24 w-32" />}
-          title="Templates speed up the next bid"
-          body="Save any revision as a reusable starting point — areas, BOQ sections, markups, the works. Import from elsewhere using the Import button above."
+          title={t("empty.templates.title")}
+          body={t("empty.templates.body")}
         />
       ) : (
         <ul className="space-y-2">
