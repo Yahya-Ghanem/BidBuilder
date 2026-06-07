@@ -101,6 +101,13 @@ builder.Services.AddScoped<BidBuilder.Api.Services.AreaRollupService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.BenchmarkService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.RateSuggestionService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.EstimateTemplateService>();
+// 22.1 — Notification email digests. The assembly/send service is scoped (uses the
+// request or background-scope DbContext); a background host periodically sends due
+// digests. The host is registered only when enabled (default on); tests disable it and
+// drive DigestService directly so digest assertions stay deterministic.
+builder.Services.AddScoped<BidBuilder.Api.Services.DigestService>();
+if (builder.Configuration.GetValue("Digests:Enabled", true))
+    builder.Services.AddHostedService<BidBuilder.Api.Services.DigestSchedulerService>();
 
 // ── FluentValidation (19.7) ───────────────────────────────────────────────────
 // Auto-register every IValidator<T> in the API assembly so the ValidationFilter
@@ -448,6 +455,7 @@ app.MapExportEndpoints();
 app.MapSettingsEndpoints();
 app.MapAuditEndpoints();
 app.MapNotificationEndpoints();
+app.MapDigestEndpoints();
 app.MapSearchEndpoints();
 app.MapWebhookEndpoints();
 app.MapApiKeyEndpoints();

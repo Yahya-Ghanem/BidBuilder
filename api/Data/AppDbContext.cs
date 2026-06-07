@@ -28,6 +28,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<AuditEvent>     AuditEvents    => Set<AuditEvent>();
     // In-app notifications (20.3) — one row per recipient per event.
     public DbSet<Notification>   Notifications  => Set<Notification>();
+    // Per-user email-digest opt-in (22.1) — one row per user per tenant.
+    public DbSet<NotificationDigestPreference> NotificationDigestPreferences => Set<NotificationDigestPreference>();
     // Outbound webhooks (20.9) — tenant-configured event subscriptions.
     public DbSet<WebhookSubscription> WebhookSubscriptions => Set<WebhookSubscription>();
 
@@ -362,6 +364,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.Property(n => n.EntityType).HasMaxLength(64);
             b.Property(n => n.EntityKey).HasMaxLength(64);
             b.HasQueryFilter(n => n.TenantId == _tenant.TenantId);
+        });
+
+        // ── NotificationDigestPreference (22.1 email digests) ────────────────
+        mb.Entity<NotificationDigestPreference>(b =>
+        {
+            // At most one preference per user per tenant; also the lookup key.
+            b.HasIndex(p => new { p.TenantId, p.UserId }).IsUnique();
+            b.Property(p => p.Frequency).HasConversion<string>().HasMaxLength(16);
+            b.HasQueryFilter(p => p.TenantId == _tenant.TenantId);
         });
 
         // ── WebhookSubscription (20.9 outbound API) ──────────────────────────

@@ -11,6 +11,7 @@ import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input } from "@/components/ui"
 import { Field } from "@/components/form"
 import { WebhooksCard } from "./webhooks-card"
+import { DigestCard } from "./digest-card"
 import { ApiKeysCard } from "./api-keys-card"
 import { TemplatesCard } from "./templates-card"
 import { CustomDomainCard } from "./custom-domain-card"
@@ -99,6 +100,10 @@ function SettingsForm() {
       {/* 21.1 — Email notifications. The toggle persists with "Save settings"; the
           test button verifies the platform SMTP transport end-to-end. */}
       <EmailCard f={f} setF={setF} ro={ro} isAdmin={isAdmin} />
+
+      {/* 22.1 — Per-user email digests (batched notification emails). Independent of the
+          page's "Save settings" — the dropdown auto-saves the caller's own preference. */}
+      <DigestCard isAdmin={isAdmin} />
 
       {isAdmin
         ? <Button disabled={save.isPending} onClick={() => save.mutate(f)}>{save.isPending ? "Saving…" : "Save settings"}</Button>

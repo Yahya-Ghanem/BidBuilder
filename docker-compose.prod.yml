@@ -106,6 +106,10 @@ services:
       Email__FromAddress: ${EMAIL_FROM_ADDRESS:-}
       Email__FromName:    ${EMAIL_FROM_NAME:-BidBuilder}
       Email__AppBaseUrl:  ${EMAIL_APP_BASE_URL:-${PUBLIC_URL}}
+      # Notification email digests (22.1) — batches each opted-in user's notifications into a
+      # periodic email. No-ops unless Email is configured above. Disable with DIGESTS_ENABLED=false.
+      Digests__Enabled:         ${DIGESTS_ENABLED:-true}
+      Digests__IntervalSeconds: ${DIGESTS_INTERVAL_SECONDS:-900}
     # Liveness probe on /healthz (no DB dependency) so a transient Postgres outage
     # doesn't get a healthy API killed, while web/Caddy still wait for it to come up.
     healthcheck:
