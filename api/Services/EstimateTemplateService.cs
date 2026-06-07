@@ -54,6 +54,21 @@ public class EstimateTemplateService(AppDbContext db, EstimateCalculator calc)
     public static (int Sections, int Items) Counts(TemplatePayload p) =>
         (p.Sections.Count, p.Sections.Sum(s => s.Items.Count));
 
+    /// <summary>24.3 — Re-derive the section/item counts from a payload JSON string,
+    /// used by the cross-tenant import endpoint where we deliberately do NOT trust
+    /// any counts the uploaded envelope claims. Returns (0, 0) when the payload is
+    /// missing/malformed; the caller treats that as a valid but empty template.</summary>
+    public static (int Sections, int Items) CountsFromJson(string payloadJson)
+    {
+        if (string.IsNullOrWhiteSpace(payloadJson)) return (0, 0);
+        try
+        {
+            var p = JsonSerializer.Deserialize<TemplatePayload>(payloadJson, Json);
+            return p is null ? (0, 0) : Counts(p);
+        }
+        catch (JsonException) { return (0, 0); }
+    }
+
     /// <summary>Create a new Draft estimate in <paramref name="targetProjectId"/> from a template.
     /// Returns the recomputed estimate. Runs in one transaction through the execution strategy
     /// (retry-safe), just like the clone.</summary>

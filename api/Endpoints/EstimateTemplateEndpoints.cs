@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using BidBuilder.Api.Auth;
 using BidBuilder.Api.Data;
@@ -16,6 +18,21 @@ public record UpdateTemplateInput(string? Name, string? Description, string? Cat
 /// <summary>22.3 — pin/unpin a template for the org.</summary>
 public record FeatureTemplateInput(bool Featured);
 public record FromTemplateInput(int TemplateId, string? Title);
+
+/// <summary>
+/// 24.3 — Portable JSON envelope for cross-tenant template sharing. A tenant exports
+/// one of their templates as JSON (export.json), hands the file to another tenant's
+/// admin, who uploads it via /import to land a fresh tenant-owned copy. The
+/// <see cref="SchemaVersion"/> field is the migration knob if the captured payload
+/// shape evolves; currently <c>1</c>.
+/// </summary>
+public record TemplateExportEnvelope(
+    int SchemaVersion,
+    string Name,
+    string? Description,
+    string? Category,
+    string[]? Tags,
+    JsonElement Payload);
 
 /// <summary>
 /// 21.3 — Reusable estimate templates. Save an estimate's structure as a tenant
@@ -159,6 +176,79 @@ public static class EstimateTemplateEndpoints
             await db.SaveChangesAsync();
             await audit.LogAsync(me, "estimate-template.delete", "EstimateTemplate", id.ToString(), tpl.Name);
             return Results.NoContent();
+        });
+
+        // 24.3 — Export a template as a portable JSON envelope. Re-scoped from the
+        // "starter library with nullable TenantId" IOU: rather than touch IHasTenant /
+        // global query filter / auto-stamp machinery, we ship cross-tenant sharing
+        // via an export/import pair. The envelope is self-contained — name,
+        // description, library metadata, and the captured payload — and the
+        // schemaVersion lets us migrate older files if the payload shape evolves.
+        grp.MapGet("/{id:int}/export.json", async (int id, ClaimsPrincipal me, AppDbContext db, PermissionService perm) =>
+        {
+            if (!await perm.CanAsync(me, Admin, ModuleAction.View)) return Forbid();
+            var tpl = await db.EstimateTemplates.FirstOrDefaultAsync(t => t.Id == id);
+            if (tpl is null) return Results.NotFound(new { error = "Template not found" });
+
+            // The stored PayloadJson is already a JSON document — embed it as JsonElement
+            // (not a quoted string) so the consumer sees structured JSON, not escaped text.
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(tpl.PayloadJson) ? "{}" : tpl.PayloadJson);
+            var envelope = new TemplateExportEnvelope(
+                SchemaVersion: 1,
+                Name:          tpl.Name,
+                Description:   tpl.Description,
+                Category:      tpl.Category,
+                Tags:          TagArray(tpl.Tags),
+                Payload:       doc.RootElement.Clone());
+
+            // Web defaults → camelCase property names (matching how the rest of the API
+            // serialises), and indented for human-legible files.
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(envelope,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true });
+            // Sanitize the filename: strip control chars, collapse to safe chars.
+            var safe  = string.Concat(tpl.Name.Where(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' or ' '));
+            var fname = string.IsNullOrWhiteSpace(safe) ? $"template-{id}.json" : $"{safe.Trim().Replace(' ', '-')}.json";
+            return Results.File(bytes, "application/json", fname);
+        });
+
+        // 24.3 — Import a previously-exported envelope into the current tenant as a
+        // fresh template (always tenant-owned by the caller; never linked back to the
+        // source). Accepts JSON in the request body (so curl / fetch work) — drop the
+        // file picker on the client to read-as-text then POST.
+        grp.MapPost("/import", async (TemplateExportEnvelope body, ClaimsPrincipal me, AppDbContext db,
+            PermissionService perm, AuditService audit) =>
+        {
+            if (!await perm.CanAsync(me, Admin, ModuleAction.Add)) return Forbid();
+            if (body.SchemaVersion != 1)
+                return Bad($"Unsupported schemaVersion {body.SchemaVersion} (this server understands 1).");
+            var name = body.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(name)) return Bad("Name is required.");
+            if (name!.Length > 160) return Bad("Name is too long (max 160).");
+            if (body.Category is { } cat && cat.Trim().Length > 40) return Bad("Category is too long (max 40).");
+            if (body.Payload.ValueKind != JsonValueKind.Object)
+                return Bad("Payload is required and must be a JSON object.");
+
+            var payloadJson = body.Payload.GetRawText();
+            // Parse the payload to recover the section/item counts for the list view
+            // (we never trust whatever the file claimed — re-derive from the structure).
+            var (sections, items) = EstimateTemplateService.CountsFromJson(payloadJson);
+
+            var tpl = new EstimateTemplate
+            {
+                Name = name,
+                Description = Clean(body.Description),
+                PayloadJson = payloadJson,
+                SectionCount = sections,
+                ItemCount = items,
+                Category = Clean(body.Category),
+                Tags = NormalizeTags(body.Tags),
+                CreatedByUserId = me.Id(),
+            };
+            db.EstimateTemplates.Add(tpl);
+            await db.SaveChangesAsync();
+            await audit.LogAsync(me, "estimate-template.import", "EstimateTemplate", tpl.Id.ToString(),
+                $"imported \"{name}\" ({sections} sections / {items} items)");
+            return Results.Created($"/api/estimate-templates/{tpl.Id}", ToDto(tpl, me.Name()));
         });
 
         // Create a new estimate in a project FROM a template.
