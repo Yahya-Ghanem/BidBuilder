@@ -14,6 +14,8 @@ import type { Project, EstimateSummary, EstimateBreakdown, Area, AreaRollup, Pro
 import { Button, Input, Card } from "@/components/ui"
 import { Modal, Field, Select } from "@/components/form"
 import { Money } from "@/components/money"
+import { EmptyState } from "@/components/empty-state"
+import { ProjectsIllustration } from "@/components/empty-state-illustrations"
 
 /* ── Selection context (shared between the sidebar tree and the detail pane) ── */
 
@@ -95,7 +97,15 @@ function ProjectsBranch({ depth }: { depth: number }) {
   const { data, isLoading, error } = useQuery({ queryKey: ["projects"], queryFn: () => fetchApi<Project[]>("/api/projects") })
   if (isLoading) return <Message depth={depth}>Loading…</Message>
   if (error) return <Message depth={depth} tone="error">{(error as Error).message}</Message>
-  if (!data?.length) return <Message depth={depth}>No projects.</Message>
+  if (!data?.length) return (
+    <div className="px-3 py-2">
+      <EmptyState
+        illustration={<ProjectsIllustration className="h-20 w-28" />}
+        title="Your first project lives here"
+        body="Create a project to start preparing a bid. Add areas, lines, and rates — each project becomes one bid letter."
+      />
+    </div>
+  )
   // Group projects by their type; "Untyped" sorts last, the rest alphabetically.
   const groups = new Map<string, Project[]>()
   for (const p of data) {
@@ -191,14 +201,19 @@ export function ProjectsDetailPane() {
         </div>
       </div>
 
-      {selected ? <SectionView key={`${selected.estimateId}:${selected.section}`} sel={selected} /> : <EmptyState />}
+      {selected ? <SectionView key={`${selected.estimateId}:${selected.section}`} sel={selected} /> : <NoSelectionState />}
 
       <NewProjectModal open={newOpen} onClose={() => setNewOpen(false)} />
     </div>
   )
 }
 
-function EmptyState() {
+// Renamed (26.5) from `EmptyState` to avoid the import collision with the
+// shared `<EmptyState>` primitive. This panel is not a "no data" state —
+// it's "no SELECTION", which is a different affordance: the tenant DOES
+// have projects, they just haven't picked one yet. Keeping the local
+// component as `NoSelectionState` makes that semantic split clear.
+function NoSelectionState() {
   return (
     <Card className="grid place-items-center p-16 text-center text-slate-500">
       <div>

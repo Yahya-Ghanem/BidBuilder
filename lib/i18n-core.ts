@@ -52,6 +52,24 @@ const en: Dict = {
   "restype.Material": "Material",
   "restype.Equipment": "Equipment",
   "restype.Subcontractor": "Subcontractor",
+  // ── Empty states (26.5) ─────────────────────────────────────────────────
+  // First-time copy for every surface a new tenant can land on with zero
+  // data. The title names what the user would see; the body explains what
+  // the surface does + the next step. Keys are nested under `empty.*` so a
+  // future "explore all empty states" tour can iterate them.
+  "empty.projects.title": "Your first project lives here",
+  "empty.projects.body": "Create a project to start preparing a bid. Add areas, lines, and rates — each project becomes one bid letter.",
+  "empty.resources.title": "Build a price library",
+  "empty.resources.body": "Add materials, labour, equipment, or subcontractors with a unit price. Estimates pull from this library so every line uses the same rate.",
+  "empty.assemblies.title": "Group a recipe",
+  "empty.assemblies.body": "An assembly bundles resources (e.g. \"1 m³ concrete = 0.4 ton cement + 1.8 ton sand + 2 hours labour\"). Build one to reuse across projects.",
+  "empty.subQuotes.title": "Invite a subcontractor",
+  "empty.subQuotes.body": "Send a portal link to a subcontractor. They quote against your scope on a public page; their bid pulls back into your estimate.",
+  "empty.quotes.title": "Track every supplier quote",
+  "empty.quotes.body": "Log quotes you receive from suppliers (price, unit, validity). Old quotes archive automatically so historical pricing stays handy.",
+  "empty.templates.title": "Templates speed up the next bid",
+  "empty.templates.body": "Save any revision as a reusable starting point — areas, BOQ sections, markups, the works. Import from elsewhere using the Import button above.",
+
   // ── Quotes register (22.4) ──────────────────────────────────────────────
   "quotes.heading": "Supplier quotes",
   "quotes.allTypes": "All types",
@@ -335,6 +353,20 @@ const ar: Dict = {
   "restype.Material": "مواد",
   "restype.Equipment": "معدات",
   "restype.Subcontractor": "مقاول من الباطن",
+  // ── الحالات الفارغة (26.5) ────────────────────────────────────────────
+  "empty.projects.title": "مشروعك الأول يبدأ هنا",
+  "empty.projects.body": "أنشئ مشروعًا لبدء إعداد عرض. أضِف المناطق والبنود والأسعار — كل مشروع يصبح خطاب عرض واحدًا.",
+  "empty.resources.title": "ابنِ مكتبة أسعار",
+  "empty.resources.body": "أضِف مواد وعمالة ومعدات أو مقاولي باطن مع سعر وحدة. تستمد التقديرات من هذه المكتبة حتى يستخدم كل بند نفس السعر.",
+  "empty.assemblies.title": "أنشئ تجميعة",
+  "empty.assemblies.body": "التجميعة تربط موارد معًا (مثلاً \"١ م³ خرسانة = ٠٫٤ طن أسمنت + ١٫٨ طن رمل + ساعتا عمالة\"). أنشئها لإعادة استخدامها عبر المشاريع.",
+  "empty.subQuotes.title": "ادعُ مقاول باطن",
+  "empty.subQuotes.body": "أرسل رابط البوابة إلى مقاول باطن. يقدّم عرضه على نطاقك في صفحة عامة؛ ثم يعود عرضه إلى تقديرك تلقائيًا.",
+  "empty.quotes.title": "تتبّع كل عرض مورّد",
+  "empty.quotes.body": "سجّل عروض الأسعار التي تتلقّاها من المورّدين (السعر والوحدة وصلاحية العرض). تُؤرشَف العروض القديمة تلقائيًا فيبقى التسعير التاريخي تحت اليد.",
+  "empty.templates.title": "القوالب تُسرّع العرض التالي",
+  "empty.templates.body": "احفظ أي مراجعة كنقطة بداية قابلة لإعادة الاستخدام — المناطق وأقسام البنود والمارك-أب. استورد من ملف باستخدام زر الاستيراد أعلاه.",
+
   // ── سجل عروض الأسعار (22.4) ───────────────────────────────────────────
   "quotes.heading": "عروض أسعار المورّدين",
   "quotes.allTypes": "كل الأنواع",

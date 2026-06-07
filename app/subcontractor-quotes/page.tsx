@@ -11,6 +11,8 @@ import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input, TableScroll } from "@/components/ui"
 import { Modal, Field, ModalActions, Select, Textarea } from "@/components/form"
 import { Money } from "@/components/money"
+import { EmptyState } from "@/components/empty-state"
+import { SubcontractorQuotesIllustration } from "@/components/empty-state-illustrations"
 
 /**
  * 20.6 — Subcontractor quote portal (estimator side). Create a request-for-quote
@@ -93,7 +95,14 @@ function Register() {
 
       {isLoading ? <p className="p-4 text-sm text-muted">Loading…</p>
         : error ? <p className="p-4 text-sm text-rose-600">{(error as Error).message}</p>
-        : !data?.length ? <p className="p-4 text-sm text-muted">No subcontractor requests yet. Create one and share the portal link.</p>
+        : !data?.length ? (
+          <EmptyState
+            illustration={<SubcontractorQuotesIllustration className="h-24 w-32" />}
+            title="Invite a subcontractor"
+            body="Send a portal link to a subcontractor. They quote against your scope on a public page; their bid pulls back into your estimate."
+            cta={canAdd ? <Button onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> New request</Button> : undefined}
+          />
+        )
         : (
           <TableScroll>
           <table className="w-full min-w-[60rem] text-sm">

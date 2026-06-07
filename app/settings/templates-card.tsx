@@ -10,6 +10,8 @@ import { usePermissions } from "@/lib/permissions"
 import { Card, Button } from "@/components/ui"
 import { cn } from "@/lib/utils"
 import { useT } from "@/lib/i18n"
+import { EmptyState } from "@/components/empty-state"
+import { TemplatesIllustration } from "@/components/empty-state-illustrations"
 
 /**
  * 21.3 → 22.3 — Manage saved estimate templates as a library. Templates are created from
@@ -91,7 +93,11 @@ export function TemplatesCard() {
       {list.isLoading ? (
         <p className="text-sm text-muted">Loading…</p>
       ) : !list.data?.length ? (
-        <p className="text-sm text-muted">No templates yet.</p>
+        <EmptyState
+          illustration={<TemplatesIllustration className="h-24 w-32" />}
+          title="Templates speed up the next bid"
+          body="Save any revision as a reusable starting point — areas, BOQ sections, markups, the works. Import from elsewhere using the Import button above."
+        />
       ) : (
         <ul className="space-y-2">
           {list.data.map((t) => (

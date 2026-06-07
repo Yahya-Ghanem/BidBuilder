@@ -12,6 +12,8 @@ import { Card, Button, Input, TableScroll } from "@/components/ui"
 import { Modal, Field, ModalActions, Select } from "@/components/form"
 import { Money } from "@/components/money"
 import { useI18n } from "@/lib/i18n"
+import { EmptyState } from "@/components/empty-state"
+import { QuotesRegisterIllustration } from "@/components/empty-state-illustrations"
 
 /**
  * Supplier-quote register (18.3). A flat, sortable view of every live and expired
@@ -62,7 +64,14 @@ function QuotesTable() {
 
       {isLoading ? <p className="p-4 text-sm text-muted">{t("common.loading")}</p>
         : error ? <p className="p-4 text-sm text-rose-600">{(error as Error).message}</p>
-        : !data?.length ? <p className="p-4 text-sm text-muted">{t("quotes.none")}</p>
+        : !data?.length ? (
+          <EmptyState
+            illustration={<QuotesRegisterIllustration className="h-24 w-32" />}
+            title={t("empty.quotes.title")}
+            body={t("empty.quotes.body")}
+            cta={canAdd ? <Button onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> {t("quotes.add")}</Button> : undefined}
+          />
+        )
         : (
           <TableScroll>
           <table className="w-full min-w-[52rem] text-sm">
