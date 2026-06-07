@@ -123,6 +123,22 @@ export interface DigestPreviewDto {
   body: string
 }
 
+/** 23.4 — One monthly bucket of the rate-trend series. */
+export interface RateTrendPoint { month: string; rate: number }
+/** 23.4 — 24-month rate trend + summary stats for one library resource.
+ *  `volatilityIndex` is stddev / mean over the series (coefficient of variation);
+ *  `min12m` / `max12m` are over the trailing 12 months. Either may be null when
+ *  the series is too thin. */
+export interface RateTrendDto {
+  resourceType: string
+  resourceId: number
+  currentRate: number
+  min12m: number | null
+  max12m: number | null
+  volatilityIndex: number | null
+  points: RateTrendPoint[]
+}
+
 /** 21.2 — A programmatic API key (never carries the secret after creation).
  *  22.2 adds scopes, an optional per-minute rate limit, and live usage.
  *  23.2 adds an optional CIDR allowlist (empty array = any IP). */
