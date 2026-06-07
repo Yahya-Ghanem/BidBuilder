@@ -99,7 +99,7 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
           <div className="flex items-center gap-2">
             <code className="flex-1 truncate rounded bg-white px-2 py-1 text-slate-700">{newSecret}</code>
             <button onClick={() => { navigator.clipboard?.writeText(newSecret); toast.success("Key copied") }}
-              className="rounded p-1 text-slate-500 hover:bg-amber-100"><Copy className="h-4 w-4" /></button>
+              className="rounded p-1 text-muted hover:bg-amber-100"><Copy className="h-4 w-4" /></button>
             <button onClick={() => setNewSecret(null)} className="text-amber-700 hover:underline">Dismiss</button>
           </div>
         </div>
@@ -117,7 +117,7 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm text-slate-700">{k.name}</span>
-                  <code className="rounded bg-slate-100 px-1 text-xs text-slate-500">{k.prefix}…</code>
+                  <code className="rounded bg-slate-100 px-1 text-xs text-muted">{k.prefix}…</code>
                   {k.revoked && <span className="rounded bg-rose-100 px-1.5 text-xs text-rose-700">revoked</span>}
                   {!k.revoked && k.expiresAt && new Date(k.expiresAt) < new Date() && (
                     <span className="rounded bg-amber-100 px-1.5 text-xs text-amber-700">expired</span>
@@ -136,7 +136,7 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
                       <Shield className="h-3 w-3" /> {k.ipAllowlist.length} IP{k.ipAllowlist.length === 1 ? "" : "s"}
                     </span>
                   ) : (
-                    <span className="rounded bg-slate-100 px-1.5 text-xs text-slate-500">any IP</span>
+                    <span className="rounded bg-slate-100 px-1.5 text-xs text-muted">any IP</span>
                   )}
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted">

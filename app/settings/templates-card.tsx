@@ -103,7 +103,7 @@ export function TemplatesCard() {
                   {t.category && <span className="rounded bg-sky-100 px-1.5 text-xs font-medium text-sky-700">{t.category}</span>}
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                  {t.tags.map((g) => <span key={g} className="rounded bg-slate-100 px-1.5 text-xs text-slate-500">{g}</span>)}
+                  {t.tags.map((g) => <span key={g} className="rounded bg-slate-100 px-1.5 text-xs text-muted">{g}</span>)}
                 </div>
                 <div className="mt-0.5 text-xs text-muted">
                   {t.sectionCount} sections · {t.itemCount} items{t.createdByName ? ` · by ${t.createdByName}` : ""}{t.description ? ` · ${t.description}` : ""}
