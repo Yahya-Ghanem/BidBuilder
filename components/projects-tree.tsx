@@ -10,6 +10,7 @@ import {
 import { toast } from "sonner"
 import { fetchApi } from "@/lib/api"
 import { usePermissions } from "@/lib/permissions"
+import { useT } from "@/lib/i18n"
 import type { Project, EstimateSummary, EstimateBreakdown, Area, AreaRollup, ProjectType } from "@/lib/types"
 import { Button, Input, Card } from "@/components/ui"
 import { Modal, Field, Select } from "@/components/form"
@@ -94,6 +95,7 @@ export function ProjectsSidebarTree() {
 const UNTYPED = "Untyped"
 
 function ProjectsBranch({ depth }: { depth: number }) {
+  const t = useT()
   const { data, isLoading, error } = useQuery({ queryKey: ["projects"], queryFn: () => fetchApi<Project[]>("/api/projects") })
   if (isLoading) return <Message depth={depth}>Loading…</Message>
   if (error) return <Message depth={depth} tone="error">{(error as Error).message}</Message>
@@ -101,8 +103,8 @@ function ProjectsBranch({ depth }: { depth: number }) {
     <div className="px-3 py-2">
       <EmptyState
         illustration={<ProjectsIllustration className="h-20 w-28" />}
-        title="Your first project lives here"
-        body="Create a project to start preparing a bid. Add areas, lines, and rates — each project becomes one bid letter."
+        title={t("empty.projects.title")}
+        body={t("empty.projects.body")}
       />
     </div>
   )

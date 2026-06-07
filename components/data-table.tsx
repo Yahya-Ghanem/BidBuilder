@@ -230,7 +230,7 @@ export function DataTable<T>({
                   canSort ? "none" : undefined
                 }
                 style={{ width: h.getSize() !== 150 /* default */ ? h.getSize() : undefined }}
-                className={cn("px-3 py-2 text-left font-medium", canSort && "cursor-pointer select-none")}
+                className={cn("px-3 py-2 text-start font-medium", canSort && "cursor-pointer select-none")}
                 onClick={canSort ? h.column.getToggleSortingHandler() : undefined}
               >
                 <span className="inline-flex items-center gap-1">
