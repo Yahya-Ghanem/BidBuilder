@@ -10,6 +10,7 @@ import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input } from "@/components/ui"
 import { Field } from "@/components/form"
+import { useT } from "@/lib/i18n"
 import { WebhooksCard } from "./webhooks-card"
 import { DigestCard } from "./digest-card"
 import { ApiKeysCard } from "./api-keys-card"
@@ -26,6 +27,7 @@ export default function SettingsPage() {
 }
 
 function SettingsForm() {
+  const t = useT()
   const qc = useQueryClient()
   const { isAdmin } = usePermissions()
   const { data, isLoading, error } = useQuery({ queryKey: ["settings"], queryFn: () => fetchApi<TenantSettings>("/api/settings") })
@@ -34,11 +36,11 @@ function SettingsForm() {
 
   const save = useMutation({
     mutationFn: (v: TenantSettings) => fetchApi<TenantSettings>("/api/settings", { method: "PUT", body: JSON.stringify(v) }),
-    onSuccess: (d) => { qc.setQueryData(["settings"], d); setF(d); toast.success("Settings saved") },
+    onSuccess: (d) => { qc.setQueryData(["settings"], d); setF(d); toast.success(t("adm.saved")) },
     onError: (e) => toast.error((e as Error).message),
   })
 
-  if (isLoading || !f) return <p className="text-slate-400">Loading…</p>
+  if (isLoading || !f) return <p className="text-slate-400">{t("adm.loading")}</p>
   if (error) return <p className="text-rose-600">{(error as Error).message}</p>
 
   const ro = !isAdmin
@@ -106,8 +108,8 @@ function SettingsForm() {
       <DigestCard isAdmin={isAdmin} />
 
       {isAdmin
-        ? <Button disabled={save.isPending} onClick={() => save.mutate(f)}>{save.isPending ? "Saving…" : "Save settings"}</Button>
-        : <p className="text-xs text-slate-400">Only a tenant admin can edit settings.</p>}
+        ? <Button disabled={save.isPending} onClick={() => save.mutate(f)}>{save.isPending ? t("adm.saving") : t("adm.save")}</Button>
+        : <p className="text-xs text-slate-400">{t("adm.adminOnly")}</p>}
 
       <CurrencyRatesCard isAdmin={isAdmin} />
       <CostTypesCard isAdmin={isAdmin} />
@@ -126,26 +128,24 @@ function SettingsForm() {
  *  the shared settings state so it saves with the page's "Save settings" button; the
  *  test send is independent and only enabled when the platform transport is configured. */
 function EmailCard({ f, setF, ro, isAdmin }: { f: TenantSettings; setF: (s: TenantSettings) => void; ro: boolean; isAdmin: boolean }) {
+  const t = useT()
   const [testing, setTesting] = useState(false)
 
   async function sendTest() {
     setTesting(true)
     try {
       const r = await fetchApi<{ configured: boolean; sent: boolean }>("/api/settings/email/test", { method: "POST" })
-      if (!r.configured) toast.error("Platform email transport is not configured.")
-      else if (r.sent) toast.success("Test email sent — check your inbox.")
-      else toast.error("Email is configured but the test send failed. Check the server logs.")
+      if (!r.configured) toast.error(t("adm.email.notConfiguredToast"))
+      else if (r.sent) toast.success(t("adm.email.sent"))
+      else toast.error(t("adm.email.testFailed"))
     } catch (e) { toast.error((e as Error).message) } finally { setTesting(false) }
   }
 
   return (
     <Card className="space-y-4 p-5">
       <div>
-        <h3 className="text-sm font-semibold text-slate-600">Email notifications</h3>
-        <p className="text-xs text-slate-400">
-          Email a copy of in-app notifications (estimate publish / approvals / subcontractor quotes) to your
-          workspace's users, and email subcontractor RFQ invites. Requires the platform SMTP transport to be configured.
-        </p>
+        <h3 className="text-sm font-semibold text-slate-600">{t("adm.email.heading")}</h3>
+        <p className="text-xs text-slate-400">{t("adm.email.sub")}</p>
       </div>
 
       <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -155,21 +155,21 @@ function EmailCard({ f, setF, ro, isAdmin }: { f: TenantSettings; setF: (s: Tena
           disabled={ro}
           onChange={(e) => setF({ ...f, notificationEmailsEnabled: e.target.checked })}
         />
-        Email notification copies to this workspace's users
+        {t("adm.email.toggle")}
       </label>
 
       <p className="text-xs">
         {f.emailConfigured
-          ? <span className="text-emerald-600">Platform email transport is configured.</span>
-          : <span className="text-amber-600">Platform email transport is not configured — set the SMTP environment variables to enable sending.</span>}
+          ? <span className="text-emerald-600">{t("adm.email.configured")}</span>
+          : <span className="text-amber-600">{t("adm.email.notConfigured")}</span>}
       </p>
 
       {isAdmin && (
         <div className="flex items-center gap-3">
           <Button variant="outline" className="h-8 text-xs" disabled={testing || !f.emailConfigured} onClick={sendTest}>
-            <Mail className="h-4 w-4" /> {testing ? "Sending…" : "Send test email"}
+            <Mail className="h-4 w-4" /> {testing ? t("adm.email.sending") : t("adm.email.test")}
           </Button>
-          <span className="text-xs text-slate-400">The toggle is saved with “Save settings”.</span>
+          <span className="text-xs text-slate-400">{t("adm.email.toggleHint")}</span>
         </div>
       )}
     </Card>

@@ -8,6 +8,7 @@ import { fetchApi } from "@/lib/api"
 import type { ApiKey, ApiKeyCreated } from "@/lib/types"
 import { Card, Button, Input } from "@/components/ui"
 import { Field } from "@/components/form"
+import { useT } from "@/lib/i18n"
 
 // 23.2 — Parse a comma- or newline-separated allowlist string into a clean array.
 // Empty entries are dropped; the server validates each CIDR.
@@ -21,6 +22,7 @@ function parseAllowlist(raw: string): string[] {
  * once at creation; only its hash is stored.
  */
 export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
+  const t = useT()
   const qc = useQueryClient()
   const list = useQuery({ queryKey: ["api-keys"], queryFn: () => fetchApi<ApiKey[]>("/api/admin/api-keys"), enabled: isAdmin })
 
@@ -81,7 +83,7 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
     <Card className="space-y-4 p-5">
       <div>
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
-          <KeyRound className="h-4 w-4 text-[var(--brand)]" /> API keys
+          <KeyRound className="h-4 w-4 text-[var(--brand)]" /> {t("adm.apikeys.heading")}
         </h3>
         <p className="text-xs text-slate-400">
           Call the API from your own systems. Send the key in an

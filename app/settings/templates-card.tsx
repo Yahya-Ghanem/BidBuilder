@@ -8,6 +8,7 @@ import type { EstimateTemplate } from "@/lib/types"
 import { usePermissions } from "@/lib/permissions"
 import { Card, Button } from "@/components/ui"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 
 /**
  * 21.3 → 22.3 — Manage saved estimate templates as a library. Templates are created from
@@ -16,6 +17,7 @@ import { cn } from "@/lib/utils"
  * top of the picker), and lets an estimate-admin delete unwanted ones.
  */
 export function TemplatesCard() {
+  const t = useT()
   const qc = useQueryClient()
   const { can, isAdmin } = usePermissions()
   const canView = can("estimate-admin", "view")
@@ -40,7 +42,7 @@ export function TemplatesCard() {
     <Card className="space-y-4 p-5">
       <div>
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
-          <FileStack className="h-4 w-4 text-[var(--brand)]" /> Estimate templates
+          <FileStack className="h-4 w-4 text-[var(--brand)]" /> {t("adm.tpl.heading")}
         </h3>
         <p className="text-xs text-slate-400">
           Reusable estimate structures. Create one with <b>Save as template</b> on a project&apos;s

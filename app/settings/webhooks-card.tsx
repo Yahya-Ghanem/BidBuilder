@@ -8,6 +8,7 @@ import { fetchApi } from "@/lib/api"
 import type { WebhookSubscription, WebhookCreated } from "@/lib/types"
 import { Card, Button, Input } from "@/components/ui"
 import { Field } from "@/components/form"
+import { useT } from "@/lib/i18n"
 
 /**
  * 20.9 — Manage outbound webhooks. Subscribe a URL to bid-lifecycle events; the
@@ -15,6 +16,7 @@ import { Field } from "@/components/form"
  * once at creation. "Ping" sends a test delivery and reports the HTTP status.
  */
 export function WebhooksCard({ isAdmin }: { isAdmin: boolean }) {
+  const t = useT()
   const qc = useQueryClient()
   const list = useQuery({ queryKey: ["webhooks"], queryFn: () => fetchApi<WebhookSubscription[]>("/api/webhooks"), enabled: isAdmin })
   const events = useQuery({ queryKey: ["webhook-events"], queryFn: () => fetchApi<string[]>("/api/webhooks/events"), enabled: isAdmin })
@@ -52,7 +54,7 @@ export function WebhooksCard({ isAdmin }: { isAdmin: boolean }) {
     <Card className="space-y-4 p-5">
       <div>
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
-          <Webhook className="h-4 w-4 text-[var(--brand)]" /> Webhooks
+          <Webhook className="h-4 w-4 text-[var(--brand)]" /> {t("adm.webhooks.heading")}
         </h3>
         <p className="text-xs text-slate-400">
           POST a signed JSON payload to your systems when bid events occur. Verify the
