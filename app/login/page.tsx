@@ -83,23 +83,23 @@ export default function LoginPage() {
             <p className="mb-4 text-sm text-slate-500">{t("login.subtitle")}</p>
             <form onSubmit={onSubmit} className="space-y-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">{t("login.tenant")}</label>
-                <Input value={tenant} onChange={(e) => setTenant(e.target.value)} placeholder="default" />
+                <label htmlFor="login-tenant" className="mb-1 block text-xs font-medium text-slate-600">{t("login.tenant")}</label>
+                <Input id="login-tenant" value={tenant} onChange={(e) => setTenant(e.target.value)} placeholder="default" />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">{t("login.email")}</label>
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <label htmlFor="login-email" className="mb-1 block text-xs font-medium text-slate-600">{t("login.email")}</label>
+                <Input id="login-email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">{t("login.password")}</label>
-                <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <label htmlFor="login-password" className="mb-1 block text-xs font-medium text-slate-600">{t("login.password")}</label>
+                <Input id="login-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
               </div>
               <Button type="submit" className="w-full" disabled={busy}>
                 {busy ? t("login.signingIn") : t("login.signIn")}
               </Button>
             </form>
 
-            <div className="my-4 flex items-center gap-3 text-xs text-slate-400">
+            <div className="my-4 flex items-center gap-3 text-xs text-slate-500">
               <span className="h-px flex-1 bg-[var(--border)]" /> {t("login.or")} <span className="h-px flex-1 bg-[var(--border)]" />
             </div>
             <Button type="button" variant="outline" className="w-full" onClick={signInWithSso}>
@@ -114,10 +114,11 @@ export default function LoginPage() {
             </div>
             <form onSubmit={onSubmit} className="space-y-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
+                <label htmlFor="login-mfa-code" className="mb-1 block text-xs font-medium text-slate-600">
                   {useRecovery ? "Recovery code" : "6-digit code"}
                 </label>
                 <Input
+                  id="login-mfa-code"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   placeholder={useRecovery ? "abcde-fghij" : "123456"}
@@ -143,7 +144,7 @@ export default function LoginPage() {
           </>
         )}
 
-        <p className="mt-4 text-center text-xs text-slate-400">
+        <p className="mt-4 text-center text-xs text-slate-500">
           <a href="/platform" className="hover:text-[var(--brand)] hover:underline">{t("login.platformAdmin")}</a>
         </p>
       </Card>
