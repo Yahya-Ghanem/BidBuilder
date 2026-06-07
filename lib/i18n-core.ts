@@ -270,6 +270,23 @@ const en: Dict = {
   "proj.duration":       "Duration:",
   "proj.mo":             "mo",
   "proj.teams":          "Teams:",
+  // ── Revision-bar dropdowns (25.4) ──────────────────────────────────────
+  "rev.actions":         "Actions",
+  "rev.actions.aria":    "Revision actions",
+  "rev.new":             "New",
+  "rev.duplicate":       "Duplicate",
+  "rev.copyTo":          "Copy to…",
+  "rev.saveAsTemplate":  "Save as template",
+  "rev.fromTemplate":    "From template",
+  "rev.delete":          "Delete",
+  "ed.export":           "Export",
+  "ed.export.aria":      "Export this revision",
+  // ── Settings tabs (25.2) ───────────────────────────────────────────────
+  "stab.aria":           "Settings sections",
+  "stab.company":        "Company",
+  "stab.workspace":      "Workspace",
+  "stab.catalogues":     "Catalogues",
+  "stab.integrations":   "Integrations",
 }
 
 const ar: Dict = {
@@ -525,6 +542,23 @@ const ar: Dict = {
   "proj.duration":       "المدة:",
   "proj.mo":             "شهر",
   "proj.teams":          "الفِرق:",
+  // ── قوائم شريط المراجعات (25.4) ────────────────────────────────────────
+  "rev.actions":         "إجراءات",
+  "rev.actions.aria":    "إجراءات المراجعة",
+  "rev.new":             "جديد",
+  "rev.duplicate":       "تكرار",
+  "rev.copyTo":          "نسخ إلى…",
+  "rev.saveAsTemplate":  "حفظ كقالب",
+  "rev.fromTemplate":    "من قالب",
+  "rev.delete":          "حذف",
+  "ed.export":           "تصدير",
+  "ed.export.aria":      "تصدير هذه المراجعة",
+  // ── تبويبات الإعدادات (25.2) ───────────────────────────────────────────
+  "stab.aria":           "أقسام الإعدادات",
+  "stab.company":        "الشركة",
+  "stab.workspace":      "مساحة العمل",
+  "stab.catalogues":     "الكتالوجات",
+  "stab.integrations":   "التكاملات",
 }
 
 export const messages: Record<Locale, Dict> = { en, ar }

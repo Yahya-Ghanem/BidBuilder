@@ -1,5 +1,26 @@
 "use client"
 
+/**
+ * Settings page (25.2 tab restructure).
+ *
+ * Was: 14 cards stacked in a 6,000-px column with no visual grouping — finding
+ * a specific setting meant scrolling past everything else on the way.
+ *
+ * Now: four logical tabs below the page title.
+ *   • Company       — company profile, logo, document branding, custom domain
+ *   • Workspace     — estimating defaults, approvals, currency FX, email, digest
+ *   • Catalogues    — cost-component types, templates, activities, project types
+ *   • Integrations  — SSO, webhooks, API keys
+ *
+ * The shared form-state (`f`) — used by Company and Workspace tabs — and the
+ * single "Save settings" mutation stay lifted into `SettingsForm` so the user
+ * can edit fields across either tab and click Save from either. The Save
+ * button renders inside the tabs that own inline fields so it sits close to
+ * what was edited.
+ *
+ * URL deep-link: `?tab=integrations` (etc.) — the Tabs primitive handles it.
+ */
+
 import { useState, useEffect, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -10,6 +31,7 @@ import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input } from "@/components/ui"
 import { Field } from "@/components/form"
+import { Tabs } from "@/components/tabs"
 import { useT } from "@/lib/i18n"
 import { WebhooksCard } from "./webhooks-card"
 import { DigestCard } from "./digest-card"
@@ -44,88 +66,143 @@ function SettingsForm() {
   if (error) return <p className="text-rose-600">{(error as Error).message}</p>
 
   const ro = !isAdmin
-  const set = (k: keyof TenantSettings) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value })
-  const setNum = (k: keyof TenantSettings) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: Number(e.target.value || 0) })
+  // The "Save settings" affordance is shared between the Company and Workspace
+  // tabs (the two that drive `f`). Computed once as a JSX value so both tabs
+  // render the SAME button — saving from either persists the whole `f` object,
+  // including unsaved edits made in the other tab. Kept as a value (not a
+  // nested component) so React doesn't reset it on every parent render.
+  const saveBar = isAdmin
+    ? <Button disabled={save.isPending} onClick={() => save.mutate(f)}>{save.isPending ? t("adm.saving") : t("adm.save")}</Button>
+    : <p className="text-xs text-slate-400">{t("adm.adminOnly")}</p>
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <Card className="space-y-4 p-5">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-600">Company profile</h3>
-          <p className="text-xs text-slate-400">Appears on the header of exported bid documents.</p>
-        </div>
-        <Field label="Company name"><Input value={f.companyName} disabled /></Field>
-        <Field label="Address"><Input value={f.address ?? ""} onChange={set("address")} disabled={ro} /></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="City"><Input value={f.city ?? ""} onChange={set("city")} disabled={ro} /></Field>
-          <Field label="Country (ISO-2)"><Input value={f.country ?? ""} onChange={set("country")} disabled={ro} maxLength={2} /></Field>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Phone"><Input value={f.phone ?? ""} onChange={set("phone")} disabled={ro} /></Field>
-          <Field label="Email"><Input value={f.contactEmail ?? ""} onChange={set("contactEmail")} disabled={ro} /></Field>
-          <Field label="Website"><Input value={f.website ?? ""} onChange={set("website")} disabled={ro} /></Field>
-        </div>
-      </Card>
-
-      <LogoCard hasLogo={f.hasLogo} isAdmin={isAdmin} />
-
-      {/* 24.5 — Branding text rendered on the bid letter PDF: tagline/header text above
-          the body, multi-line footer (replaces the page-count footer when set), and the
-          sign-off block (overrides the boilerplate "Yours faithfully, / CompanyName"). */}
-      <BrandingCard f={f} setF={setF} ro={ro} />
-
-      <Card className="space-y-4 p-5">
-        <h3 className="text-sm font-semibold text-slate-600">Estimating defaults</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Base currency"><Input value={f.baseCurrency} onChange={set("baseCurrency")} disabled={ro} maxLength={3} /></Field>
-          <Field label="Timezone"><Input value={f.timezone} onChange={set("timezone")} disabled={ro} /></Field>
-        </div>
-        <div className="grid grid-cols-4 gap-3">
-          <Field label="Overhead %"><Input type="number" step="0.01" min={0} value={f.defaultOverheadPct} onChange={setNum("defaultOverheadPct")} disabled={ro} /></Field>
-          <Field label="Profit %"><Input type="number" step="0.01" min={0} value={f.defaultProfitPct} onChange={setNum("defaultProfitPct")} disabled={ro} /></Field>
-          <Field label="Contingency %"><Input type="number" step="0.01" min={0} value={f.defaultContingencyPct} onChange={setNum("defaultContingencyPct")} disabled={ro} /></Field>
-          <Field label="VAT / tax %"><Input type="number" step="0.01" min={0} max={100} value={f.defaultTaxRatePct} onChange={setNum("defaultTaxRatePct")} disabled={ro} /></Field>
-        </div>
-      </Card>
-
-      {/* 20.2 — Approval workflow. Required-approvals=0 keeps the legacy
-          "anyone with permission can publish" behavior; any positive value
-          enforces N sign-offs before Draft→Published. */}
-      <Card className="space-y-4 p-5">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-600">Approval workflow</h3>
-          <p className="text-xs text-slate-400">
-            Number of TenantAdmin sign-offs required before an estimate can be Published.
-            Zero disables the workflow. Any BOQ / preliminaries / markups / risks edit invalidates existing sign-offs.
-          </p>
-        </div>
-        <div className="grid grid-cols-4 gap-3">
-          <Field label="Required approvals"><Input type="number" min={0} value={f.requiredApprovalsToPublish} onChange={setNum("requiredApprovalsToPublish")} disabled={ro} /></Field>
-        </div>
-      </Card>
-
-      {/* 21.1 — Email notifications. The toggle persists with "Save settings"; the
-          test button verifies the platform SMTP transport end-to-end. */}
-      <EmailCard f={f} setF={setF} ro={ro} isAdmin={isAdmin} />
-
-      {/* 22.1 — Per-user email digests (batched notification emails). Independent of the
-          page's "Save settings" — the dropdown auto-saves the caller's own preference. */}
-      <DigestCard isAdmin={isAdmin} />
-
-      {isAdmin
-        ? <Button disabled={save.isPending} onClick={() => save.mutate(f)}>{save.isPending ? t("adm.saving") : t("adm.save")}</Button>
-        : <p className="text-xs text-slate-400">{t("adm.adminOnly")}</p>}
-
-      <CurrencyRatesCard isAdmin={isAdmin} />
-      <CostTypesCard isAdmin={isAdmin} />
-      <TemplatesCard />
-      <ActivitiesCard isAdmin={isAdmin} />
-      <ProjectTypesCard isAdmin={isAdmin} />
-      <CustomDomainCard isAdmin={isAdmin} />
-      <SsoCard isAdmin={isAdmin} />
-      <WebhooksCard isAdmin={isAdmin} />
-      <ApiKeysCard isAdmin={isAdmin} />
+    <div className="max-w-2xl">
+      <Tabs
+        ariaLabel={t("stab.aria")}
+        defaultId="company"
+        tabs={[
+          {
+            id: "company",
+            label: t("stab.company"),
+            content: (
+              <div className="space-y-6">
+                <CompanyProfileCard f={f} setF={setF} ro={ro} />
+                <LogoCard hasLogo={f.hasLogo} isAdmin={isAdmin} />
+                {/* 24.5 — Branding text rendered on the bid letter PDF. */}
+                <BrandingCard f={f} setF={setF} ro={ro} />
+                <CustomDomainCard isAdmin={isAdmin} />
+                {saveBar}
+              </div>
+            ),
+          },
+          {
+            id: "workspace",
+            label: t("stab.workspace"),
+            content: (
+              <div className="space-y-6">
+                <EstimatingDefaultsCard f={f} setF={setF} ro={ro} />
+                <ApprovalWorkflowCard f={f} setF={setF} ro={ro} />
+                <CurrencyRatesCard isAdmin={isAdmin} />
+                {/* 21.1 — Email notification toggle + test send. */}
+                <EmailCard f={f} setF={setF} ro={ro} isAdmin={isAdmin} />
+                {/* 22.1 — Per-user email digest (auto-saves its own field). */}
+                <DigestCard isAdmin={isAdmin} />
+                {saveBar}
+              </div>
+            ),
+          },
+          {
+            id: "catalogues",
+            label: t("stab.catalogues"),
+            content: (
+              <div className="space-y-6">
+                <CostTypesCard isAdmin={isAdmin} />
+                <TemplatesCard />
+                <ActivitiesCard isAdmin={isAdmin} />
+                <ProjectTypesCard isAdmin={isAdmin} />
+              </div>
+            ),
+          },
+          {
+            id: "integrations",
+            label: t("stab.integrations"),
+            content: (
+              <div className="space-y-6">
+                <SsoCard isAdmin={isAdmin} />
+                <WebhooksCard isAdmin={isAdmin} />
+                <ApiKeysCard isAdmin={isAdmin} />
+              </div>
+            ),
+          },
+        ]}
+      />
     </div>
+  )
+}
+
+// 25.2 — Extracted from the previous inline JSX so each tab can render the card
+// without leaking the parent's onChange wiring. State still lives in the parent
+// (`f`) so the single Save button can persist the whole object.
+function CompanyProfileCard({ f, setF, ro }: { f: TenantSettings; setF: (s: TenantSettings) => void; ro: boolean }) {
+  const set = (k: keyof TenantSettings) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value })
+  return (
+    <Card className="space-y-4 p-5">
+      <div>
+        <h3 className="text-sm font-semibold text-slate-600">Company profile</h3>
+        <p className="text-xs text-slate-400">Appears on the header of exported bid documents.</p>
+      </div>
+      <Field label="Company name"><Input value={f.companyName} disabled /></Field>
+      <Field label="Address"><Input value={f.address ?? ""} onChange={set("address")} disabled={ro} /></Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="City"><Input value={f.city ?? ""} onChange={set("city")} disabled={ro} /></Field>
+        <Field label="Country (ISO-2)"><Input value={f.country ?? ""} onChange={set("country")} disabled={ro} maxLength={2} /></Field>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Phone"><Input value={f.phone ?? ""} onChange={set("phone")} disabled={ro} /></Field>
+        <Field label="Email"><Input value={f.contactEmail ?? ""} onChange={set("contactEmail")} disabled={ro} /></Field>
+        <Field label="Website"><Input value={f.website ?? ""} onChange={set("website")} disabled={ro} /></Field>
+      </div>
+    </Card>
+  )
+}
+
+function EstimatingDefaultsCard({ f, setF, ro }: { f: TenantSettings; setF: (s: TenantSettings) => void; ro: boolean }) {
+  const set = (k: keyof TenantSettings) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value })
+  const setNum = (k: keyof TenantSettings) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: Number(e.target.value || 0) })
+  return (
+    <Card className="space-y-4 p-5">
+      <h3 className="text-sm font-semibold text-slate-600">Estimating defaults</h3>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Base currency"><Input value={f.baseCurrency} onChange={set("baseCurrency")} disabled={ro} maxLength={3} /></Field>
+        <Field label="Timezone"><Input value={f.timezone} onChange={set("timezone")} disabled={ro} /></Field>
+      </div>
+      <div className="grid grid-cols-4 gap-3">
+        <Field label="Overhead %"><Input type="number" step="0.01" min={0} value={f.defaultOverheadPct} onChange={setNum("defaultOverheadPct")} disabled={ro} /></Field>
+        <Field label="Profit %"><Input type="number" step="0.01" min={0} value={f.defaultProfitPct} onChange={setNum("defaultProfitPct")} disabled={ro} /></Field>
+        <Field label="Contingency %"><Input type="number" step="0.01" min={0} value={f.defaultContingencyPct} onChange={setNum("defaultContingencyPct")} disabled={ro} /></Field>
+        <Field label="VAT / tax %"><Input type="number" step="0.01" min={0} max={100} value={f.defaultTaxRatePct} onChange={setNum("defaultTaxRatePct")} disabled={ro} /></Field>
+      </div>
+    </Card>
+  )
+}
+
+// 20.2 — Approval workflow. RequiredApprovals=0 keeps the legacy "anyone with
+// permission can publish" behavior; any positive value enforces N sign-offs.
+function ApprovalWorkflowCard({ f, setF, ro }: { f: TenantSettings; setF: (s: TenantSettings) => void; ro: boolean }) {
+  const setNum = (k: keyof TenantSettings) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: Number(e.target.value || 0) })
+  return (
+    <Card className="space-y-4 p-5">
+      <div>
+        <h3 className="text-sm font-semibold text-slate-600">Approval workflow</h3>
+        <p className="text-xs text-slate-400">
+          Number of TenantAdmin sign-offs required before an estimate can be Published.
+          Zero disables the workflow. Any BOQ / preliminaries / markups / risks edit invalidates existing sign-offs.
+        </p>
+      </div>
+      <div className="grid grid-cols-4 gap-3">
+        <Field label="Required approvals"><Input type="number" min={0} value={f.requiredApprovalsToPublish} onChange={setNum("requiredApprovalsToPublish")} disabled={ro} /></Field>
+      </div>
+    </Card>
   )
 }
 
