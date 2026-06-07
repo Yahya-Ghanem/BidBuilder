@@ -47,6 +47,21 @@ public sealed class ApiKeyGuard(RequestDelegate next)
             return;
         }
 
+        // ── IP allowlist (23.2) ──────────────────────────────────────────────────
+        // Evaluated AFTER the rate limit (so a flood from a blocked IP still gets a 429
+        // for the right reason) and BEFORE the scope check (an IP rejection is a stronger
+        // signal — wrong place, not just wrong method).
+        var allowlist = ctx.User.FindFirst(ApiKeyClaims.IpAllowlist)?.Value;
+        if (!CidrMatcher.IsAllowed(ctx.Connection.RemoteIpAddress, allowlist))
+        {
+            ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await ctx.Response.WriteAsJsonAsync(new
+            {
+                error = "API key is restricted to a specific IP allowlist and this request was rejected.",
+            });
+            return;
+        }
+
         // ── Scope ─────────────────────────────────────────────────────────────────
         var required = IsWriteMethod(ctx.Request.Method) ? "write" : "read";
         var scopes = (ctx.User.FindFirst(ApiKeyClaims.Scopes)?.Value ?? "")
@@ -73,9 +88,10 @@ public sealed class ApiKeyGuard(RequestDelegate next)
 /// <see cref="ApiKeyGuard"/> can enforce scopes + limits without re-reading the DB.</summary>
 public static class ApiKeyClaims
 {
-    public const string KeyId     = "akey_id";
-    public const string Scopes    = "akey_scope";
-    public const string RateLimit = "akey_rl";
+    public const string KeyId       = "akey_id";
+    public const string Scopes      = "akey_scope";
+    public const string RateLimit   = "akey_rl";
+    public const string IpAllowlist = "akey_ips";   // 23.2 — CSV of CIDRs; empty = any IP
 }
 
 public static class ApiKeyGuardExtensions

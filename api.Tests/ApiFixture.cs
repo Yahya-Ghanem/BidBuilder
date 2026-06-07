@@ -83,8 +83,29 @@ public sealed class ApiFixture : IAsyncLifetime
                 s.AddSingleton<IWebhookSender>(Webhooks);
                 s.RemoveAll<IEmailSender>();
                 s.AddSingleton<IEmailSender>(Emails);
+                // 23.2 — TestServer doesn't carry a real connection, so RemoteIpAddress is
+                // null. Stamp loopback so ApiKeyGuard's IP allowlist check has a meaningful
+                // value to evaluate. Test-only — production Kestrel never reports null.
+                s.AddSingleton<Microsoft.AspNetCore.Hosting.IStartupFilter, LoopbackIpStartupFilter>();
             });
         }
+    }
+
+    private sealed class LoopbackIpStartupFilter : Microsoft.AspNetCore.Hosting.IStartupFilter
+    {
+        public Action<Microsoft.AspNetCore.Builder.IApplicationBuilder> Configure(
+            Action<Microsoft.AspNetCore.Builder.IApplicationBuilder> next) => app =>
+        {
+            // Use the lower-level Use(Func<RequestDelegate, RequestDelegate>) overload so
+            // there's no ambiguity with the newer ctx/n overload (which lives in different
+            // namespaces across ASP.NET Core versions).
+            app.Use(nextDelegate => ctx =>
+            {
+                ctx.Connection.RemoteIpAddress ??= System.Net.IPAddress.Loopback;
+                return nextDelegate(ctx);
+            });
+            next(app);
+        };
     }
 
     public Task InitializeAsync()

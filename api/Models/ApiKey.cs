@@ -41,6 +41,14 @@ public class ApiKey : IHasTenant
     /// (429 + Retry-After on breach).</summary>
     public int? RateLimitPerMinute { get; set; }
 
+    /// <summary>23.2 — Optional comma-separated list of CIDR ranges (IPv4 and/or IPv6) the key
+    /// may be presented from. Null or empty = any IP. A bare address is treated as a /32 (or /128)
+    /// host route. Enforced after the rate-limit and before the scope check in
+    /// <see cref="Auth.ApiKeyGuard"/>: a request from outside the list is rejected 403 with a
+    /// distinct "IP not allowed" reason. CIDR matching is byte-wise, so IPv6 mapped-IPv4
+    /// addresses are normalized to their IPv4 form before comparison.</summary>
+    public string? IpAllowlist { get; set; }
+
     public DateTime  CreatedAt  { get; set; } = DateTime.UtcNow;
     public DateTime? LastUsedAt { get; set; }
     /// <summary>Optional expiry; null = never expires.</summary>

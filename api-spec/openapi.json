@@ -407,6 +407,13 @@
             "nullable": true,
             "type": "integer"
           },
+          "ipAllowlist": {
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          },
           "name": {
             "nullable": true,
             "type": "string"
@@ -1335,6 +1342,19 @@
         },
         "type": "object"
       },
+      "UpdateApiKeyAllowlistInput": {
+        "additionalProperties": false,
+        "properties": {
+          "ipAllowlist": {
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "UpdateEstimateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1658,6 +1678,39 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/admin/api-keys/{id}/allowlist": {
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateApiKeyAllowlistInput"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "OK"
