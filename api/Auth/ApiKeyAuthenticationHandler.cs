@@ -95,6 +95,8 @@ public sealed class ApiKeyAuthenticationHandler(
             new(ApiKeyClaims.KeyId, key.Id.ToString()),
             new(ApiKeyClaims.Scopes, key.Scopes ?? "read,write"),
             new(ApiKeyClaims.RateLimit, key.RateLimitPerMinute?.ToString() ?? ""),
+            // 23.2 — IP allowlist (CSV of CIDRs). Empty = "any IP" in ApiKeyGuard.
+            new(ApiKeyClaims.IpAllowlist, key.IpAllowlist ?? ""),
         };
         var identity = new ClaimsIdentity(claims, ApiKeyTokens.Scheme, nameType: "name", roleType: "role");
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), ApiKeyTokens.Scheme);

@@ -18,11 +18,19 @@ public record ApiKeyDto(
     /// <summary>22.2 — per-minute cap, or null when unlimited.</summary>
     int? RateLimitPerMinute,
     /// <summary>22.2 — requests counted against this key in the current minute (live, in-process).</summary>
-    int UsageThisMinute);
+    int UsageThisMinute,
+    /// <summary>23.2 — CIDRs the key may be used from; empty array = any IP.</summary>
+    string[] IpAllowlist);
 
 /// <summary>22.2 — Scopes default to full access (["read","write"]) when omitted, so the
-/// existing create shape keeps working. RateLimitPerMinute null = unlimited.</summary>
-public record CreateApiKeyInput(string? Name, int? ExpiresInDays, string[]? Scopes, int? RateLimitPerMinute);
+/// existing create shape keeps working. RateLimitPerMinute null = unlimited.
+/// 23.2 — IpAllowlist null/empty = any IP.</summary>
+public record CreateApiKeyInput(
+    string? Name, int? ExpiresInDays, string[]? Scopes, int? RateLimitPerMinute, string[]? IpAllowlist);
+
+/// <summary>23.2 — Update a key's IP allowlist after creation. Other fields are immutable
+/// (rotate the key instead). Null/empty = clear (any IP).</summary>
+public record UpdateApiKeyAllowlistInput(string[]? IpAllowlist);
 
 /// <summary>The create response — the only time the raw <see cref="Secret"/> is returned.</summary>
 public record ApiKeyCreatedDto(ApiKeyDto Key, string Secret);
@@ -62,6 +70,8 @@ public static class ApiKeyEndpoints
             if (!TryNormalizeScopes(input.Scopes, out var scopesCsv, out var scopeErr)) return Bad(scopeErr!);
             if (input.RateLimitPerMinute is { } rl && rl <= 0)
                 return Bad("Rate limit, if set, must be a positive number of requests per minute.");
+            // 23.2 — Validate IP allowlist (null/empty = unrestricted).
+            if (!TryNormalizeAllowlist(input.IpAllowlist, out var allowCsv, out var allowErr)) return Bad(allowErr!);
 
             var (secret, prefix) = ApiKeyTokens.Generate();
             var key = new ApiKey
@@ -72,14 +82,33 @@ public static class ApiKeyEndpoints
                 KeyHash            = ApiKeyTokens.Hash(secret),
                 Scopes             = scopesCsv,
                 RateLimitPerMinute = input.RateLimitPerMinute,
+                IpAllowlist        = allowCsv,
                 ExpiresAt          = input.ExpiresInDays is { } days ? DateTime.UtcNow.AddDays(days) : null,
             };
             db.ApiKeys.Add(key);                       // TenantId auto-stamped on save
             await db.SaveChangesAsync();
             await audit.LogAsync(me, "api-key.create", "ApiKey", key.Id.ToString(),
-                $"{name} ({prefix}…) scopes={scopesCsv}{(key.RateLimitPerMinute is { } r ? $" rate={r}/min" : "")}");
+                $"{name} ({prefix}…) scopes={scopesCsv}"
+                + (key.RateLimitPerMinute is { } r ? $" rate={r}/min" : "")
+                + (string.IsNullOrEmpty(allowCsv) ? "" : $" ips={allowCsv}"));
 
             return Results.Created($"/api/admin/api-keys/{key.Id}", new ApiKeyCreatedDto(ToDto(key), secret));
+        });
+
+        // 23.2 — Update an existing key's IP allowlist (other fields are immutable; rotate instead).
+        grp.MapPut("/{id:int}/allowlist", async (int id, UpdateApiKeyAllowlistInput input,
+            ClaimsPrincipal me, AppDbContext db, AuditService audit, ApiKeyRateLimiter limiter) =>
+        {
+            if (!me.IsAdmin()) return Forbid();
+            if (!TryNormalizeAllowlist(input.IpAllowlist, out var allowCsv, out var allowErr)) return Bad(allowErr!);
+
+            var key = await db.ApiKeys.FirstOrDefaultAsync(k => k.Id == id);
+            if (key is null) return Results.NotFound(new { error = "API key not found" });
+            key.IpAllowlist = allowCsv;
+            await db.SaveChangesAsync();
+            await audit.LogAsync(me, "api-key.allowlist", "ApiKey", key.Id.ToString(),
+                string.IsNullOrEmpty(allowCsv) ? $"{key.Name} ({key.Prefix}…) cleared" : $"{key.Name} ({key.Prefix}…) → {allowCsv}");
+            return Results.Ok(ToDto(key, limiter.CurrentCount(key.Id, DateTime.UtcNow)));
         });
 
         // Revoke a key (keeps the row for the audit trail; the key stops authenticating immediately).
@@ -100,7 +129,7 @@ public static class ApiKeyEndpoints
 
     private static ApiKeyDto ToDto(ApiKey k, int usageThisMinute = 0) => new(
         k.Id, k.Name, k.Prefix, k.CreatedAt, k.LastUsedAt, k.ExpiresAt, k.RevokedAt is not null,
-        ScopeArray(k.Scopes), k.RateLimitPerMinute, usageThisMinute);
+        ScopeArray(k.Scopes), k.RateLimitPerMinute, usageThisMinute, ScopeArray(k.IpAllowlist));
 
     /// <summary>The only scopes a key may carry. Kept binary for v22.2 (read = safe methods,
     /// write = mutations); per-resource scopes can extend this later.</summary>
@@ -129,6 +158,31 @@ public static class ApiKeyEndpoints
         }
         // Canonical order so the stored value is stable regardless of input order.
         csv = string.Join(",", AllowedScopes.Where(scopes.Contains));
+        return true;
+    }
+
+    /// <summary>23.2 — Validate + canonicalize the IP allowlist. Null / empty → "" (any IP).
+    /// Caps the entry count at 32 so a careless paste can't fill a column with kilobytes.
+    /// Malformed CIDRs are rejected with a descriptive error rather than silently dropped.</summary>
+    private static bool TryNormalizeAllowlist(string[]? requested, out string csv, out string? error)
+    {
+        error = null;
+        var entries = (requested ?? Array.Empty<string>())
+            .Select(s => (s ?? "").Trim())
+            .Where(s => s.Length > 0)
+            .ToList();
+        if (entries.Count == 0) { csv = ""; return true; }
+        if (entries.Count > 32) { csv = ""; error = "IP allowlist may contain at most 32 entries."; return false; }
+        var canon = new List<string>(entries.Count);
+        foreach (var e in entries)
+        {
+            if (!CidrMatcher.TryParse(e, out var c))
+            {
+                csv = ""; error = $"Invalid CIDR or IP address: '{e}'"; return false;
+            }
+            if (!canon.Contains(c)) canon.Add(c);
+        }
+        csv = string.Join(",", canon);
         return true;
     }
 

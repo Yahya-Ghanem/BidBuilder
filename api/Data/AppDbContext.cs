@@ -398,6 +398,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.Property(k => k.KeyHash).HasMaxLength(64).IsRequired();
             // 22.2 — scopes CSV ("read,write"); existing rows backfilled in the migration.
             b.Property(k => k.Scopes).HasMaxLength(64).IsRequired();
+            // 23.2 — IP allowlist CSV; nullable. 32 entries × ~43 chars (IPv6 + /128) = ~1.4kB ceiling.
+            b.Property(k => k.IpAllowlist).HasMaxLength(2048);
             b.HasQueryFilter(k => k.TenantId == _tenant.TenantId);
         });
 

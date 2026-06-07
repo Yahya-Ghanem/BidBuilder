@@ -205,6 +205,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/api-keys/{id}/allowlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateApiKeyAllowlistInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/groups": {
         parameters: {
             query?: never;
@@ -5765,6 +5804,7 @@ export interface components {
         CreateApiKeyInput: {
             /** Format: int32 */
             expiresInDays?: number | null;
+            ipAllowlist?: string[] | null;
             name?: string | null;
             /** Format: int32 */
             rateLimitPerMinute?: number | null;
@@ -6066,6 +6106,9 @@ export interface components {
         };
         TotpCodeInput: {
             code?: string | null;
+        };
+        UpdateApiKeyAllowlistInput: {
+            ipAllowlist?: string[] | null;
         };
         UpdateEstimateRequest: {
             clearPricingDate?: boolean | null;

@@ -124,7 +124,8 @@ export interface DigestPreviewDto {
 }
 
 /** 21.2 — A programmatic API key (never carries the secret after creation).
- *  22.2 adds scopes, an optional per-minute rate limit, and live usage. */
+ *  22.2 adds scopes, an optional per-minute rate limit, and live usage.
+ *  23.2 adds an optional CIDR allowlist (empty array = any IP). */
 export interface ApiKey {
   id: number
   name: string
@@ -139,6 +140,8 @@ export interface ApiKey {
   rateLimitPerMinute: number | null
   /** 22.2 — requests counted against this key in the current minute (live). */
   usageThisMinute: number
+  /** 23.2 — CIDRs the key may be presented from. Empty = any IP. */
+  ipAllowlist: string[]
 }
 
 /** 21.2 — The create response — the only time the raw secret is returned. */
