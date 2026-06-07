@@ -119,14 +119,14 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-600">
           <Building2 className="h-4 w-4" /> Tenants
         </div>
-        {isLoading && <p className="text-slate-400">Loading…</p>}
+        {isLoading && <p className="text-muted">Loading…</p>}
         {error && <p className="text-rose-600">{(error as Error).message}</p>}
-        {tenants && tenants.length === 0 && <p className="text-slate-400">No tenants yet.</p>}
+        {tenants && tenants.length === 0 && <p className="text-muted">No tenants yet.</p>}
         {tenants && tenants.length > 0 && (
           <TableScroll>
           <table className="w-full min-w-[44rem] text-sm">
             <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
+              <tr className="text-left text-xs uppercase tracking-wide text-muted">
                 <th className="py-2">Name</th>
                 <th className="py-2">Slug</th>
                 <th className="py-2">Locale</th>

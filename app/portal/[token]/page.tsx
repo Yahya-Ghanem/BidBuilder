@@ -44,7 +44,7 @@ export default function PortalPage() {
 
       <main className="mx-auto max-w-2xl p-4">
         {isLoading ? (
-          <p className="p-8 text-center text-sm text-slate-400">Loading…</p>
+          <p className="p-8 text-center text-sm text-muted">Loading…</p>
         ) : error ? (
           <Card className="p-6 text-center">
             <AlertTriangle className="mx-auto mb-2 h-8 w-8 text-rose-500" />
@@ -66,10 +66,10 @@ function Body({ view, token, qs, onSubmitted }: { view: SubcontractorPortalView;
       <Card className="space-y-3 p-5">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-xs uppercase tracking-wide text-slate-400">Request for quote</p>
+            <p className="text-xs uppercase tracking-wide text-muted">Request for quote</p>
             <h2 className="text-lg font-semibold text-slate-800">{view.trade}</h2>
           </div>
-          <span className="text-xs text-slate-400">to {view.contractorName}</span>
+          <span className="text-xs text-muted">to {view.contractorName}</span>
         </div>
         <div>
           <p className="mb-1 text-xs font-medium text-slate-500">Scope</p>

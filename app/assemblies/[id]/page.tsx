@@ -54,7 +54,7 @@ function Detail({ id }: { id: number }) {
     onError: (e) => toast.error((e as Error).message),   // 409 message shown if the assembly is in use
   })
 
-  if (isLoading) return <p className="text-slate-400">Loading…</p>
+  if (isLoading) return <p className="text-muted">Loading…</p>
   if (error) return <p className="text-rose-600">{(error as Error).message}</p>
   const a = data!
 
@@ -62,8 +62,8 @@ function Detail({ id }: { id: number }) {
     <div className="space-y-4">
       <Card className="flex items-center justify-between p-5">
         <div>
-          <span className="font-mono text-xs text-slate-400">{a.code}</span>
-          <h2 className="text-xl font-bold text-slate-800">{a.name}{!a.isActive && <span className="ml-2 text-xs font-normal text-slate-400">(inactive)</span>}</h2>
+          <span className="font-mono text-xs text-muted">{a.code}</span>
+          <h2 className="text-xl font-bold text-slate-800">{a.name}{!a.isActive && <span className="ml-2 text-xs font-normal text-muted">(inactive)</span>}</h2>
           <p className="text-sm text-slate-500">Build-up per <b>{a.unit || "unit"}</b></p>
         </div>
         <div className="flex items-center gap-4">
@@ -95,18 +95,18 @@ function Detail({ id }: { id: number }) {
             {a.components.map((c) => (
               <tr key={c.id} className="border-t border-[var(--border)]">
                 <td className="px-4 py-2 text-slate-500">{c.resourceType}</td>
-                <td className="px-4 py-2"><span className="font-mono text-xs text-slate-400">{c.resourceCode}</span> {c.resourceName}</td>
+                <td className="px-4 py-2"><span className="font-mono text-xs text-muted">{c.resourceCode}</span> {c.resourceName}</td>
                 <td className="px-4 py-2 text-right">{c.factor}</td>
                 {/* 25.1 — TODO: confirm currency source */}
                 <td className="px-4 py-2 text-right"><Money value={c.resourceRate} currency="AED" /></td>
                 {/* 25.1 — TODO: confirm currency source */}
                 <td className="px-4 py-2 text-right font-medium"><Money value={c.cost} currency="AED" /></td>
                 <td className="px-2 py-2 text-right">
-                  {canEdit && <button onClick={() => del.mutate(c.id)} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
+                  {canEdit && <button onClick={() => del.mutate(c.id)} className="rounded p-1 text-muted hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
                 </td>
               </tr>
             ))}
-            {!a.components.length && <tr><td colSpan={6} className="px-4 py-3 text-sm text-slate-400">No components yet — add one below.</td></tr>}
+            {!a.components.length && <tr><td colSpan={6} className="px-4 py-3 text-sm text-muted">No components yet — add one below.</td></tr>}
           </tbody>
         </table>
         </TableScroll>

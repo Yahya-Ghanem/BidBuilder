@@ -54,8 +54,8 @@ export function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd,
         <div className="flex items-center justify-between border-t border-[var(--border)] py-1.5" style={{ paddingLeft: depth * 16 + 4 }}>
           <span className="flex items-center text-sm">
             <CollapseToggle open={open} hasChildren={hasContent} onToggle={() => toggle(area.id)} />
-            {area.code && <span className="mr-1 font-mono text-xs text-slate-400">{area.code}</span>}
-            {area.name}<span className="ml-2 text-xs text-slate-400">{area.kind}{!open && acts.length > 0 ? ` · ${acts.length} activit${acts.length > 1 ? "ies" : "y"}` : ""}</span>
+            {area.code && <span className="mr-1 font-mono text-xs text-muted">{area.code}</span>}
+            {area.name}<span className="ml-2 text-xs text-muted">{area.kind}{!open && acts.length > 0 ? ` · ${acts.length} activit${acts.length > 1 ? "ies" : "y"}` : ""}</span>
           </span>
           <div className="flex items-center gap-1">
             {canAdd && <Button variant="ghost" className="h-6 px-2 text-xs" onClick={() => setCloning(area)}><Copy className="h-3.5 w-3.5" /> Clone</Button>}
@@ -69,8 +69,8 @@ export function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd,
             <span className="text-right text-xs text-slate-500" title="Manpower">L <Money value={compAmount(it, "LAB")} currency={currency} /></span>
             <Money className="text-right font-medium" value={it.lineTotal} currency={currency} />
             <span className="flex justify-end gap-1">
-              {canEdit && <button onClick={() => setEditing(it)} className="rounded p-1 text-slate-400 hover:text-[var(--brand)]" title="Material & manpower"><Layers className="h-3.5 w-3.5" /></button>}
-              {canDelete && <button onClick={() => { if (confirm(`Delete activity "${it.description}"?`)) onDelItem(it.id) }} className="rounded p-1 text-slate-400 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
+              {canEdit && <button onClick={() => setEditing(it)} className="rounded p-1 text-muted hover:text-[var(--brand)]" title="Material & manpower"><Layers className="h-3.5 w-3.5" /></button>}
+              {canDelete && <button onClick={() => { if (confirm(`Delete activity "${it.description}"?`)) onDelItem(it.id) }} className="rounded p-1 text-muted hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
             </span>
           </div>
         ))}
@@ -105,7 +105,7 @@ export function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd,
           {collapsibleIds.size > 0 && <ExpandCollapseAll onExpand={expandAll} onCollapse={() => collapseAll(collapsibleIds)} />}
         </div>
       </div>
-      <p className="mb-2 text-xs text-slate-400">Add work activities under each unit; each carries Material (qty × price) and Manpower (hours × rate). M = material, L = manpower; total includes any other components. The Detail / Area / Sub-Area toggle sets how the export is grouped.</p>
+      <p className="mb-2 text-xs text-muted">Add work activities under each unit; each carries Material (qty × price) and Manpower (hours × rate). M = material, L = manpower; total includes any other components. The Detail / Area / Sub-Area toggle sets how the export is grouped.</p>
       {childrenOf(null).map((r) => <Node key={r.id} area={r} depth={0} />)}
       {adding && (
         <ActivityModal area={adding} costTypes={costTypes} currency={currency}

@@ -17,7 +17,9 @@
  *
  * --- Color contrast notes (Phase 26.2 closes the rest of the 24.4 debt) ---
  *
- *   --muted        slate-500   #64748b  4.78:1 on white  — AA ✓ (4.5)
+ *   --muted        slate-600   #475569  6.51:1 on white,
+ *                                       6.34:1 on slate-50,
+ *                                       5.99:1 on slate-100 — all AA ✓
  *   --danger       rose-700    #be123c  6.59:1 on white  — AA ✓
  *   --warning      amber-700   #b45309  4.92:1 on white  — AA ✓
  *   --success      emerald-700 #047857  4.76:1 on white  — AA ✓
@@ -53,7 +55,12 @@
   --color-card: #ffffff;
   --color-border: #e2e8f0;       /* slate-200 */
   --color-text: #0f172a;         /* slate-900 — primary body text */
-  --color-muted: #64748b;        /* slate-500 — AA-safe muted text */
+  /* 26.2 — bumped from slate-500 (#64748b) to slate-600 because
+     #64748b on slate-100 (#f1f5f9) is 4.34:1 — below AA for body text.
+     #475569 stays safely above 4.5:1 against every common background
+     (white, slate-50, slate-100), which is what we needed to enable the
+     A11Y_INCLUDE_SERIOUS gate on /settings (the densest admin form). */
+  --color-muted: #475569;        /* slate-600 — AA-safe muted text on any common bg */
 
   /* Semantic — all 700-tier hexes are WCAG AA on white. */
   --color-danger: #be123c;       /* rose-700 */
@@ -78,7 +85,7 @@
   --card: #ffffff;
   --border: #e2e8f0;
   --text: #0f172a;
-  --muted: #64748b;
+  --muted: #475569;
   --danger: #be123c;
   --warning: #b45309;
   --success: #047857;

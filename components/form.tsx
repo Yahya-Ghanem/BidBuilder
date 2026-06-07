@@ -50,7 +50,7 @@ export function Modal({
            className="w-full max-w-lg rounded-lg bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
           <h3 id={titleId} className="font-semibold">{title}</h3>
-          <button onClick={onClose} aria-label="Close dialog" className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label="Close dialog" className="rounded p-1 text-muted hover:bg-slate-100"><X className="h-4 w-4" /></button>
         </div>
         <div className="max-h-[70vh] overflow-auto px-5 py-4">{children}</div>
         {footer && <div className="flex justify-end gap-2 border-t border-[var(--border)] px-5 py-3">{footer}</div>}

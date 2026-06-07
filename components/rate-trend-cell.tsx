@@ -39,16 +39,16 @@ export function RateTrendCell({ apiType, id }: { apiType: ApiType; id: number })
         type="button"
         title="Show rate trend"
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}
-        className="ms-1 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-[var(--brand)]"
+        className="ms-1 rounded p-0.5 text-muted hover:bg-slate-100 hover:text-[var(--brand)]"
       >
         <TrendingUp className="h-3.5 w-3.5" />
       </button>
       {open && (
         <div className="absolute end-0 top-full z-10 mt-1 flex flex-col items-end gap-1 rounded-md border border-[var(--border)] bg-white p-2 shadow-md">
           {isLoading || !data ? (
-            <span className="text-xs text-slate-400">Loading…</span>
+            <span className="text-xs text-muted">Loading…</span>
           ) : data.points.length < 2 ? (
-            <span className="text-xs text-slate-400">No history yet</span>
+            <span className="text-xs text-muted">No history yet</span>
           ) : (
             <>
               <Sparkline points={data.points.map((p) => p.rate)} />

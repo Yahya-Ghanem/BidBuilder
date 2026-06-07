@@ -34,7 +34,7 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
   const [navOpen, setNavOpen] = useState(false)
 
   if (isLoading || !isAuthenticated) {
-    return <div className="grid min-h-screen place-items-center text-slate-400">{t("shell.loading")}</div>
+    return <div className="grid min-h-screen place-items-center text-muted">{t("shell.loading")}</div>
   }
 
   // Only show nav entries for modules the user may view (admins see all);
@@ -66,7 +66,7 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
             <LayoutGrid className="h-5 w-5 text-[var(--brand)]" />
             BidBuilder
           </span>
-          <button onClick={() => setNavOpen(false)} aria-label={t("shell.closeMenu")} className="rounded p-1 text-slate-400 hover:bg-slate-100 md:hidden">
+          <button onClick={() => setNavOpen(false)} aria-label={t("shell.closeMenu")} className="rounded p-1 text-muted hover:bg-slate-100 md:hidden">
             <X className="h-5 w-5" />
           </button>
         </div>

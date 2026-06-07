@@ -68,7 +68,7 @@ export function WhatIfPanel({ estimateId, markups, currency, canEdit }: {
           <SlidersHorizontal className="h-4 w-4 text-[var(--brand)]" /> {t("ed.whatif.title")}
         </div>
         {changed && (
-          <button onClick={() => setDraft(original)} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600">
+          <button onClick={() => setDraft(original)} className="flex items-center gap-1 text-xs text-muted hover:text-slate-600">
             <RotateCcw className="h-3 w-3" /> {t("ed.whatif.reset")}
           </button>
         )}
@@ -83,7 +83,7 @@ export function WhatIfPanel({ estimateId, markups, currency, canEdit }: {
             <div className="flex items-center gap-2">
               <Input className="w-20 py-1 text-right" type="number" step="0.01" min={0}
                 value={draft[m.id] ?? ""} onChange={(ev) => setDraft({ ...draft, [m.id]: ev.target.value })} />
-              <span className="w-8 text-xs text-slate-400">%</span>
+              <span className="w-8 text-xs text-muted">%</span>
               <Money className="w-28 text-right font-medium" value={line?.computedAmount ?? 0} currency={currency} />
             </div>
           </div>

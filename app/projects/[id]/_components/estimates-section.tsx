@@ -63,7 +63,7 @@ export function EstimatesSection({ projectId }: { projectId: number }) {
     onError: (er) => toast.error((er as Error).message),
   })
 
-  if (estimates.isLoading) return <p className="text-slate-400">Loading estimates…</p>
+  if (estimates.isLoading) return <p className="text-muted">Loading estimates…</p>
 
   if (!list.length) {
     return (
@@ -74,7 +74,7 @@ export function EstimatesSection({ projectId }: { projectId: number }) {
               <Button onClick={() => createBlank.mutate("Base Estimate")} disabled={createBlank.isPending}><Plus className="h-4 w-4" /> Create first estimate</Button>
               <Button variant="outline" onClick={() => setFromTplOpen(true)}><FileStack className="h-4 w-4" /> Start from template</Button>
             </div>
-          : <p className="text-xs text-slate-400">You don&apos;t have permission to create estimates.</p>}
+          : <p className="text-xs text-muted">You don&apos;t have permission to create estimates.</p>}
         {fromTplOpen && <FromTemplateModal pending={fromTemplate.isPending} onClose={() => setFromTplOpen(false)} onPick={(templateId, title) => fromTemplate.mutate({ templateId, title })} />}
       </Card>
     )
@@ -201,7 +201,7 @@ function SaveTemplateModal({ estimateId, onClose }: { estimateId: number; onClos
           <Field label="Category (optional)"><Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Warehouse" maxLength={40} /></Field>
           <Field label="Tags (comma-separated)"><Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="concrete, framing" /></Field>
         </div>
-        <p className="text-xs text-slate-400">Captures the BOQ sections/items + cost build-ups, preliminaries, markups and risks. Area tags and the project are not included.</p>
+        <p className="text-xs text-muted">Captures the BOQ sections/items + cost build-ups, preliminaries, markups and risks. Area tags and the project are not included.</p>
       </div>
       <div className="mt-4 flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
@@ -226,7 +226,7 @@ function FromTemplateModal({ pending, onClose, onPick }: { pending: boolean; onC
     || t.tags.some((g) => g.toLowerCase().includes(q)))
   return (
     <Modal open onClose={onClose} title="New estimate from template">
-      {templates.isLoading ? <p className="text-sm text-slate-400">Loading templates…</p>
+      {templates.isLoading ? <p className="text-sm text-muted">Loading templates…</p>
         : all.length === 0 ? <p className="text-sm text-slate-500">No templates yet. Save one from an existing estimate first.</p>
         : (
           <div className="space-y-3">
@@ -242,7 +242,7 @@ function FromTemplateModal({ pending, onClose, onPick }: { pending: boolean; onC
               </Select>
             </Field>
             <Field label="Title (optional)"><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="defaults to the template name" /></Field>
-            <p className="text-xs text-slate-400">Creates a new Draft revision in this project from the template&apos;s structure. ★ = featured for your org.</p>
+            <p className="text-xs text-muted">Creates a new Draft revision in this project from the template&apos;s structure. ★ = featured for your org.</p>
           </div>
         )}
       <div className="mt-4 flex justify-end gap-2">
@@ -269,7 +269,7 @@ function CopyToProjectModal({ projectId, estimateId, onClose, onDone }: {
   const others = (projects.data ?? []).filter((p) => p.id !== projectId)
   return (
     <Modal open onClose={onClose} title="Copy estimate to another project">
-      {projects.isLoading ? <p className="text-sm text-slate-400">Loading projects…</p>
+      {projects.isLoading ? <p className="text-sm text-muted">Loading projects…</p>
         : others.length === 0 ? <p className="text-sm text-slate-500">No other projects you can access.</p>
         : (
           <div className="space-y-3">
@@ -280,7 +280,7 @@ function CopyToProjectModal({ projectId, estimateId, onClose, onDone }: {
               </Select>
             </Field>
             <Field label="Title (optional)"><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="defaults to the source title" /></Field>
-            <p className="text-xs text-slate-400">Copies the BOQ, preliminaries and markups as a new Draft revision in the target project.</p>
+            <p className="text-xs text-muted">Copies the BOQ, preliminaries and markups as a new Draft revision in the target project.</p>
           </div>
         )}
       <div className="mt-4 flex justify-end gap-2">

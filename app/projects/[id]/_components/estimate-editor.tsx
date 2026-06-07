@@ -128,7 +128,7 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
     catch (err) { toast.error((err as Error).message) }
   }
 
-  if (isLoading) return <p className="text-slate-400">Loading estimate…</p>
+  if (isLoading) return <p className="text-muted">Loading estimate…</p>
   if (error) return <p className="text-danger">{(error as Error).message}</p>
   const e = data!
   const c = e.currency
@@ -260,7 +260,7 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
           per-estimate per-unit-toggle preference is freshly read from localStorage. */}
       <StatCards key={e.id} e={e} areas={areas.data} />
       {e.markupCost > 0 && (
-        <p className="text-sm text-slate-500">{t("ed.grossMargin")} <b className="text-slate-700">{e.marginOnPricePct}%</b> <span className="text-slate-400">{t("ed.markupsOnCost")}</span></p>
+        <p className="text-sm text-slate-500">{t("ed.grossMargin")} <b className="text-slate-700">{e.marginOnPricePct}%</b> <span className="text-muted">{t("ed.markupsOnCost")}</span></p>
       )}
       {e.fx && (
         <p className="text-sm text-slate-500">
@@ -327,7 +327,7 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
                       onDelItem={(iid) => delItem.mutate(iid)}
                       onDelSection={() => { if (confirm(t("ed.boq.deleteSectionConfirm", { title: s.title }))) delSection.mutate(s.id) }} />
                   ))}
-                  {!e.sections.length && <p className="px-4 py-3 text-sm text-slate-400">{t("ed.boq.empty")}</p>}
+                  {!e.sections.length && <p className="px-4 py-3 text-sm text-muted">{t("ed.boq.empty")}</p>}
                 </div>
 
                 {/* Prelims + markups */}

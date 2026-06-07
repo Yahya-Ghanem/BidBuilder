@@ -61,7 +61,7 @@ export function RiskAndCashFlowPanel({ estimateId, currency, risks, suggestedAmo
 
       {/* Risk table */}
       {risks.length === 0 ? (
-        <p className="text-xs text-slate-400">No risks recorded yet. Add one to start building a defensible contingency.</p>
+        <p className="text-xs text-muted">No risks recorded yet. Add one to start building a defensible contingency.</p>
       ) : (
         <table className="w-full text-xs">
           <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
@@ -76,7 +76,7 @@ export function RiskAndCashFlowPanel({ estimateId, currency, risks, suggestedAmo
           <tbody>
             {risks.map((r) => (
               <tr key={r.id} className="border-t border-[var(--border)]">
-                <td className="px-2 py-1">{r.title}{r.note ? <span className="ml-1 text-slate-400" title={r.note}>·</span> : null}</td>
+                <td className="px-2 py-1">{r.title}{r.note ? <span className="ml-1 text-muted" title={r.note}>·</span> : null}</td>
                 <td className="px-2 py-1 text-slate-600">{r.category}</td>
                 <td className="px-2 py-1 text-right tabular-nums">{r.probabilityPct.toFixed(2)}%</td>
                 <td className="px-2 py-1 text-right tabular-nums"><Money value={r.impactAmount} currency={currency} /></td>
@@ -84,7 +84,7 @@ export function RiskAndCashFlowPanel({ estimateId, currency, risks, suggestedAmo
                 <td className="px-2 py-1 text-right">
                   {canEdit && (
                     <button onClick={() => { if (confirm(`Remove "${r.title}"?`)) delRisk.mutate(r.id) }}
-                      className="rounded p-0.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600">×</button>
+                      className="rounded p-0.5 text-muted hover:bg-rose-50 hover:text-rose-600">×</button>
                   )}
                 </td>
               </tr>
