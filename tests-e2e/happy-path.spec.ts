@@ -64,13 +64,26 @@ test.describe("Happy path", () => {
 
     await page.goto(`/projects/${seeded!.id}`)
     // Each landmark proves a different extracted module renders:
-    //   • "Currency:" in the header card  → page.tsx Detail()
-    //   • Teams                            → _components/teams-panel
-    //   • Areas                            → _components/areas-panel
-    //   • Revision                         → _components/estimates-section
+    //   • "Currency:" in the sticky project header card  → page.tsx Detail()
+    //   • "Revision" in the always-visible revision strip → _components/estimates-section
+    //   • Tab strip (25.3): the five-tab restructure landed Phase 25.3 — assert
+    //     each tab button is present, then drive the Overview tab to prove the
+    //     Teams + Areas panels still mount via their _components modules.
     await expect(page.getByText("Currency:")).toBeVisible({ timeout: 10_000 })
-    await expect(page.locator("text=Teams").first()).toBeVisible()
-    await expect(page.locator("text=Areas").first()).toBeVisible()
     await expect(page.locator("text=Revision").first()).toBeVisible()
+
+    // Tabs render with the 5 labels. tablist scoping avoids accidental matches
+    // against other text on the page (eg. "Risk" appearing in a panel below).
+    const tablist = page.getByRole("tablist", { name: /project sections/i })
+    await expect(tablist).toBeVisible()
+    for (const name of ["Overview", "Estimate", "Insights", "Risk", "Activity"]) {
+      await expect(tablist.getByRole("tab", { name })).toBeVisible()
+    }
+
+    // Drive the Overview tab → Teams + Areas panels appear (they used to render
+    // at the page level pre-25.3 and now live in this tab).
+    await tablist.getByRole("tab", { name: "Overview" }).click()
+    await expect(page.locator("text=Teams").first()).toBeVisible({ timeout: 5_000 })
+    await expect(page.locator("text=Areas").first()).toBeVisible()
   })
 })

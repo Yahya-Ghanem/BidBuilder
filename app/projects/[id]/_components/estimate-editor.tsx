@@ -4,13 +4,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { FileDown, FileSpreadsheet, FileText, Table, Upload } from "lucide-react"
 import { ApiError, downloadFile, fetchApi, uploadFile } from "@/lib/api"
-import type { Area, AssemblyRow, CostComponentType, CurrencyRates, EstimateBreakdown, ImportResult } from "@/lib/types"
+import type { Area, AssemblyRow, CostComponentType, CurrencyRates, EstimateBreakdown, EstimateSummary, ImportResult } from "@/lib/types"
 import { usePermissions } from "@/lib/permissions"
 import { Badge, Button, statusColor } from "@/components/ui"
 import { Select } from "@/components/form"
 import { Money } from "@/components/money"
 import { money } from "@/lib/utils"
 import { useT } from "@/lib/i18n"
+import { Tabs } from "@/components/tabs"
 import { ExpandCollapseAll, Row, Stat, useCollapse, type CompInput } from "./shared"
 import { AddItemForm as _UnusedAddItemForm, AddSection, SectionBlock } from "./boq"
 import { WhatIfPanel } from "./what-if"
@@ -22,6 +23,9 @@ import { AreaRollupPanel } from "./area-rollup"
 import { AnomalyPanel } from "./anomaly-panel"
 import { ActivitiesPanel } from "./activities"
 import { BidLetterModal } from "./bid-letter-modal"
+import { TeamsPanel } from "./teams-panel"
+import { AreasPanel } from "./areas-panel"
+import { CompareRevisions } from "./compare"
 
 // Re-import suppression — boq.tsx re-exports AddItemForm via SectionBlock; ESLint
 // would flag an unused import otherwise. The "_Unused" alias is a no-op.
@@ -31,11 +35,26 @@ void _UnusedAddItemForm
  *  query, every BOQ / preliminary / markup mutation, the optimistic-concurrency
  *  If-Match header on each write, and the lock state for Published revisions.
  *
- *  Why so many child panels? Each addresses a different concern that the user
- *  reaches for at a different stage of bid prep — they're sibling tabs by
- *  cognitive scope, not visual tabs (a tender estimator doesn't want to
- *  page through tabs while iterating). The split landed in 19.6. */
-export function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number; canEditMeta: boolean }) {
+ *  25.3 — Restructured into five tabs (Overview · Estimate · Insights · Risk ·
+ *  Activity) so the project page stops being a five-thousand-pixel scroll. The
+ *  meta header (title/status/fx/vat/pricing-date + exports), the locked banner
+ *  and the 4 stat cards stay ABOVE the tab strip so they remain visible no
+ *  matter which tab the user is on — the bid figure is the thing an estimator
+ *  is constantly checking against, so it has to stay on screen.
+ *
+ *  The earlier 19.6 doc-comment claimed "sibling panels, not visual tabs"; user
+ *  research (the 25.3 D-series) overturned that — newcomers hit the wall of
+ *  scroll first and never find half the panels. Tabs win.
+ *
+ *  The Overview tab takes the Teams + Areas panels that used to render above
+ *  the editor; the Insights tab absorbs the Compare-revisions panel that the
+ *  revision-bar used to toggle in EstimatesSection. */
+export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesList }: {
+  estimateId: number
+  projectId: number
+  canEditMeta: boolean
+  estimatesList: EstimateSummary[]
+}) {
   const t = useT()
   const qc = useQueryClient()
   const { can } = usePermissions()
@@ -221,7 +240,12 @@ export function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number
           {t("ed.lockedBanner", { status: e.status })}
         </div>
       )}
-      <div className="grid gap-4 sm:grid-cols-4">
+      {/* 25.3 — Stat cards: ALWAYS visible above the tab strip (and sticky just
+          below the project header so the bid total never leaves the screen while
+          the user scrolls deep into a tab). The top offset `top-[100px]` clears
+          the sticky project header above; if you change the header's padding,
+          re-tune this number. */}
+      <div className="sticky top-[100px] z-10 -mx-4 grid gap-4 bg-slate-50/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:grid-cols-4 sm:px-6">
         <Stat label={t("ed.stat.directCost")} value={money(e.directCost, c)} />
         <Stat label={t("ed.stat.indirect")} value={money(e.indirectCost, c)} />
         <Stat label={t("ed.stat.markups")} value={money(e.markupCost, c)} />
@@ -242,93 +266,146 @@ export function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number
         </p>
       )}
 
-      {/* BOQ */}
-      <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-white">
-        <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-2">
-          <span className="text-sm font-semibold">{t("ed.boq.heading")}</span>
-          <div className="flex items-center gap-2">
-            {e.sections.length > 0 && (
-              <ExpandCollapseAll onExpand={boqCollapse.expandAll} onCollapse={() => boqCollapse.collapseAll(e.sections.map((s) => s.id))} />
-            )}
-            {editAdd && (
-              <>
-                <input ref={fileRef} type="file" accept=".xlsx" className="hidden"
-                  onChange={(ev) => { const f = ev.target.files?.[0]; if (f) importMut.mutate(f); ev.target.value = "" }} />
-                <Button variant="ghost" className="h-7 px-2 text-xs" onClick={downloadTemplate}><FileDown className="h-3.5 w-3.5" /> {t("ed.boq.template")}</Button>
-                <Button variant="ghost" className="h-7 px-2 text-xs" disabled={importMut.isPending} onClick={() => fileRef.current?.click()}>
-                  <Upload className="h-3.5 w-3.5" /> {importMut.isPending ? t("ed.boq.importing") : t("ed.boq.import")}
-                </Button>
-                <AddSection onAdd={(v) => addSection.mutate(v)} />
-              </>
-            )}
-          </div>
-        </div>
-        {e.sections.map((s) => (
-          <SectionBlock key={s.id} section={s} currency={c} assemblies={assemblies.data ?? []} costTypes={costTypes.data ?? []} areas={areas.data ?? []}
-            open={boqCollapse.isOpen(s.id)} onToggle={() => boqCollapse.toggle(s.id)}
-            canAdd={editAdd} canEdit={editEdit} canDelete={editDelete}
-            onAddItem={(v) => addItem.mutate({ ...(v as Record<string, unknown>), sectionId: s.id } as { sectionId: number } & Record<string, unknown>)}
-            onUpdItem={(v) => updItem.mutate(v as { id: number } & Record<string, unknown>)}
-            onDelItem={(iid) => delItem.mutate(iid)}
-            onDelSection={() => { if (confirm(t("ed.boq.deleteSectionConfirm", { title: s.title }))) delSection.mutate(s.id) }} />
-        ))}
-        {!e.sections.length && <p className="px-4 py-3 text-sm text-slate-400">{t("ed.boq.empty")}</p>}
-      </div>
-
-      {(areas.data?.length ?? 0) > 0 && (
-        <ActivitiesPanel breakdown={e} areas={areas.data ?? []} costTypes={costTypes.data ?? []} currency={c}
-          canAdd={editAdd} canEdit={editEdit} canDelete={editDelete} canExport={canReports} onExport={dlActivities}
-          onAddActivity={addActivity} onUpdItem={(v) => updItem.mutate(v as { id: number } & Record<string, unknown>)} onDelItem={(iid) => delItem.mutate(iid)}
-          onCloneRoom={(areaId, name) => cloneRoom.mutate({ areaId, name })} />
-      )}
-
-      <AreaRollupPanel estimateId={estimateId} currency={c} canExport={canReports} onExport={dlCostByArea} />
-
-      {/* 23.5 — Cost-anomaly scan. Lazy: only fetches after the user clicks Scan. */}
-      <AnomalyPanel estimateId={estimateId} currency={c} />
-
+      {/* 25.3 — Bid letter modal is rendered at the editor level (not inside any
+          tab) so its open state survives a tab switch. */}
       {bidLetter && <BidLetterModal estimateId={estimateId} bidPrice={e.bidPriceInclTax} currency={c} onClose={() => setBidLetter(false)} />}
 
-      {/* Prelims + markups */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-lg border border-[var(--border)] bg-white p-4">
-          <div className="mb-2 text-sm font-semibold">{t("ed.prelims")}</div>
-          {e.preliminaries.map((p) => (
-            <Row key={p.id} left={`${p.description} (${p.kind})`} right={money(p.computedTotal, c)} onDelete={editPlmDelete ? () => delPrelim.mutate(p.id) : undefined} />
-          ))}
-          {editPlmAdd && <AddPrelim onAdd={(v) => addPrelim.mutate(v)} />}
-        </div>
-        <div className="rounded-lg border border-[var(--border)] bg-white p-4">
-          <div className="mb-2 text-sm font-semibold">{t("ed.stat.markups")}</div>
-          {e.markups.map((m) => (
-            <Row key={m.id} left={`${m.type} (${m.percentage}%)`} right={money(m.computedAmount, c)} onDelete={editPlmDelete ? () => delMarkup.mutate(m.id) : undefined} />
-          ))}
-          {editPlmAdd && <AddMarkup onAdd={(v) => addMarkup.mutate(v)} />}
-        </div>
-      </div>
+      {/* 25.3 — Five tabs grouping the existing panels with no behaviour change.
+          Inactive panels stay mounted (display:none) so per-tab state like a
+          half-typed BOQ row or a what-if % isn't lost when the user flips
+          tabs to check an insight. */}
+      <Tabs
+        ariaLabel={t("ptab.aria")}
+        defaultId="estimate"
+        tabs={[
+          {
+            id: "overview",
+            label: t("ptab.overview"),
+            content: (
+              <div className="space-y-4">
+                <TeamsPanel projectId={projectId} />
+                <AreasPanel projectId={projectId} />
+              </div>
+            ),
+          },
+          {
+            id: "estimate",
+            label: t("ptab.estimate"),
+            content: (
+              <div className="space-y-4">
+                {/* BOQ */}
+                <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-white">
+                  <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-2">
+                    <span className="text-sm font-semibold">{t("ed.boq.heading")}</span>
+                    <div className="flex items-center gap-2">
+                      {e.sections.length > 0 && (
+                        <ExpandCollapseAll onExpand={boqCollapse.expandAll} onCollapse={() => boqCollapse.collapseAll(e.sections.map((s) => s.id))} />
+                      )}
+                      {editAdd && (
+                        <>
+                          <input ref={fileRef} type="file" accept=".xlsx" className="hidden"
+                            onChange={(ev) => { const f = ev.target.files?.[0]; if (f) importMut.mutate(f); ev.target.value = "" }} />
+                          <Button variant="ghost" className="h-7 px-2 text-xs" onClick={downloadTemplate}><FileDown className="h-3.5 w-3.5" /> {t("ed.boq.template")}</Button>
+                          <Button variant="ghost" className="h-7 px-2 text-xs" disabled={importMut.isPending} onClick={() => fileRef.current?.click()}>
+                            <Upload className="h-3.5 w-3.5" /> {importMut.isPending ? t("ed.boq.importing") : t("ed.boq.import")}
+                          </Button>
+                          <AddSection onAdd={(v) => addSection.mutate(v)} />
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {e.sections.map((s) => (
+                    <SectionBlock key={s.id} section={s} currency={c} assemblies={assemblies.data ?? []} costTypes={costTypes.data ?? []} areas={areas.data ?? []}
+                      open={boqCollapse.isOpen(s.id)} onToggle={() => boqCollapse.toggle(s.id)}
+                      canAdd={editAdd} canEdit={editEdit} canDelete={editDelete}
+                      onAddItem={(v) => addItem.mutate({ ...(v as Record<string, unknown>), sectionId: s.id } as { sectionId: number } & Record<string, unknown>)}
+                      onUpdItem={(v) => updItem.mutate(v as { id: number } & Record<string, unknown>)}
+                      onDelItem={(iid) => delItem.mutate(iid)}
+                      onDelSection={() => { if (confirm(t("ed.boq.deleteSectionConfirm", { title: s.title }))) delSection.mutate(s.id) }} />
+                  ))}
+                  {!e.sections.length && <p className="px-4 py-3 text-sm text-slate-400">{t("ed.boq.empty")}</p>}
+                </div>
 
-      {plmView && e.markups.length > 0 && (
-        <WhatIfPanel key={e.markups.map((m) => m.id).join(",")}
-          estimateId={estimateId} markups={e.markups} currency={c} canEdit={plmEdit && !locked} />
-      )}
+                {/* Prelims + markups */}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-lg border border-[var(--border)] bg-white p-4">
+                    <div className="mb-2 text-sm font-semibold">{t("ed.prelims")}</div>
+                    {e.preliminaries.map((p) => (
+                      <Row key={p.id} left={`${p.description} (${p.kind})`} right={money(p.computedTotal, c)} onDelete={editPlmDelete ? () => delPrelim.mutate(p.id) : undefined} />
+                    ))}
+                    {editPlmAdd && <AddPrelim onAdd={(v) => addPrelim.mutate(v)} />}
+                  </div>
+                  <div className="rounded-lg border border-[var(--border)] bg-white p-4">
+                    <div className="mb-2 text-sm font-semibold">{t("ed.stat.markups")}</div>
+                    {e.markups.map((m) => (
+                      <Row key={m.id} left={`${m.type} (${m.percentage}%)`} right={money(m.computedAmount, c)} onDelete={editPlmDelete ? () => delMarkup.mutate(m.id) : undefined} />
+                    ))}
+                    {editPlmAdd && <AddMarkup onAdd={(v) => addMarkup.mutate(v)} />}
+                  </div>
+                </div>
 
-      {plmView && (
-        <TargetPanel estimateId={estimateId} currency={c} currentBid={e.bidPrice}
-          currentAdjustment={e.commercialAdjustment} canApply={plmEdit && !locked} />
-      )}
+                {plmView && e.markups.length > 0 && (
+                  <WhatIfPanel key={e.markups.map((m) => m.id).join(",")}
+                    estimateId={estimateId} markups={e.markups} currency={c} canEdit={plmEdit && !locked} />
+                )}
 
-      {plmView && (
-        <RiskAndCashFlowPanel estimateId={estimateId} currency={c}
-          risks={e.risks ?? []}
-          suggestedAmount={e.suggestedContingencyAmount ?? 0}
-          suggestedPct={e.suggestedContingencyPct ?? 0}
-          cashFlow={e.cashFlow}
-          canEdit={plmEdit && !locked} />
-      )}
-
-      {/* 20.2 — sign-off gate. Renders nothing when the tenant has
-          RequiredApprovalsToPublish=0 (the panel self-hides). */}
-      <ApprovalPanel estimateId={estimateId} status={e.status} />
+                {plmView && (
+                  <TargetPanel estimateId={estimateId} currency={c} currentBid={e.bidPrice}
+                    currentAdjustment={e.commercialAdjustment} canApply={plmEdit && !locked} />
+                )}
+              </div>
+            ),
+          },
+          {
+            id: "insights",
+            label: t("ptab.insights"),
+            content: (
+              <div className="space-y-4">
+                {(areas.data?.length ?? 0) > 0 && (
+                  <ActivitiesPanel breakdown={e} areas={areas.data ?? []} costTypes={costTypes.data ?? []} currency={c}
+                    canAdd={editAdd} canEdit={editEdit} canDelete={editDelete} canExport={canReports} onExport={dlActivities}
+                    onAddActivity={addActivity} onUpdItem={(v) => updItem.mutate(v as { id: number } & Record<string, unknown>)} onDelItem={(iid) => delItem.mutate(iid)}
+                    onCloneRoom={(areaId, name) => cloneRoom.mutate({ areaId, name })} />
+                )}
+                <AreaRollupPanel estimateId={estimateId} currency={c} canExport={canReports} onExport={dlCostByArea} />
+                {/* 23.5 — Cost-anomaly scan. Lazy: only fetches after the user clicks Scan. */}
+                <AnomalyPanel estimateId={estimateId} currency={c} />
+                {/* 25.3 — Compare-revisions moved here from the revision strip. */}
+                {estimatesList.length >= 2 && <CompareRevisions estimates={estimatesList} />}
+              </div>
+            ),
+          },
+          {
+            id: "risk",
+            label: t("ptab.risk"),
+            content: (
+              <div className="space-y-4">
+                {plmView ? (
+                  <RiskAndCashFlowPanel estimateId={estimateId} currency={c}
+                    risks={e.risks ?? []}
+                    suggestedAmount={e.suggestedContingencyAmount ?? 0}
+                    suggestedPct={e.suggestedContingencyPct ?? 0}
+                    cashFlow={e.cashFlow}
+                    canEdit={plmEdit && !locked} />
+                ) : (
+                  <p className="text-sm text-slate-500">{t("common.loading")}</p>
+                )}
+              </div>
+            ),
+          },
+          {
+            id: "activity",
+            label: t("ptab.activity"),
+            content: (
+              <div className="space-y-4">
+                {/* 20.2 — sign-off gate. Renders nothing when the tenant has
+                    RequiredApprovalsToPublish=0 (the panel self-hides). */}
+                <ApprovalPanel estimateId={estimateId} status={e.status} />
+              </div>
+            ),
+          },
+        ]}
+      />
     </div>
   )
 }

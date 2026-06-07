@@ -3,7 +3,7 @@ import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Copy, FileStack, FolderInput, GitCompareArrows, Plus, Save, Trash2 } from "lucide-react"
+import { Copy, FileStack, FolderInput, Plus, Save, Trash2 } from "lucide-react"
 import { fetchApi } from "@/lib/api"
 import { usePermissions } from "@/lib/permissions"
 import type { EstimateSummary, EstimateTemplate, Project } from "@/lib/types"
@@ -11,7 +11,6 @@ import { Card, Button, Input } from "@/components/ui"
 import { Field, Modal, Select, Textarea } from "@/components/form"
 import { money } from "@/lib/utils"
 import { EstimateEditor } from "./estimate-editor"
-import { CompareRevisions } from "./compare"
 
 /** Estimate revision picker: pick a revision, create blank / duplicate, view & edit it.
  *  The displayed revision is whatever the user picked OR the latest if none. */
@@ -24,13 +23,14 @@ export function EstimatesSection({ projectId }: { projectId: number }) {
   const estimates = useQuery({ queryKey: ["estimates", projectId], queryFn: () => fetchApi<EstimateSummary[]>(`/api/projects/${projectId}/estimates`) })
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [copyOpen, setCopyOpen] = useState(false)
-  const [compareOpen, setCompareOpen] = useState(false)
   const [saveTplOpen, setSaveTplOpen] = useState(false)
   const [fromTplOpen, setFromTplOpen] = useState(false)
   const router = useRouter()
 
   const list = estimates.data ?? []
   const currentId = selectedId != null && list.some((e) => e.id === selectedId) ? selectedId : list[list.length - 1]?.id ?? null
+  // 25.3 — Compare moved into the Insights tab (rendered by <EstimateEditor>),
+  // so the revision-bar toggle is no longer needed here.
 
   const createBlank = useMutation({
     mutationFn: (title: string) => fetchApi<EstimateSummary>(`/api/projects/${projectId}/estimates`, { method: "POST", body: JSON.stringify({ title }) }),
@@ -73,6 +73,9 @@ export function EstimatesSection({ projectId }: { projectId: number }) {
 
   return (
     <div className="space-y-4">
+      {/* 25.3 — Revision strip: just the dropdown + lifecycle actions. The
+          Compare button is gone from here — comparison lives in the Insights
+          tab below, beside the other cross-revision analyses. */}
       <Card className="flex flex-wrap items-center justify-between gap-3 p-3">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-slate-600">Revision</span>
@@ -82,9 +85,8 @@ export function EstimatesSection({ projectId }: { projectId: number }) {
             ))}
           </Select>
         </div>
-        {(canManage || canDelete || list.length >= 2) && (
+        {(canManage || canDelete) && (
           <div className="flex flex-wrap gap-2">
-            {list.length >= 2 && <Button variant={compareOpen ? "primary" : "outline"} className="h-8 text-xs" onClick={() => setCompareOpen((o) => !o)}><GitCompareArrows className="h-4 w-4" /> Compare</Button>}
             {canManage && <Button variant="outline" className="h-8 text-xs" disabled={createBlank.isPending} onClick={() => createBlank.mutate(`Revision ${(list[list.length - 1]?.revision ?? 0) + 1}`)}><Plus className="h-4 w-4" /> New</Button>}
             {canManage && <Button variant="outline" className="h-8 text-xs" disabled={clone.isPending || currentId == null} onClick={() => currentId != null && clone.mutate(currentId)}><Copy className="h-4 w-4" /> Duplicate</Button>}
             {canManage && <Button variant="outline" className="h-8 text-xs" disabled={currentId == null} onClick={() => setCopyOpen(true)}><FolderInput className="h-4 w-4" /> Copy to…</Button>}
@@ -100,9 +102,7 @@ export function EstimatesSection({ projectId }: { projectId: number }) {
         )}
       </Card>
 
-      {compareOpen && list.length >= 2 && <CompareRevisions estimates={list} onClose={() => setCompareOpen(false)} />}
-
-      {currentId != null && <EstimateEditor key={currentId} estimateId={currentId} canEditMeta={canEditMeta} />}
+      {currentId != null && <EstimateEditor key={currentId} estimateId={currentId} projectId={projectId} canEditMeta={canEditMeta} estimatesList={list} />}
 
       {copyOpen && currentId != null && (
         <CopyToProjectModal projectId={projectId} estimateId={currentId}

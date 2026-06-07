@@ -257,6 +257,19 @@ const en: Dict = {
   "adm.apikeys.heading": "API keys",
   "adm.sso.heading":     "Single sign-on (SAML)",
   "adm.domain.heading":  "Custom domain",
+  // ── Project detail tabs (25.3) ─────────────────────────────────────────
+  "ptab.aria":           "Project sections",
+  "ptab.overview":       "Overview",
+  "ptab.estimate":       "Estimate",
+  "ptab.insights":       "Insights",
+  "ptab.risk":           "Risk",
+  "ptab.activity":       "Activity",
+  "ptab.revisions":      "Revisions",
+  "ptab.compareToggle":  "Compare revisions",
+  "proj.currency":       "Currency:",
+  "proj.duration":       "Duration:",
+  "proj.mo":             "mo",
+  "proj.teams":          "Teams:",
 }
 
 const ar: Dict = {
@@ -499,6 +512,19 @@ const ar: Dict = {
   "adm.apikeys.heading": "مفاتيح الواجهة البرمجية",
   "adm.sso.heading":     "الدخول الموحّد (SAML)",
   "adm.domain.heading":  "نطاق مخصّص",
+  // ── أقسام صفحة المشروع (25.3) ──────────────────────────────────────────
+  "ptab.aria":           "أقسام المشروع",
+  "ptab.overview":       "نظرة عامة",
+  "ptab.estimate":       "التقدير",
+  "ptab.insights":       "الرؤى",
+  "ptab.risk":           "المخاطر",
+  "ptab.activity":       "النشاط",
+  "ptab.revisions":      "المراجعات",
+  "ptab.compareToggle":  "مقارنة المراجعات",
+  "proj.currency":       "العملة:",
+  "proj.duration":       "المدة:",
+  "proj.mo":             "شهر",
+  "proj.teams":          "الفِرق:",
 }
 
 export const messages: Record<Locale, Dict> = { en, ar }
