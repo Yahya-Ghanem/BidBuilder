@@ -31,6 +31,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     // Outbound webhooks (20.9) — tenant-configured event subscriptions.
     public DbSet<WebhookSubscription> WebhookSubscriptions => Set<WebhookSubscription>();
 
+    // Programmatic API keys (21.2) — hashed, tenant-scoped, act-as-creator credentials.
+    public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
+
     // ── Project scoping layer (BidBuilder) ────────────────────────────────────
     public DbSet<Project>     Projects     => Set<Project>();
     public DbSet<ProjectTeam> ProjectTeams => Set<ProjectTeam>();
@@ -367,6 +370,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.Property(w => w.Events).HasMaxLength(1024).IsRequired();
             b.Property(w => w.LastStatus).HasMaxLength(120);
             b.HasQueryFilter(w => w.TenantId == _tenant.TenantId);
+        });
+
+        // ── ApiKey (21.2 programmatic access) ─────────────────────────────────
+        mb.Entity<ApiKey>(b =>
+        {
+            // Globally-unique hash so the auth handler can resolve a presented key in one
+            // indexed lookup (across tenants, before the tenant context is resolved).
+            b.HasIndex(k => k.KeyHash).IsUnique();
+            b.HasIndex(k => k.TenantId);
+            b.Property(k => k.Name).HasMaxLength(120).IsRequired();
+            b.Property(k => k.Prefix).HasMaxLength(24).IsRequired();
+            b.Property(k => k.KeyHash).HasMaxLength(64).IsRequired();
+            b.HasQueryFilter(k => k.TenantId == _tenant.TenantId);
         });
 
         // ── Resource library ──────────────────────────────────────────────────

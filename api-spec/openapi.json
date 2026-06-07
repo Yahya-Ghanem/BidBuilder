@@ -399,6 +399,21 @@
         },
         "type": "object"
       },
+      "CreateApiKeyInput": {
+        "additionalProperties": false,
+        "properties": {
+          "expiresInDays": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          },
+          "name": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "CreateEstimateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1474,6 +1489,61 @@
           },
           "required": true
         },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/admin/api-keys": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateApiKeyInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/admin/api-keys/{id}": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
