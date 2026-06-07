@@ -22,7 +22,10 @@ public record SettingsDto(
     bool NotificationEmailsEnabled,
     /// <summary>21.1 — read-only: whether the platform's SMTP transport is configured.
     /// When false, the tenant toggle has no effect (nothing is sent).</summary>
-    bool EmailConfigured);
+    bool EmailConfigured,
+    /// <summary>24.5 — Multi-paragraph branding strings rendered on bid letters.
+    /// Newlines preserved; **bold** spans honoured by the PDF renderer.</summary>
+    string? BrandHeaderText, string? BrandFooterText, string? BrandSignatureText);
 
 /// <summary>20.11 — set (non-empty) or clear (null/empty) the tenant's custom domain.</summary>
 public record CustomDomainInput(string? Domain);
@@ -34,7 +37,9 @@ public record SettingsInput(
     /// <summary>20.2 — null leaves the existing value alone (back-compat).</summary>
     int? RequiredApprovalsToPublish,
     /// <summary>21.1 — null leaves the existing value alone (back-compat).</summary>
-    bool? NotificationEmailsEnabled);
+    bool? NotificationEmailsEnabled,
+    /// <summary>24.5 — null leaves the existing value alone; empty string clears it.</summary>
+    string? BrandHeaderText = null, string? BrandFooterText = null, string? BrandSignatureText = null);
 
 public record CurrencyRateDto(string Code, decimal RateToBase, DateTime UpdatedAt);
 public record CurrencyRatesDto(string BaseCurrency, List<CurrencyRateDto> Rates);
@@ -93,6 +98,25 @@ public static class SettingsEndpoints
             s.DefaultTaxRatePct = i.DefaultTaxRatePct;
             if (i.RequiredApprovalsToPublish is { } reqAps) s.RequiredApprovalsToPublish = reqAps;
             if (i.NotificationEmailsEnabled is { } emailsOn) s.NotificationEmailsEnabled = emailsOn;
+            // 24.5 — distinguish null (leave alone) from "" (clear). NormalizeBrand
+            // bounds length at 2 KB (rejects with 400 above the cap) and strips trailing
+            // whitespace; we deliberately don't escape — the PDF renderer treats the
+            // content as text, not markup, so no XSS surface.
+            if (i.BrandHeaderText is not null)
+            {
+                if (i.BrandHeaderText.Length > 2048) return Bad("Branding header must be 2 KB or shorter.");
+                s.BrandHeaderText = NormalizeBrand(i.BrandHeaderText);
+            }
+            if (i.BrandFooterText is not null)
+            {
+                if (i.BrandFooterText.Length > 2048) return Bad("Branding footer must be 2 KB or shorter.");
+                s.BrandFooterText = NormalizeBrand(i.BrandFooterText);
+            }
+            if (i.BrandSignatureText is not null)
+            {
+                if (i.BrandSignatureText.Length > 2048) return Bad("Branding signature must be 2 KB or shorter.");
+                s.BrandSignatureText = NormalizeBrand(i.BrandSignatureText);
+            }
             s.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
@@ -296,7 +320,16 @@ public static class SettingsEndpoints
         s?.RequiredApprovalsToPublish ?? 0,
         customDomain,
         s?.NotificationEmailsEnabled ?? true,
-        emailConfigured);
+        emailConfigured,
+        s?.BrandHeaderText, s?.BrandFooterText, s?.BrandSignatureText);
+
+    /// <summary>24.5 — Trim trailing whitespace, normalize CR/LF, and return null when blank
+    /// so a cleared field round-trips as JSON null rather than an empty string.</summary>
+    private static string? NormalizeBrand(string s)
+    {
+        var v = s.Replace("\r\n", "\n").TrimEnd();
+        return string.IsNullOrWhiteSpace(v) ? null : v;
+    }
 
     /// <summary>Validate a hostname for use as a custom domain. Lowercased, 1–253 chars,
     /// dot-separated DNS labels (letters/digits/hyphens, no leading/trailing hyphen),

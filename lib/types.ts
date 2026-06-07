@@ -102,6 +102,10 @@ export interface TenantSettings {
   notificationEmailsEnabled: boolean
   /** 21.1 — read-only: whether the platform's SMTP transport is configured. */
   emailConfigured: boolean
+  /** 24.5 — multi-paragraph branding text rendered on bid letters. Null when unset. */
+  brandHeaderText: string | null
+  brandFooterText: string | null
+  brandSignatureText: string | null
 }
 
 /** 22.1 — A user's email-digest opt-in. Frequency is "Off" | "Daily" | "Weekly".

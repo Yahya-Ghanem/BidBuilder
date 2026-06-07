@@ -134,7 +134,10 @@ public static class ExportEndpoints
             project.Code, project.Name, project.ClientName, project.Location,
             DateTime.UtcNow.ToString("yyyy-MM-dd"), bd,
             settings?.LogoBytes is { Length: > 0 } ? settings.LogoBytes : null,
-            areaRollup is { Areas.Count: > 0 } ? areaRollup : null);
+            areaRollup is { Areas.Count: > 0 } ? areaRollup : null,
+            // 24.5 — branding text (header/footer/signature) plumbed through to the
+            // PDF renderer; nulls leave the legacy layout intact.
+            settings?.BrandHeaderText, settings?.BrandFooterText, settings?.BrandSignatureText);
 
         return await render(model);
     }

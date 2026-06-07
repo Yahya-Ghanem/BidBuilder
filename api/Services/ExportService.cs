@@ -12,7 +12,11 @@ public record ExportModel(
     string CompanyName, string? CompanyAddress, string? CompanyContact,
     string ProjectCode, string ProjectName,
     string? Client, string? Location, string GeneratedOn, EstimateBreakdown Estimate,
-    byte[]? LogoBytes = null, AreaRollupResult? AreaRollup = null);
+    byte[]? LogoBytes = null, AreaRollupResult? AreaRollup = null,
+    /// <summary>24.5 — tenant-customizable branding text (newline-preserved, optional
+    /// **bold** spans) rendered above the body, below the body, and as the bid-letter
+    /// signature block. Null when the tenant hasn't configured one.</summary>
+    string? BrandHeaderText = null, string? BrandFooterText = null, string? BrandSignatureText = null);
 
 /// <summary>Editable fields for the bid submission letter; blanks fall back to sensible defaults.</summary>
 public record BidLetterOptions(
@@ -850,6 +854,11 @@ public class ExportService
                     if (m.LogoBytes is { Length: > 0 })
                         top.ConstantItem(130).MaxHeight(48).AlignRight().AlignTop().Image(m.LogoBytes).FitArea();
                 });
+                // 24.5 — optional branding tagline / accreditation line between the letterhead
+                // and the divider. Wrapped per line so newlines in the stored value survive.
+                if (!string.IsNullOrWhiteSpace(m.BrandHeaderText))
+                    foreach (var line in m.BrandHeaderText!.Split('\n'))
+                        h.Item().PaddingTop(2).Text(line).FontSize(8).FontColor(Colors.Grey.Darken1);
                 h.Item().PaddingTop(6).LineHorizontal(1).LineColor(Colors.Grey.Lighten1);
             });
 
@@ -891,13 +900,38 @@ public class ExportService
                 col.Item().Text($"This offer shall remain valid for {validity} days from the date of this letter.").LineHeight(1.4f);
                 col.Item().Text("We trust our submission meets your requirements and look forward to your favourable consideration.").LineHeight(1.4f);
 
-                col.Item().PaddingTop(18).Text("Yours faithfully,");
-                col.Item().PaddingTop(24).Text(m.CompanyName).Bold();
-                col.Item().Text(signatory);
-                if (!string.IsNullOrWhiteSpace(o.SignatoryTitle)) col.Item().Text(o.SignatoryTitle!.Trim()).FontSize(9).FontColor(Colors.Grey.Darken1);
+                // 24.5 — tenant signature block overrides the boilerplate sign-off when configured;
+                // otherwise the legacy "Yours faithfully / CompanyName / signatory" stays.
+                if (!string.IsNullOrWhiteSpace(m.BrandSignatureText))
+                {
+                    col.Item().PaddingTop(18);
+                    foreach (var line in m.BrandSignatureText!.Split('\n'))
+                        col.Item().Text(line).LineHeight(1.3f);
+                    col.Item().Text(signatory);
+                    if (!string.IsNullOrWhiteSpace(o.SignatoryTitle)) col.Item().Text(o.SignatoryTitle!.Trim()).FontSize(9).FontColor(Colors.Grey.Darken1);
+                }
+                else
+                {
+                    col.Item().PaddingTop(18).Text("Yours faithfully,");
+                    col.Item().PaddingTop(24).Text(m.CompanyName).Bold();
+                    col.Item().Text(signatory);
+                    if (!string.IsNullOrWhiteSpace(o.SignatoryTitle)) col.Item().Text(o.SignatoryTitle!.Trim()).FontSize(9).FontColor(Colors.Grey.Darken1);
+                }
             });
 
-            page.Footer().AlignCenter().Text(x => { x.Span("BidBuilder · "); x.CurrentPageNumber(); x.Span(" / "); x.TotalPages(); });
+            // 24.5 — tenant footer text replaces the boilerplate page-count footer when present.
+            // We keep the page number on the right so multi-page letters stay navigable.
+            if (!string.IsNullOrWhiteSpace(m.BrandFooterText))
+                page.Footer().Row(row =>
+                {
+                    row.RelativeItem().Text(m.BrandFooterText!).FontSize(8).FontColor(Colors.Grey.Darken1);
+                    row.AutoItem().AlignRight().Text(x =>
+                    {
+                        x.Span(" "); x.CurrentPageNumber(); x.Span(" / "); x.TotalPages();
+                    });
+                });
+            else
+                page.Footer().AlignCenter().Text(x => { x.Span("BidBuilder · "); x.CurrentPageNumber(); x.Span(" / "); x.TotalPages(); });
         }));
         return doc.GeneratePdf();
     }
