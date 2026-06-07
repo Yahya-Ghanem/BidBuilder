@@ -1222,6 +1222,18 @@
             "nullable": true,
             "type": "string"
           },
+          "brandFooterText": {
+            "nullable": true,
+            "type": "string"
+          },
+          "brandHeaderText": {
+            "nullable": true,
+            "type": "string"
+          },
+          "brandSignatureText": {
+            "nullable": true,
+            "type": "string"
+          },
           "city": {
             "nullable": true,
             "type": "string"

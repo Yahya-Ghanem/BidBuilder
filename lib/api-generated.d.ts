@@ -6252,6 +6252,9 @@ export interface components {
         SettingsInput: {
             address?: string | null;
             baseCurrency?: string | null;
+            brandFooterText?: string | null;
+            brandHeaderText?: string | null;
+            brandSignatureText?: string | null;
             city?: string | null;
             contactEmail?: string | null;
             country?: string | null;

@@ -22,6 +22,19 @@ public class TenantSettings : IHasTenant
     public byte[]? LogoBytes       { get; set; }
     public string? LogoContentType { get; set; }   // image/png | image/jpeg
 
+    /// <summary>24.5 — Multi-paragraph header text rendered above the body on bid letters
+    /// (e.g. company tagline, accreditations). Newlines are preserved; ** bold ** spans
+    /// are honoured by the PDF renderer. Stored sanitized as plain text; max ~2 KB.</summary>
+    public string? BrandHeaderText { get; set; }
+
+    /// <summary>24.5 — Footer text on bid letters / branded exports (e.g. registered address,
+    /// confidentiality notice). Same encoding rules as BrandHeaderText.</summary>
+    public string? BrandFooterText { get; set; }
+
+    /// <summary>24.5 — Sign-off block used by the bid letter when the user doesn't override
+    /// per-letter. Lines like "Yours faithfully, / Acme Construction LLC / Procurement".</summary>
+    public string? BrandSignatureText { get; set; }
+
     // ── Estimating defaults (seed new projects) ──────────────────────────────
     public string  BaseCurrency       { get; set; } = "AED"; // ISO-4217
     public decimal DefaultOverheadPct  { get; set; }          // e.g. 8.00

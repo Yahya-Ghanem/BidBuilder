@@ -69,6 +69,11 @@ function SettingsForm() {
 
       <LogoCard hasLogo={f.hasLogo} isAdmin={isAdmin} />
 
+      {/* 24.5 — Branding text rendered on the bid letter PDF: tagline/header text above
+          the body, multi-line footer (replaces the page-count footer when set), and the
+          sign-off block (overrides the boilerplate "Yours faithfully, / CompanyName"). */}
+      <BrandingCard f={f} setF={setF} ro={ro} />
+
       <Card className="space-y-4 p-5">
         <h3 className="text-sm font-semibold text-slate-600">Estimating defaults</h3>
         <div className="grid grid-cols-2 gap-3">
@@ -121,6 +126,66 @@ function SettingsForm() {
       <WebhooksCard isAdmin={isAdmin} />
       <ApiKeysCard isAdmin={isAdmin} />
     </div>
+  )
+}
+
+/** 24.5 — Branding text rendered on the bid-letter PDF. Three multi-line plain-text fields:
+ *  header (above the body, e.g. "Licensed General Contractor"), footer (replaces the
+ *  default page-count footer), signature block (overrides the boilerplate sign-off).
+ *  Stays inline in the page state; saved with the page's "Save settings" button.
+ *  An empty textarea clears the field on save; the 2 KB cap is enforced server-side. */
+function BrandingCard({ f, setF, ro }: { f: TenantSettings; setF: (s: TenantSettings) => void; ro: boolean }) {
+  // Live character-count surfaces the 2 KB cap before the user hits Save and 400s.
+  const counter = (s: string | null) => `${(s ?? "").length} / 2048`
+  const update = (k: "brandHeaderText" | "brandFooterText" | "brandSignatureText") =>
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value === "" ? null : e.target.value })
+  const ta = "min-h-[72px] w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/20 disabled:bg-slate-50"
+
+  return (
+    <Card className="space-y-4 p-5">
+      <div>
+        <h3 className="text-sm font-semibold text-slate-600">Document branding</h3>
+        <p className="text-xs text-slate-500">
+          Plain text rendered on the bid-letter PDF. Newlines preserved. 2 KB max per field.
+        </p>
+      </div>
+
+      <div>
+        <label htmlFor="brand-header" className="mb-1 block text-xs font-medium text-slate-600">
+          Header (above the body)
+        </label>
+        <textarea
+          id="brand-header" className={ta} disabled={ro}
+          placeholder="e.g. Licensed General Contractor — Lic. #AB-12345"
+          value={f.brandHeaderText ?? ""} onChange={update("brandHeaderText")} maxLength={2048}
+        />
+        <p className="mt-0.5 text-right text-xs text-slate-500">{counter(f.brandHeaderText)}</p>
+      </div>
+
+      <div>
+        <label htmlFor="brand-footer" className="mb-1 block text-xs font-medium text-slate-600">
+          Footer (replaces page-count footer)
+        </label>
+        <textarea
+          id="brand-footer" className={ta} disabled={ro}
+          placeholder="e.g. © ACME Construction LLC · Confidential"
+          value={f.brandFooterText ?? ""} onChange={update("brandFooterText")} maxLength={2048}
+        />
+        <p className="mt-0.5 text-right text-xs text-slate-500">{counter(f.brandFooterText)}</p>
+      </div>
+
+      <div>
+        <label htmlFor="brand-signature" className="mb-1 block text-xs font-medium text-slate-600">
+          Signature block (overrides the bid-letter sign-off)
+        </label>
+        <textarea
+          id="brand-signature" className={ta} disabled={ro}
+          placeholder={"Yours faithfully,\nACME Construction LLC\nTender Office"}
+          value={f.brandSignatureText ?? ""} onChange={update("brandSignatureText")} maxLength={2048}
+        />
+        <p className="mt-0.5 text-right text-xs text-slate-500">{counter(f.brandSignatureText)}</p>
+      </div>
+    </Card>
   )
 }
 
