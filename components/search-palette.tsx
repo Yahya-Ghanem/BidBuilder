@@ -98,28 +98,28 @@ export function SearchPalette() {
           <div ref={panelRef} className="w-full max-w-xl overflow-hidden rounded-xl border border-[var(--border)] bg-white shadow-2xl"
                onKeyDown={onKeyDown}>
             <div className="flex items-center gap-2 border-b border-[var(--border)] px-3">
-              <Search className="h-4 w-4 shrink-0 text-slate-400" />
+              <Search className="h-4 w-4 shrink-0 text-muted" />
               <input
                 ref={inputRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search projects, estimates, resources, assemblies…"
-                className="w-full bg-transparent py-3 text-sm outline-none placeholder:text-slate-400"
+                className="w-full bg-transparent py-3 text-sm outline-none placeholder:text-muted"
               />
-              {isFetching && <span className="text-xs text-slate-400">…</span>}
+              {isFetching && <span className="text-xs text-muted">…</span>}
             </div>
 
             <div className="max-h-[60vh] overflow-auto py-1">
               {term.length < 2 ? (
-                <p className="px-4 py-6 text-center text-sm text-slate-400">Type at least 2 characters to search.</p>
+                <p className="px-4 py-6 text-center text-sm text-muted">Type at least 2 characters to search.</p>
               ) : groups.length === 0 ? (
-                <p className="px-4 py-6 text-center text-sm text-slate-400">{isFetching ? "Searching…" : `No matches for “${term}”.`}</p>
+                <p className="px-4 py-6 text-center text-sm text-muted">{isFetching ? "Searching…" : `No matches for “${term}”.`}</p>
               ) : (
                 groups.map((g) => {
                   const Icon = ICONS[g.type] ?? Search
                   return (
                     <div key={g.type} className="px-1 py-1">
-                      <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{g.label}</div>
+                      <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{g.label}</div>
                       {g.hits.map((h) => {
                         const idx = flat.indexOf(h.link)
                         const isActive = idx === active
@@ -128,10 +128,10 @@ export function SearchPalette() {
                             onMouseEnter={() => setActive(idx)}
                             onClick={() => go(h.link)}
                             className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-left ${isActive ? "bg-[var(--brand)]/10" : "hover:bg-slate-50"}`}>
-                            <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-[var(--brand)]" : "text-slate-400"}`} />
+                            <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-[var(--brand)]" : "text-muted"}`} />
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-sm text-slate-700">{h.title}</span>
-                              {h.subtitle && <span className="block truncate text-xs text-slate-400">{h.subtitle}</span>}
+                              {h.subtitle && <span className="block truncate text-xs text-muted">{h.subtitle}</span>}
                             </span>
                             {isActive && <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-slate-300" />}
                           </button>

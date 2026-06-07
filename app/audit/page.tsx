@@ -82,7 +82,7 @@ function AuditView() {
         </div>
       </Card>
 
-      {isLoading ? <p className="text-slate-400">Loading…</p>
+      {isLoading ? <p className="text-muted">Loading…</p>
         : error ? <p className="text-rose-600">{(error as Error).message}</p>
         : items.length === 0 ? <p className="text-slate-500">{hasFilters ? "No events match these filters." : "No audit events recorded yet."}</p>
         : (
@@ -104,7 +104,7 @@ function AuditView() {
                     <td className="whitespace-nowrap px-4 py-2 text-slate-500">{e.at.replace("T", " ").slice(0, 19)}</td>
                     <td className="px-4 py-2">
                       {e.actorName ?? e.actorEmail ?? "—"}
-                      {e.actorRole && <span className="ml-1 text-xs text-slate-400">{e.actorRole}</span>}
+                      {e.actorRole && <span className="ml-1 text-xs text-muted">{e.actorRole}</span>}
                     </td>
                     <td className="px-4 py-2"><Badge className="bg-slate-100 font-mono text-xs text-slate-700">{e.action}</Badge></td>
                     <td className="px-4 py-2 text-slate-500">{e.entity}{e.entityKey ? ` #${e.entityKey}` : ""}</td>

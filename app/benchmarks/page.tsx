@@ -21,9 +21,9 @@ function Body() {
   const { can, isLoading: permLoading } = usePermissions()
   const { data, isLoading, error } = useQuery({ queryKey: ["benchmarks"], queryFn: () => fetchApi<BenchmarkResult>("/api/benchmarks") })
 
-  if (permLoading) return <p className="text-slate-400">Loading…</p>
+  if (permLoading) return <p className="text-muted">Loading…</p>
   if (!can("reports", "view")) return <p className="text-rose-600">You need the Reports permission to view benchmarks.</p>
-  if (isLoading) return <p className="text-slate-400">Loading…</p>
+  if (isLoading) return <p className="text-muted">Loading…</p>
   if (error) return <p className="text-rose-600">{(error as Error).message}</p>
   if (!data) return null
 
@@ -38,7 +38,7 @@ function Body() {
       <ProjectsCard data={data} />
 
       {data.units.length === 0
-        ? <Card className="p-5 text-sm text-slate-400">No area measures yet. Add a quantity + unit to project areas (on the project page) to benchmark cost per unit/m².</Card>
+        ? <Card className="p-5 text-sm text-muted">No area measures yet. Add a quantity + unit to project areas (on the project page) to benchmark cost per unit/m².</Card>
         : data.units.map((g) => <UnitGroupCard key={g.unit} g={g} />)}
     </div>
   )
@@ -61,7 +61,7 @@ function ProjectsCard({ data }: { data: BenchmarkResult }) {
               <td className="py-2 text-xs text-slate-500">
                 {p.estimateTitle
                   ? <>Rev {p.revision} {p.status && <Badge className={statusColor(p.status)}>{p.status}</Badge>}</>
-                  : <span className="text-slate-400">no estimate</span>}
+                  : <span className="text-muted">no estimate</span>}
               </td>
               <td className="py-2 text-right font-medium"><Money value={p.bidPrice} currency={p.currency} /></td>
             </tr>
@@ -83,7 +83,7 @@ function UnitGroupCard({ g }: { g: BenchmarkUnitGroup }) {
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
           <BarChart3 className="h-4 w-4" /> Cost per {g.unit}
-          <span className="text-xs font-normal text-slate-400">· {g.count} area{g.count > 1 ? "s" : ""}</span>
+          <span className="text-xs font-normal text-muted">· {g.count} area{g.count > 1 ? "s" : ""}</span>
         </h3>
         {hasAgg && (
           <div className="flex gap-3 text-xs text-slate-500">
@@ -120,8 +120,8 @@ function UnitGroupCard({ g }: { g: BenchmarkUnitGroup }) {
         <tbody>
           {g.points.map((pt, i) => (
             <tr key={`${pt.projectCode}-${pt.areaName}-${i}`} className="border-t border-[var(--border)]">
-              <td className="py-2"><span className="font-mono text-xs text-slate-400">{pt.projectCode}</span></td>
-              <td className="py-2 text-slate-700">{pt.areaName} <span className="text-xs text-slate-400">{pt.kind}</span></td>
+              <td className="py-2"><span className="font-mono text-xs text-muted">{pt.projectCode}</span></td>
+              <td className="py-2 text-slate-700">{pt.areaName} <span className="text-xs text-muted">{pt.kind}</span></td>
               <td className="py-2 text-right tabular-nums">{pt.quantity} {pt.unit}</td>
               <td className="py-2 text-right tabular-nums text-slate-500"><Money value={pt.total} currency={pt.currency} /></td>
               <td className="py-2 text-right font-medium tabular-nums"><Money value={pt.costPerUnit} currency={pt.currency} /></td>

@@ -35,7 +35,7 @@ export default function AdminPage() {
 
 function AdminBody() {
   const { isAdmin, isLoading } = usePermissions()
-  if (isLoading) return <p className="text-slate-400">Loading…</p>
+  if (isLoading) return <p className="text-muted">Loading…</p>
   if (!isAdmin) return <p className="text-rose-600">Only a tenant admin can manage users and teams.</p>
   return (
     <div className="max-w-4xl space-y-6">
@@ -66,7 +66,7 @@ function UsersCard() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600"><UsersIcon className="h-4 w-4" /> Users</h3>
-          <p className="text-xs text-slate-400">Accounts that can sign in. Assign teams to control project access &amp; module permissions.</p>
+          <p className="text-xs text-muted">Accounts that can sign in. Assign teams to control project access &amp; module permissions.</p>
         </div>
         <Button variant="outline" className="h-9" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New user</Button>
       </div>
@@ -77,10 +77,10 @@ function UsersCard() {
           <tr><th className="py-1">Name</th><th className="py-1">Email</th><th className="py-1">Role</th><th className="py-1">Teams</th><th className="py-1">Status</th><th /></tr>
         </thead>
         <tbody>
-          {!users && <tr><td colSpan={6} className="py-2 text-slate-400">Loading…</td></tr>}
+          {!users && <tr><td colSpan={6} className="py-2 text-muted">Loading…</td></tr>}
           {users?.map((u) => (
             <tr key={u.id} className="border-t border-[var(--border)]">
-              <td className="py-2 font-medium text-slate-800">{u.name}{me?.id === u.id && <span className="ml-1 text-xs text-slate-400">(you)</span>}</td>
+              <td className="py-2 font-medium text-slate-800">{u.name}{me?.id === u.id && <span className="ml-1 text-xs text-muted">(you)</span>}</td>
               <td className="py-2 text-slate-600">{u.email}</td>
               <td className="py-2">{u.role === "TenantAdmin" ? <Badge className="bg-indigo-100 text-indigo-700">Admin</Badge> : <span className="text-xs text-slate-500">User</span>}</td>
               <td className="py-2 text-xs text-slate-500">{u.groups.length === 0 ? "—" : u.groups.map((g) => g.code).join(", ")}</td>
@@ -171,7 +171,7 @@ function UserModal({ user, groups, onClose }: { user: AdminUser | null; groups: 
         </div>
         <div>
           <span className="mb-1 block text-xs font-medium text-slate-600">Teams</span>
-          {groups.length === 0 ? <p className="text-xs text-slate-400">No teams yet — create one below.</p> : (
+          {groups.length === 0 ? <p className="text-xs text-muted">No teams yet — create one below.</p> : (
             <div className="grid grid-cols-2 gap-1">
               {groups.map((g) => (
                 <label key={g.id} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-50">
@@ -231,7 +231,7 @@ function GroupsCard() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600"><ShieldCheck className="h-4 w-4" /> Teams &amp; permissions</h3>
-          <p className="text-xs text-slate-400">A team grants its members a set of module permissions and is assigned to projects.</p>
+          <p className="text-xs text-muted">A team grants its members a set of module permissions and is assigned to projects.</p>
         </div>
         <Button variant="outline" className="h-9" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New team</Button>
       </div>
@@ -242,10 +242,10 @@ function GroupsCard() {
           <tr><th className="py-1">Name</th><th className="py-1">Code</th><th className="py-1">Members</th><th className="py-1">Modules</th><th /></tr>
         </thead>
         <tbody>
-          {!groups && <tr><td colSpan={5} className="py-2 text-slate-400">Loading…</td></tr>}
+          {!groups && <tr><td colSpan={5} className="py-2 text-muted">Loading…</td></tr>}
           {groups?.map((g) => (
             <tr key={g.id} className="border-t border-[var(--border)]">
-              <td className="py-2 font-medium text-slate-800">{g.name}{g.isBuiltIn && <span className="ml-1 text-xs text-slate-400">built-in</span>}</td>
+              <td className="py-2 font-medium text-slate-800">{g.name}{g.isBuiltIn && <span className="ml-1 text-xs text-muted">built-in</span>}</td>
               <td className="py-2 font-mono text-xs">{g.code}</td>
               <td className="py-2 text-slate-600">{g.memberCount}</td>
               <td className="py-2 text-xs text-slate-500">{g.permissions.length}</td>
@@ -349,7 +349,7 @@ function PermissionsModal({ group, modules, onClose }: { group: AdminGroup; modu
         <tbody>
           {modules.map((mod) => (
             <tr key={mod.id} className="border-t border-[var(--border)]">
-              <td className="py-2">{mod.name} <span className="font-mono text-xs text-slate-400">{mod.code}</span></td>
+              <td className="py-2">{mod.name} <span className="font-mono text-xs text-muted">{mod.code}</span></td>
               {ACTIONS.map((a) => (
                 <td key={a.key} className="px-2 py-2 text-center">
                   <input type="checkbox" checked={grid[mod.id][a.key]} onChange={() => toggle(mod.id, a.key)} />

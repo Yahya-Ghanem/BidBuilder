@@ -71,7 +71,7 @@ export function TemplatesCard() {
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
             <FileStack className="h-4 w-4 text-[var(--brand)]" /> {t("adm.tpl.heading")}
           </h3>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted">
             Reusable estimate structures. Create one with <b>Save as template</b> on a project&apos;s
             estimate, then start new estimates from it. Deleting a template does not affect estimates already created from it.
           </p>
@@ -89,9 +89,9 @@ export function TemplatesCard() {
       </div>
 
       {list.isLoading ? (
-        <p className="text-sm text-slate-400">Loading…</p>
+        <p className="text-sm text-muted">Loading…</p>
       ) : !list.data?.length ? (
-        <p className="text-sm text-slate-400">No templates yet.</p>
+        <p className="text-sm text-muted">No templates yet.</p>
       ) : (
         <ul className="space-y-2">
           {list.data.map((t) => (
@@ -105,7 +105,7 @@ export function TemplatesCard() {
                 <div className="mt-0.5 flex flex-wrap items-center gap-1">
                   {t.tags.map((g) => <span key={g} className="rounded bg-slate-100 px-1.5 text-xs text-slate-500">{g}</span>)}
                 </div>
-                <div className="mt-0.5 text-xs text-slate-400">
+                <div className="mt-0.5 text-xs text-muted">
                   {t.sectionCount} sections · {t.itemCount} items{t.createdByName ? ` · by ${t.createdByName}` : ""}{t.description ? ` · ${t.description}` : ""}
                 </div>
               </div>

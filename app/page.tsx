@@ -12,5 +12,5 @@ export default function Home() {
     if (isLoading) return
     router.replace(isAuthenticated ? "/projects" : "/login")
   }, [isLoading, isAuthenticated, router])
-  return <div className="grid min-h-screen place-items-center text-slate-400">Loading…</div>
+  return <div className="grid min-h-screen place-items-center text-muted">Loading…</div>
 }

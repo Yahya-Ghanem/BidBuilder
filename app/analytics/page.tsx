@@ -57,7 +57,7 @@ export default function AnalyticsPage() {
         </Card>
 
         {error && <p className="text-sm text-rose-600">{(error as Error).message}</p>}
-        {isLoading && <p className="text-sm text-slate-400">Loading…</p>}
+        {isLoading && <p className="text-sm text-muted">Loading…</p>}
 
         {data && (
           <>
@@ -109,7 +109,7 @@ function BucketTable({ title, rows }: { title: string; rows: BidAnalyticsBucket[
     <Card className="overflow-hidden">
       <div className="border-b border-[var(--border)] px-4 py-2 text-sm font-semibold">{title}</div>
       {!rows.length ? (
-        <p className="p-4 text-sm text-slate-400">No decided projects in this window.</p>
+        <p className="p-4 text-sm text-muted">No decided projects in this window.</p>
       ) : (
         <TableScroll>
         <table className="w-full min-w-[44rem] text-sm">
@@ -167,7 +167,7 @@ function Register({ rows, onChanged }: { rows: BidRegisterRow[]; onChanged: () =
         <span className="text-xs text-slate-500">{rows.length} project(s) accessible{rows.length > 250 ? " · showing the 250 most recent" : ""}</span>
       </div>
       {!grouped.length ? (
-        <p className="p-4 text-sm text-slate-400">No projects accessible.</p>
+        <p className="p-4 text-sm text-muted">No projects accessible.</p>
       ) : (
         <div className="overflow-auto">
           <table className="w-full min-w-[64rem] text-sm">
@@ -206,7 +206,7 @@ function Register({ rows, onChanged }: { rows: BidRegisterRow[]; onChanged: () =
                   <td className="px-4 py-2 text-right tabular-nums">{r.finalCost == null ? <span className="text-slate-300">—</span> : <Money value={r.finalCost} currency={r.currency ?? "AED"} />}</td>
                   <td className="px-2 py-2">
                     {canEdit && (
-                      <button onClick={() => setEditing(r)} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Record outcome">
+                      <button onClick={() => setEditing(r)} className="rounded p-1 text-muted hover:bg-slate-100 hover:text-slate-700" title="Record outcome">
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                     )}

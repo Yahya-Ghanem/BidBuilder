@@ -49,9 +49,9 @@ export default function AssembliesPage() {
         )}
       </div>
       <Card className="overflow-hidden">
-        {isLoading ? <p className="p-4 text-sm text-slate-400">Loading…</p>
+        {isLoading ? <p className="p-4 text-sm text-muted">Loading…</p>
           : error ? <p className="p-4 text-sm text-rose-600">{(error as Error).message}</p>
-          : !data?.length ? <p className="p-4 text-sm text-slate-400">{filter === "inactive" ? "No inactive assemblies." : filter === "active" ? "No active assemblies." : "No assemblies yet."}</p>
+          : !data?.length ? <p className="p-4 text-sm text-muted">{filter === "inactive" ? "No inactive assemblies." : filter === "active" ? "No active assemblies." : "No assemblies yet."}</p>
           : (
             <TableScroll>
             <table className="w-full min-w-[34rem] text-sm">

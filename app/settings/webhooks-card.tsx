@@ -56,7 +56,7 @@ export function WebhooksCard({ isAdmin }: { isAdmin: boolean }) {
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
           <Webhook className="h-4 w-4 text-[var(--brand)]" /> {t("adm.webhooks.heading")}
         </h3>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-muted">
           POST a signed JSON payload to your systems when bid events occur. Verify the
           <code className="mx-1 rounded bg-slate-100 px-1">X-BidBuilder-Signature</code> header (HMAC-SHA256 of the body, keyed by your secret).
         </p>
@@ -77,9 +77,9 @@ export function WebhooksCard({ isAdmin }: { isAdmin: boolean }) {
 
       {/* Existing subscriptions. */}
       {list.isLoading ? (
-        <p className="text-sm text-slate-400">Loading…</p>
+        <p className="text-sm text-muted">Loading…</p>
       ) : !list.data?.length ? (
-        <p className="text-sm text-slate-400">No webhooks yet.</p>
+        <p className="text-sm text-muted">No webhooks yet.</p>
       ) : (
         <ul className="space-y-2">
           {list.data.map((w) => (
@@ -89,7 +89,7 @@ export function WebhooksCard({ isAdmin }: { isAdmin: boolean }) {
                   <span className={`h-1.5 w-1.5 rounded-full ${w.isActive ? "bg-emerald-500" : "bg-slate-300"}`} />
                   <span className="truncate text-sm text-slate-700">{w.url}</span>
                 </div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted">
                   <span>{w.events === "*" ? "all events" : w.events}</span>
                   {w.lastStatus && (
                     <span className={w.failureCount > 0 ? "text-rose-600" : "text-emerald-600"}>
@@ -115,7 +115,7 @@ export function WebhooksCard({ isAdmin }: { isAdmin: boolean }) {
           <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/bidbuilder-hook" />
         </Field>
         <div>
-          <span className="text-xs text-slate-500">Events <span className="text-slate-400">(none = all)</span></span>
+          <span className="text-xs text-slate-500">Events <span className="text-muted">(none = all)</span></span>
           <div className="mt-1 flex flex-wrap gap-2">
             {(events.data ?? []).map((ev) => {
               const on = picked.includes(ev)

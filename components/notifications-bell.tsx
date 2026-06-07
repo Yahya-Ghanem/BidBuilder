@@ -111,9 +111,9 @@ export function NotificationsBell() {
 
           <div className="max-h-[24rem] overflow-auto">
             {list.isLoading ? (
-              <p className="px-4 py-6 text-center text-sm text-slate-400">Loading…</p>
+              <p className="px-4 py-6 text-center text-sm text-muted">Loading…</p>
             ) : !list.data?.items.length ? (
-              <p className="px-4 py-6 text-center text-sm text-slate-400">You&apos;re all caught up.</p>
+              <p className="px-4 py-6 text-center text-sm text-muted">You&apos;re all caught up.</p>
             ) : (
               <ul>
                 {list.data.items.map((n) => (
@@ -125,7 +125,7 @@ export function NotificationsBell() {
                         <span className={`text-sm ${n.isRead ? "text-slate-600" : "font-semibold text-slate-800"}`}>{n.title}</span>
                       </span>
                       {n.body && <span className="line-clamp-2 text-xs text-slate-500">{n.body}</span>}
-                      <span className="text-[11px] text-slate-400">{ago(n.createdAt)}</span>
+                      <span className="text-[11px] text-muted">{ago(n.createdAt)}</span>
                     </button>
                   </li>
                 ))}

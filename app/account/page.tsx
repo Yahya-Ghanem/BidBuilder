@@ -32,7 +32,7 @@ function ProfileCard() {
     <Card className="space-y-1 p-5">
       <h3 className="text-sm font-semibold text-slate-600">Profile</h3>
       <p className="text-sm text-slate-700">{user?.name}</p>
-      <p className="text-xs text-slate-400">{user?.email} · {user?.role}</p>
+      <p className="text-xs text-muted">{user?.email} · {user?.role}</p>
     </Card>
   )
 }
@@ -77,18 +77,18 @@ function TwoFactorCard() {
     onError: (e) => toast.error((e as Error).message),
   })
 
-  if (isLoading) return <Card className="p-5 text-sm text-slate-400">Loading…</Card>
+  if (isLoading) return <Card className="p-5 text-sm text-muted">Loading…</Card>
 
   const enabled = status?.enabled ?? false
 
   return (
     <Card className="space-y-3 p-5">
       <div className="flex items-center gap-2">
-        {enabled ? <ShieldCheck className="h-4 w-4 text-emerald-600" /> : <ShieldOff className="h-4 w-4 text-slate-400" />}
+        {enabled ? <ShieldCheck className="h-4 w-4 text-emerald-600" /> : <ShieldOff className="h-4 w-4 text-muted" />}
         <h3 className="text-sm font-semibold text-slate-600">Two-factor authentication</h3>
         {enabled && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-emerald-700">on</span>}
       </div>
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-muted">
         Protect sign-in with a time-based code from an authenticator app (Google Authenticator, 1Password, Authy…).
       </p>
 
@@ -118,9 +118,9 @@ function TwoFactorCard() {
             <div className="flex items-center gap-2">
               <code className="break-all rounded bg-white px-2 py-1 font-mono text-sm text-slate-700">{setup.secret}</code>
               <button title="Copy" onClick={() => navigator.clipboard.writeText(setup.secret).then(() => toast.success("Key copied"))}
-                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-[var(--brand)]"><Copy className="h-3.5 w-3.5" /></button>
+                className="rounded p-1 text-muted hover:bg-slate-100 hover:text-[var(--brand)]"><Copy className="h-3.5 w-3.5" /></button>
             </div>
-            <p className="mt-1 break-all text-[11px] text-slate-400">{setup.otpauthUri}</p>
+            <p className="mt-1 break-all text-[11px] text-muted">{setup.otpauthUri}</p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">2. Enter the 6-digit code it shows</label>

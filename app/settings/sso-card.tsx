@@ -65,7 +65,7 @@ export function SsoCard({ isAdmin }: { isAdmin: boolean }) {
           <KeyRound className="h-4 w-4 text-[var(--brand)]" /> {t("adm.sso.heading")}
           {data?.enabled && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-emerald-700">on</span>}
         </h3>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-muted">
           Let members sign in through your identity provider (Okta, Azure AD, Google Workspace, ADFS…).
         </p>
       </div>
@@ -79,7 +79,7 @@ export function SsoCard({ isAdmin }: { isAdmin: boolean }) {
               <span className="w-28 shrink-0 text-slate-500">{label}</span>
               <code className="flex-1 break-all rounded bg-white px-2 py-1 font-mono text-slate-700">{val}</code>
               <button type="button" title="Copy" onClick={() => copy(val)}
-                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-[var(--brand)]"><Copy className="h-3.5 w-3.5" /></button>
+                className="rounded p-1 text-muted hover:bg-slate-100 hover:text-[var(--brand)]"><Copy className="h-3.5 w-3.5" /></button>
             </div>
           ))}
         </div>

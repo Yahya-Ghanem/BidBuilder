@@ -93,7 +93,7 @@ export function DigestCard({ isAdmin }: { isAdmin: boolean }) {
     <Card className="space-y-4 p-5">
       <div>
         <h3 className="text-sm font-semibold text-slate-600">{t("adm.dig.heading")}</h3>
-        <p className="text-xs text-slate-400">{t("adm.dig.sub")}</p>
+        <p className="text-xs text-muted">{t("adm.dig.sub")}</p>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
@@ -122,7 +122,7 @@ export function DigestCard({ isAdmin }: { isAdmin: boolean }) {
           </Field>
         )}
         {data?.lastSentAt && (
-          <span className="pb-2 text-xs text-slate-400">{t("adm.dig.lastSent", { when: data.lastSentAt.replace("T", " ").slice(0, 16) })}</span>
+          <span className="pb-2 text-xs text-muted">{t("adm.dig.lastSent", { when: data.lastSentAt.replace("T", " ").slice(0, 16) })}</span>
         )}
       </div>
 
@@ -142,7 +142,7 @@ export function DigestCard({ isAdmin }: { isAdmin: boolean }) {
           <Send className="h-4 w-4" /> {testing ? t("adm.email.sending") : t("adm.dig.test")}
         </Button>
         {!optedIn && (
-          <span className="text-xs text-slate-400">{t("adm.dig.optedOut")}</span>
+          <span className="text-xs text-muted">{t("adm.dig.optedOut")}</span>
         )}
       </div>
 
@@ -151,7 +151,7 @@ export function DigestCard({ isAdmin }: { isAdmin: boolean }) {
           <Button variant="outline" className="h-8 text-xs" disabled={sending || !configured} onClick={sendNow}>
             <Mail className="h-4 w-4" /> {sending ? t("adm.email.sending") : t("adm.dig.sendNow")}
           </Button>
-          <span className="text-xs text-slate-400">{t("adm.dig.sendNowSub")}</span>
+          <span className="text-xs text-muted">{t("adm.dig.sendNowSub")}</span>
         </div>
       )}
 

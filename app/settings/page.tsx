@@ -62,7 +62,7 @@ function SettingsForm() {
     onError: (e) => toast.error((e as Error).message),
   })
 
-  if (isLoading || !f) return <p className="text-slate-400">{t("adm.loading")}</p>
+  if (isLoading || !f) return <p className="text-muted">{t("adm.loading")}</p>
   if (error) return <p className="text-danger">{(error as Error).message}</p>
 
   const ro = !isAdmin
@@ -73,7 +73,7 @@ function SettingsForm() {
   // nested component) so React doesn't reset it on every parent render.
   const saveBar = isAdmin
     ? <Button disabled={save.isPending} onClick={() => save.mutate(f)}>{save.isPending ? t("adm.saving") : t("adm.save")}</Button>
-    : <p className="text-xs text-slate-400">{t("adm.adminOnly")}</p>
+    : <p className="text-xs text-muted">{t("adm.adminOnly")}</p>
 
   return (
     <div className="max-w-2xl">
@@ -149,7 +149,7 @@ function CompanyProfileCard({ f, setF, ro }: { f: TenantSettings; setF: (s: Tena
     <Card className="space-y-4 p-5">
       <div>
         <h3 className="text-sm font-semibold text-slate-600">Company profile</h3>
-        <p className="text-xs text-slate-400">Appears on the header of exported bid documents.</p>
+        <p className="text-xs text-muted">Appears on the header of exported bid documents.</p>
       </div>
       <Field label="Company name"><Input value={f.companyName} disabled /></Field>
       <Field label="Address"><Input value={f.address ?? ""} onChange={set("address")} disabled={ro} /></Field>
@@ -194,7 +194,7 @@ function ApprovalWorkflowCard({ f, setF, ro }: { f: TenantSettings; setF: (s: Te
     <Card className="space-y-4 p-5">
       <div>
         <h3 className="text-sm font-semibold text-slate-600">Approval workflow</h3>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-muted">
           Number of TenantAdmin sign-offs required before an estimate can be Published.
           Zero disables the workflow. Any BOQ / preliminaries / markups / risks edit invalidates existing sign-offs.
         </p>
@@ -287,7 +287,7 @@ function EmailCard({ f, setF, ro, isAdmin }: { f: TenantSettings; setF: (s: Tena
     <Card className="space-y-4 p-5">
       <div>
         <h3 className="text-sm font-semibold text-slate-600">{t("adm.email.heading")}</h3>
-        <p className="text-xs text-slate-400">{t("adm.email.sub")}</p>
+        <p className="text-xs text-muted">{t("adm.email.sub")}</p>
       </div>
 
       <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -311,7 +311,7 @@ function EmailCard({ f, setF, ro, isAdmin }: { f: TenantSettings; setF: (s: Tena
           <Button variant="outline" className="h-8 text-xs" disabled={testing || !f.emailConfigured} onClick={sendTest}>
             <Mail className="h-4 w-4" /> {testing ? t("adm.email.sending") : t("adm.email.test")}
           </Button>
-          <span className="text-xs text-slate-400">{t("adm.email.toggleHint")}</span>
+          <span className="text-xs text-muted">{t("adm.email.toggleHint")}</span>
         </div>
       )}
     </Card>
@@ -339,7 +339,7 @@ function ProjectTypesCard({ isAdmin }: { isAdmin: boolean }) {
     <Card className="space-y-4 p-5">
       <div>
         <h3 className="text-sm font-semibold text-slate-600">Project types</h3>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-muted">
           The dropdown of project types (Civil, Mechanical, Electrical…) shown when creating or editing a
           project. Built-in types can be deactivated but not deleted; add your own below.
         </p>
@@ -388,7 +388,7 @@ function ProjectTypeRow({ type, isAdmin, busy, setBusy }: { type: ProjectType; i
     <tr className="border-t border-[var(--border)]">
       <td className="py-2">
         {isAdmin && !type.builtin ? <Input value={name} onChange={(e) => setName(e.target.value)} aria-label={`Project type name (${type.name})`} className="w-48" /> : name}
-        {type.builtin && <span className="ml-1 text-xs text-slate-400">built-in</span>}
+        {type.builtin && <span className="ml-1 text-xs text-muted">built-in</span>}
       </td>
       <td className="py-2"><input type="checkbox" checked={active} disabled={!isAdmin} onChange={(e) => setActive(e.target.checked)} aria-label={`${type.name} active`} /></td>
       <td className="py-2 text-right">
@@ -424,7 +424,7 @@ function ActivitiesCard({ isAdmin }: { isAdmin: boolean }) {
     <Card className="space-y-4 p-5">
       <div>
         <h3 className="text-sm font-semibold text-slate-600">Activities</h3>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-muted">
           The dropdown of construction activities shown when adding work under a unit. Built-in activities
           can be deactivated but not deleted; add your own below.
         </p>
@@ -473,7 +473,7 @@ function ActivityRow({ activity, isAdmin, busy, setBusy }: { activity: ActivityT
     <tr className="border-t border-[var(--border)]">
       <td className="py-2">
         {isAdmin && !activity.builtin ? <Input value={name} onChange={(e) => setName(e.target.value)} aria-label={`Activity name (${activity.name})`} className="w-48" /> : name}
-        {activity.builtin && <span className="ml-1 text-xs text-slate-400">built-in</span>}
+        {activity.builtin && <span className="ml-1 text-xs text-muted">built-in</span>}
       </td>
       <td className="py-2"><input type="checkbox" checked={active} disabled={!isAdmin} onChange={(e) => setActive(e.target.checked)} aria-label={`${activity.name} active`} /></td>
       <td className="py-2 text-right">
@@ -514,7 +514,7 @@ function CostTypesCard({ isAdmin }: { isAdmin: boolean }) {
     <Card className="space-y-4 p-5">
       <div>
         <h3 className="text-sm font-semibold text-slate-600">Cost-component types</h3>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-muted">
           Categories used to build up each BOQ item's unit rate. <b>Amount</b> types are money per unit;
           <b> Percent</b> types apply to the amount subtotal (e.g. Waste, Overheads). Built-in types can be deactivated but not deleted.
         </p>
@@ -577,7 +577,7 @@ function CostTypeRow({ type, isAdmin, busy, setBusy }: { type: CostComponentType
     <tr className="border-t border-[var(--border)]">
       <td className="py-2">
         {isAdmin ? <Input value={name} onChange={(e) => setName(e.target.value)} aria-label={`Cost type name (${type.code})`} className="w-40" /> : name}
-        {type.builtin && <span className="ml-1 text-xs text-slate-400">built-in</span>}
+        {type.builtin && <span className="ml-1 text-xs text-muted">built-in</span>}
       </td>
       <td className="py-2 font-mono text-xs">{type.code}</td>
       <td className="py-2">
@@ -639,7 +639,7 @@ function CurrencyRatesCard({ isAdmin }: { isAdmin: boolean }) {
     <Card className="space-y-4 p-5">
       <div>
         <h3 className="text-sm font-semibold text-slate-600">Currency rates (FX)</h3>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-muted">
           Base currency is <b>{base}</b>. Enter the value of 1 unit of each currency in {base} (e.g. 1 USD = 3.6725 {base}).
           Estimates can show their bid converted into any listed currency.
         </p>
@@ -651,7 +651,7 @@ function CurrencyRatesCard({ isAdmin }: { isAdmin: boolean }) {
             <tr><th className="py-1">Currency</th><th className="py-1">Rate (1 unit in {base})</th><th className="py-1">Updated</th><th /></tr>
           </thead>
           <tbody>
-            {data.rates.length === 0 && <tr><td colSpan={4} className="py-2 text-slate-400">No currencies yet.</td></tr>}
+            {data.rates.length === 0 && <tr><td colSpan={4} className="py-2 text-muted">No currencies yet.</td></tr>}
             {data.rates.map((r) => (
               <RateRow key={r.code} rate={r} base={base} isAdmin={isAdmin} busy={busy} onSave={(v) => upsert(r.code, v)} onRemove={() => remove(r.code)} />
             ))}
@@ -685,7 +685,7 @@ function RateRow({ rate, base, isAdmin, busy, onSave, onRemove }: {
           ? <Input type="number" step="0.000001" min={0} value={v} onChange={(e) => setV(e.target.value)} aria-label={`Rate for ${rate.code}`} className="w-36" />
           : <span>{rate.rateToBase} {base}</span>}
       </td>
-      <td className="py-2 text-xs text-slate-400">{rate.updatedAt.replace("T", " ").slice(0, 16)}</td>
+      <td className="py-2 text-xs text-muted">{rate.updatedAt.replace("T", " ").slice(0, 16)}</td>
       <td className="py-2 text-right">
         {isAdmin && (
           <div className="flex justify-end gap-1">
@@ -753,13 +753,13 @@ function LogoCard({ hasLogo, isAdmin }: { hasLogo: boolean; isAdmin: boolean }) 
     <Card className="space-y-4 p-5">
       <div>
         <h3 className="text-sm font-semibold text-slate-600">Company logo</h3>
-        <p className="text-xs text-slate-400">PNG or JPEG, under 1 MB. Appears on exported Excel &amp; PDF bid documents.</p>
+        <p className="text-xs text-muted">PNG or JPEG, under 1 MB. Appears on exported Excel &amp; PDF bid documents.</p>
       </div>
       <div className="flex items-center gap-4">
         <div className="grid h-20 w-40 place-items-center overflow-hidden rounded-md border border-dashed border-[var(--border)] bg-slate-50">
           {url
             ? <img src={url} alt="Company logo" className="max-h-full max-w-full object-contain" />
-            : <span className="flex items-center gap-1 text-xs text-slate-400"><ImageIcon className="h-4 w-4" /> No logo</span>}
+            : <span className="flex items-center gap-1 text-xs text-muted"><ImageIcon className="h-4 w-4" /> No logo</span>}
         </div>
         {isAdmin && (
           <div className="flex flex-col gap-2">

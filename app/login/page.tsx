@@ -135,7 +135,7 @@ export default function LoginPage() {
                   onClick={() => { setUseRecovery((v) => !v); setCode("") }}>
                   {useRecovery ? "Use authenticator code" : "Use a recovery code"}
                 </button>
-                <button type="button" className="text-slate-400 hover:text-slate-600"
+                <button type="button" className="text-muted hover:text-slate-600"
                   onClick={() => { setMfa(false); setCode(""); setPassword("") }}>
                   Back
                 </button>

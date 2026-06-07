@@ -60,9 +60,9 @@ function QuotesTable() {
         {canAdd && <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5" /> {t("quotes.add")}</Button>}
       </div>
 
-      {isLoading ? <p className="p-4 text-sm text-slate-400">{t("common.loading")}</p>
+      {isLoading ? <p className="p-4 text-sm text-muted">{t("common.loading")}</p>
         : error ? <p className="p-4 text-sm text-rose-600">{(error as Error).message}</p>
-        : !data?.length ? <p className="p-4 text-sm text-slate-400">{t("quotes.none")}</p>
+        : !data?.length ? <p className="p-4 text-sm text-muted">{t("quotes.none")}</p>
         : (
           <TableScroll>
           <table className="w-full min-w-[52rem] text-sm">
@@ -85,7 +85,7 @@ function QuotesTable() {
                   <td className="px-4 py-2 text-slate-600">{t(`restype.${q.resourceType}`)}</td>
                   <td className="px-4 py-2 text-slate-500">{q.quotedOn}</td>
                   <td className="px-4 py-2">
-                    {q.validUntil ?? <span className="text-slate-400">—</span>}
+                    {q.validUntil ?? <span className="text-muted">—</span>}
                     {q.isExpired && (
                       <span className="ms-2 inline-flex items-center gap-1 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium uppercase text-rose-700">
                         <AlertTriangle className="h-3 w-3" /> {t("quotes.expired")}
@@ -98,7 +98,7 @@ function QuotesTable() {
                   <td className="px-2 py-2">
                     {canDelete && (
                       <button onClick={() => { if (confirm(t("quotes.deleteConfirm", { supplier: q.supplier }))) del.mutate(q.id) }}
-                        className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600">
+                        className="rounded p-1 text-muted hover:bg-rose-50 hover:text-rose-600">
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     )}

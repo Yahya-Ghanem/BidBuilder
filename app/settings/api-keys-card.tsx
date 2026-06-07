@@ -85,7 +85,7 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
           <KeyRound className="h-4 w-4 text-[var(--brand)]" /> {t("adm.apikeys.heading")}
         </h3>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-muted">
           Call the API from your own systems. Send the key in an
           <code className="mx-1 rounded bg-slate-100 px-1">X-Api-Key</code> header. A key acts as you
           (inherits your permissions) and stops working if your account is deactivated.
@@ -107,9 +107,9 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
 
       {/* Existing keys. */}
       {list.isLoading ? (
-        <p className="text-sm text-slate-400">Loading…</p>
+        <p className="text-sm text-muted">Loading…</p>
       ) : !list.data?.length ? (
-        <p className="text-sm text-slate-400">No API keys yet.</p>
+        <p className="text-sm text-muted">No API keys yet.</p>
       ) : (
         <ul className="space-y-2">
           {list.data.map((k) => (
@@ -139,7 +139,7 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
                     <span className="rounded bg-slate-100 px-1.5 text-xs text-slate-500">any IP</span>
                   )}
                 </div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted">
                   <span>created {fmt(k.createdAt)}</span>
                   <span>· last used {fmt(k.lastUsedAt)}</span>
                   {k.expiresAt && <span>· expires {fmt(k.expiresAt)}</span>}
@@ -199,7 +199,7 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
             className="w-full max-w-xl rounded border border-[var(--border)] bg-white px-2 py-1 font-mono text-xs"
           />
         </Field>
-        <p className="-mt-2 text-xs text-slate-400">Comma- or newline-separated. Leave blank to allow any IP. A bare IP is treated as /32 (or /128 for IPv6).</p>
+        <p className="-mt-2 text-xs text-muted">Comma- or newline-separated. Leave blank to allow any IP. A bare IP is treated as /32 (or /128 for IPv6).</p>
         <div className="flex flex-wrap items-center gap-4">
           <span className="text-xs font-medium text-slate-500">Scopes:</span>
           <label className="flex items-center gap-1.5 text-sm text-slate-700">
