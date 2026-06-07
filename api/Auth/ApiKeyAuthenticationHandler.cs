@@ -91,6 +91,10 @@ public sealed class ApiKeyAuthenticationHandler(
             new("role", user.Role.ToString()),
             new(JwtService.TenantSlugClaim, slug),
             new(JwtService.TenantIdClaim, key.TenantId.ToString()),
+            // 22.2 — let ApiKeyGuard enforce scopes + rate limit without re-reading the DB.
+            new(ApiKeyClaims.KeyId, key.Id.ToString()),
+            new(ApiKeyClaims.Scopes, key.Scopes ?? "read,write"),
+            new(ApiKeyClaims.RateLimit, key.RateLimitPerMinute?.ToString() ?? ""),
         };
         var identity = new ClaimsIdentity(claims, ApiKeyTokens.Scheme, nameType: "name", roleType: "role");
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), ApiKeyTokens.Scheme);

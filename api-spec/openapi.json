@@ -410,6 +410,18 @@
           "name": {
             "nullable": true,
             "type": "string"
+          },
+          "rateLimitPerMinute": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
           }
         },
         "type": "object"

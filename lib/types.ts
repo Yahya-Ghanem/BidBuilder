@@ -112,7 +112,8 @@ export interface DigestPreference {
   emailConfigured: boolean
 }
 
-/** 21.2 — A programmatic API key (never carries the secret after creation). */
+/** 21.2 — A programmatic API key (never carries the secret after creation).
+ *  22.2 adds scopes, an optional per-minute rate limit, and live usage. */
 export interface ApiKey {
   id: number
   name: string
@@ -121,6 +122,12 @@ export interface ApiKey {
   lastUsedAt: string | null
   expiresAt: string | null
   revoked: boolean
+  /** 22.2 — granted scopes, e.g. ["read","write"]. */
+  scopes: string[]
+  /** 22.2 — per-minute request cap, or null when unlimited. */
+  rateLimitPerMinute: number | null
+  /** 22.2 — requests counted against this key in the current minute (live). */
+  usageThisMinute: number
 }
 
 /** 21.2 — The create response — the only time the raw secret is returned. */
