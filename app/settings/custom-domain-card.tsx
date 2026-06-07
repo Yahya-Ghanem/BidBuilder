@@ -7,6 +7,7 @@ import { Globe, Check, Trash2 } from "lucide-react"
 import { fetchApi } from "@/lib/api"
 import type { TenantSettings } from "@/lib/types"
 import { Card, Button, Input } from "@/components/ui"
+import { useT } from "@/lib/i18n"
 
 /**
  * 20.11 — Register a vanity host for this workspace (e.g. bids.acme.com). Once the
@@ -15,6 +16,7 @@ import { Card, Button, Input } from "@/components/ui"
  * X-Tenant-Id header. Tenant admin only; the host must be globally unique.
  */
 export function CustomDomainCard({ isAdmin }: { isAdmin: boolean }) {
+  const t = useT()
   const qc = useQueryClient()
   const { data } = useQuery({ queryKey: ["settings"], queryFn: () => fetchApi<TenantSettings>("/api/settings") })
   const current = data?.customDomain ?? null
@@ -33,7 +35,7 @@ export function CustomDomainCard({ isAdmin }: { isAdmin: boolean }) {
     <Card className="space-y-3 p-5">
       <div>
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
-          <Globe className="h-4 w-4 text-[var(--brand)]" /> Custom domain
+          <Globe className="h-4 w-4 text-[var(--brand)]" /> {t("adm.domain.heading")}
         </h3>
         <p className="text-xs text-slate-400">
           Reach this workspace at your own host (e.g. <code className="rounded bg-slate-100 px-1">bids.acme.com</code>).

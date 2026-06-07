@@ -8,6 +8,7 @@ import { fetchApi } from "@/lib/api"
 import type { SamlConfig } from "@/lib/types"
 import { Card, Button, Input } from "@/components/ui"
 import { Field } from "@/components/form"
+import { useT } from "@/lib/i18n"
 
 /**
  * 20.8b — Configure SAML 2.0 single sign-on for this workspace. The admin registers
@@ -16,6 +17,7 @@ import { Field } from "@/components/form"
  * write-only — it's never returned, only its presence is shown. Tenant admin only.
  */
 export function SsoCard({ isAdmin }: { isAdmin: boolean }) {
+  const t = useT()
   const qc = useQueryClient()
   const { data } = useQuery({ queryKey: ["sso-config"], queryFn: () => fetchApi<SamlConfig>("/api/sso/config"), enabled: isAdmin })
 
@@ -60,7 +62,7 @@ export function SsoCard({ isAdmin }: { isAdmin: boolean }) {
     <Card className="space-y-4 p-5">
       <div>
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
-          <KeyRound className="h-4 w-4 text-[var(--brand)]" /> Single sign-on (SAML)
+          <KeyRound className="h-4 w-4 text-[var(--brand)]" /> {t("adm.sso.heading")}
           {data?.enabled && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-emerald-700">on</span>}
         </h3>
         <p className="text-xs text-slate-400">
