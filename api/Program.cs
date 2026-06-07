@@ -103,6 +103,7 @@ builder.Services.AddScoped<BidBuilder.Api.Services.WebhookDispatcher>();
 builder.Services.AddScoped<BidBuilder.Api.Services.AreaRollupService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.BenchmarkService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.RateSuggestionService>();
+builder.Services.AddScoped<BidBuilder.Api.Services.CostAnomalyService>();   // 23.5
 builder.Services.AddScoped<BidBuilder.Api.Services.EstimateTemplateService>();
 // 22.1 — Notification email digests. The assembly/send service is scoped (uses the
 // request or background-scope DbContext); a background host periodically sends due
