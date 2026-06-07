@@ -1501,7 +1501,11 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    search?: string;
+                    category?: string;
+                    tag?: string;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -1546,6 +1550,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/estimate-templates/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/estimate-templates/{id}": {
         parameters: {
             query?: never;
@@ -1554,7 +1591,30 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateTemplateInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         post?: never;
         delete: {
             parameters: {
@@ -1576,6 +1636,45 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/estimate-templates/{id}/featured": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FeatureTemplateInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -5674,6 +5773,9 @@ export interface components {
             ratePerHour?: number;
             unit?: string | null;
         };
+        FeatureTemplateInput: {
+            featured?: boolean;
+        };
         FromTemplateInput: {
             /** Format: int32 */
             templateId?: number;
@@ -5839,10 +5941,12 @@ export interface components {
             nameAttribute?: string | null;
         };
         SaveTemplateInput: {
+            category?: string | null;
             description?: string | null;
             /** Format: int32 */
             estimateId?: number;
             name?: string | null;
+            tags?: string[] | null;
         };
         SectionInput: {
             code?: string | null;
@@ -5922,6 +6026,12 @@ export interface components {
             status?: string | null;
             /** Format: date-time */
             tenderDueAt?: string | null;
+        };
+        UpdateTemplateInput: {
+            category?: string | null;
+            description?: string | null;
+            name?: string | null;
+            tags?: string[] | null;
         };
         UpdateUserInput: {
             email?: string | null;

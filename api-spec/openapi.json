@@ -656,6 +656,15 @@
         },
         "type": "object"
       },
+      "FeatureTemplateInput": {
+        "additionalProperties": false,
+        "properties": {
+          "featured": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "FromTemplateInput": {
         "additionalProperties": false,
         "properties": {
@@ -1142,6 +1151,10 @@
       "SaveTemplateInput": {
         "additionalProperties": false,
         "properties": {
+          "category": {
+            "nullable": true,
+            "type": "string"
+          },
           "description": {
             "nullable": true,
             "type": "string"
@@ -1153,6 +1166,13 @@
           "name": {
             "nullable": true,
             "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
           }
         },
         "type": "object"
@@ -1394,6 +1414,31 @@
             "format": "date-time",
             "nullable": true,
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateTemplateInput": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "nullable": true,
+            "type": "string"
+          },
+          "description": {
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
           }
         },
         "type": "object"
@@ -2616,6 +2661,29 @@
     },
     "/api/estimate-templates": {
       "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
@@ -2646,6 +2714,18 @@
         ]
       }
     },
+    "/api/estimate-templates/categories": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
     "/api/estimate-templates/{id}": {
       "delete": {
         "parameters": [
@@ -2659,6 +2739,70 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      },
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTemplateInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/estimate-templates/{id}/featured": {
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeatureTemplateInput"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "OK"
