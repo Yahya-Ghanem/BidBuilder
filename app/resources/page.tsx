@@ -6,6 +6,7 @@ import { Plus, Pencil, Trash2, Power, PowerOff, Sparkles, Check } from "lucide-r
 import { toast } from "sonner"
 import { fetchApi } from "@/lib/api"
 import type { ResourceRow, BulkResourceResult, RateSuggestion } from "@/lib/types"
+import { RateTrendCell } from "@/components/rate-trend-cell"
 import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input, TableScroll } from "@/components/ui"
@@ -121,7 +122,12 @@ function ResourceTable({ cfg }: { cfg: TabCfg }) {
                   <td className="px-4 py-2 font-mono text-xs">{r.code}{!r.isActive && <span className="ms-1 rounded bg-slate-100 px-1 text-[10px] text-slate-500">{t("resources.inactive")}</span>}</td>
                   <td className="px-4 py-2">{r.name}</td>
                   <td className="px-4 py-2 text-slate-500">{r.unit}</td>
-                  <td className="px-4 py-2 text-end">{money((r[cfg.rateField] as number) ?? 0, "AED", locale)}</td>
+                  <td className="px-4 py-2 text-end">
+                    <span className="inline-flex items-center justify-end gap-1">
+                      <span className="tabular-nums">{money((r[cfg.rateField] as number) ?? 0, "AED", locale)}</span>
+                      <RateTrendCell apiType={cfg.apiType} id={r.id} />
+                    </span>
+                  </td>
                   <td className="px-2 py-2">
                     <div className="flex justify-end gap-1">
                       {canEdit && <button onClick={() => setEditing(r)} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><Pencil className="h-3.5 w-3.5" /></button>}

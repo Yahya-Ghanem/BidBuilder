@@ -27,6 +27,21 @@ public record RateHistoryDto(int Id, string ResourceType, int ResourceId, DateOn
 /// <summary>Manual back-date entry: estimator records "this rate was effective from X".</summary>
 public record RateHistoryInput(DateOnly EffectiveFrom, decimal Rate, string? Source);
 
+// ── 23.4 — Rate trend (sparkline + volatility) ───────────────────────────────
+/// <summary>One bucket on the trend chart: a year-month label ("2025-04") and the
+/// arithmetic-mean rate inside that month. Months with no data are omitted (the chart
+/// renders linear segments between adjacent points).</summary>
+public record RateTrendPoint(string Month, decimal Rate);
+/// <summary>24-month rate trend for a single library resource (Labor / Material /
+/// Equipment / Subcontractor). Summary fields are computed over the window so the
+/// UI can render a sparkline + an "low/med/high" volatility badge without re-walking
+/// the series client-side. <see cref="VolatilityIndex"/> = stddev / mean of the
+/// monthly series (Coefficient of Variation); null when the series is too thin.</summary>
+public record RateTrendDto(
+    string ResourceType, int ResourceId, decimal CurrentRate,
+    decimal? Min12m, decimal? Max12m, decimal? VolatilityIndex,
+    IReadOnlyList<RateTrendPoint> Points);
+
 // ── Bulk operations (20.12) ──────────────────────────────────────────────────
 /// <summary>Apply one action to many resources of a type at once.
 /// <c>Action</c> ∈ {activate, deactivate, delete}.</summary>
@@ -242,6 +257,88 @@ public static class ResourceEndpoints
             return Results.NoContent();
         });
 
+        // ── 23.4 — Rate trend (sparkline + volatility) ─────────────────────────
+        // GET → 24-month monthly-averaged rate series + summary stats (current /
+        //   12-month min/max / volatility index). Aggregation runs in-memory: 18.3
+        //   already caps per-resource history at the human-scale "a few hundred rows
+        //   in 24 months", so the cost is negligible. The endpoint is read-only and
+        //   never enqueues a cascade.
+        grp.MapGet("/{type}/{id:int}/rate-trend", async (string type, int id, ClaimsPrincipal me, PermissionService perm, AppDbContext db) =>
+        {
+            var g = await Guard(me, perm, ModuleAction.View); if (g is not null) return g;
+            if (!TryParseType(type, out var rt)) return BadResourceType(type);
+
+            var liveRate = await GetLiveRateAsync(db, rt, id);
+            if (liveRate is null) return Results.NotFound(new { error = "Resource not found" });
+
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+            var windowStart = new DateOnly(today.Year, today.Month, 1).AddMonths(-23);   // include 24 months
+            var twelveMonthsAgo = new DateOnly(today.Year, today.Month, 1).AddMonths(-11);
+
+            // Load every dated point inside the 24-month window (plus the most recent point
+            // BEFORE the window, so a long-dormant rate is shown as carried-forward).
+            var inside = await db.ResourceRateHistory
+                .Where(h => h.ResourceType == rt && h.ResourceId == id && h.EffectiveFrom >= windowStart)
+                .OrderBy(h => h.EffectiveFrom)
+                .Select(h => new { h.EffectiveFrom, h.Rate })
+                .ToListAsync();
+            var carryIn = await db.ResourceRateHistory
+                .Where(h => h.ResourceType == rt && h.ResourceId == id && h.EffectiveFrom < windowStart)
+                .OrderByDescending(h => h.EffectiveFrom)
+                .Select(h => new { h.EffectiveFrom, h.Rate })
+                .FirstOrDefaultAsync();
+
+            // Bucket by year-month. Within a month average all rate points so a flurry of
+            // updates doesn't skew the trend. If a month has no point, carry the last seen
+            // rate forward so the sparkline is continuous (mirrors how the estimator's
+            // pricing engine resolves a rate as-at a date).
+            var byMonth = inside
+                .GroupBy(h => new { h.EffectiveFrom.Year, h.EffectiveFrom.Month })
+                .ToDictionary(g => g.Key, g => g.Average(x => x.Rate));
+
+            var points = new List<RateTrendPoint>(24);
+            decimal? lastSeen = carryIn?.Rate;
+            for (var m = 0; m < 24; m++)
+            {
+                var d = windowStart.AddMonths(m);
+                var key = new { d.Year, d.Month };
+                if (byMonth.TryGetValue(key, out var rate))
+                    lastSeen = rate;
+                if (lastSeen is decimal r) points.Add(new RateTrendPoint($"{d.Year:D4}-{d.Month:D2}", decimal.Round(r, 4)));
+            }
+            // Ensure the FINAL point reflects the live rate (last known truth), in case the
+            // most-recent history row is older than this month.
+            if (points.Count > 0 && points[^1].Rate != liveRate.Value)
+                points[^1] = new RateTrendPoint(points[^1].Month, decimal.Round(liveRate.Value, 4));
+
+            // Summary stats. min/max over the last 12 months; volatility over the full window.
+            decimal? min12m = null, max12m = null;
+            foreach (var p in points)
+            {
+                var (yyyy, mm) = (int.Parse(p.Month[..4]), int.Parse(p.Month[5..]));
+                if (new DateOnly(yyyy, mm, 1) >= twelveMonthsAgo)
+                {
+                    if (min12m is null || p.Rate < min12m) min12m = p.Rate;
+                    if (max12m is null || p.Rate > max12m) max12m = p.Rate;
+                }
+            }
+            decimal? vol = null;
+            if (points.Count >= 2)
+            {
+                var values = points.Select(p => p.Rate).ToArray();
+                var mean = values.Average();
+                if (mean > 0)
+                {
+                    var variance = values.Select(v => (v - mean) * (v - mean)).Sum() / values.Length;
+                    var stddev = (decimal)Math.Sqrt((double)variance);
+                    vol = decimal.Round(stddev / mean, 4);
+                }
+            }
+
+            return Results.Ok(new RateTrendDto(rt.ToString(), id, decimal.Round(liveRate.Value, 4),
+                min12m, max12m, vol, points));
+        });
+
         // ── Bulk operations (20.12) ──────────────────────────────────────────
         // One action across many resources of a type. activate/deactivate flip
         // IsActive (Edit perm); delete removes them (Delete perm) but SKIPS any
@@ -333,6 +430,20 @@ public static class ResourceEndpoints
 
     private static IResult BadResourceType(string raw) =>
         Results.Json(new { error = $"Unknown resource type '{raw}'. Use labor|materials|equipment|subcontractors." }, statusCode: 400);
+
+    /// <summary>23.4 — Look up the live rate for a resource by type+id, returning null if
+    /// it doesn't exist. The "live rate" is the one currently on the resource row (per-hour
+    /// for Labor/Equipment, unit price for Material, unit rate for Subcontractor) — what an
+    /// estimate built TODAY would use. Used by the rate-trend endpoint to plant the final
+    /// data point and the "current" summary.</summary>
+    private static async Task<decimal?> GetLiveRateAsync(AppDbContext db, ResourceType type, int id) => type switch
+    {
+        ResourceType.Labor         => await db.LaborResources.Where(r => r.Id == id).Select(r => (decimal?)r.RatePerHour).FirstOrDefaultAsync(),
+        ResourceType.Material      => await db.MaterialResources.Where(r => r.Id == id).Select(r => (decimal?)r.UnitPrice).FirstOrDefaultAsync(),
+        ResourceType.Equipment     => await db.EquipmentResources.Where(r => r.Id == id).Select(r => (decimal?)r.RatePerHour).FirstOrDefaultAsync(),
+        ResourceType.Subcontractor => await db.Subcontractors.Where(r => r.Id == id).Select(r => (decimal?)r.UnitRate).FirstOrDefaultAsync(),
+        _ => null,
+    };
 
     // ── helpers ──────────────────────────────────────────────────────────────
     private static async Task<IResult?> Guard(ClaimsPrincipal me, PermissionService perm, ModuleAction action) =>
