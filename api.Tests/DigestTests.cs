@@ -30,7 +30,8 @@ public class DigestTests(ApiFixture fx)
     /// <paramref name="notifications"/> notifications. Returns the user id + email + the unique
     /// notification title used (so assertions can find this user's digest in the shared capture).</summary>
     async Task<(int userId, string email, string title)> SeedAsync(
-        string slug, DigestFrequency freq, DateTime? lastSentAt, int notifications, DateTime notifCreatedAt)
+        string slug, DigestFrequency freq, DateTime? lastSentAt, int notifications, DateTime notifCreatedAt,
+        DayOfWeek dayOfWeek = DayOfWeek.Monday)
     {
         using var scope = await fx.CreateScope(slug);
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -48,7 +49,7 @@ public class DigestTests(ApiFixture fx)
 
         db.NotificationDigestPreferences.Add(new NotificationDigestPreference
         {
-            UserId = user.Id, Frequency = freq, LastSentAt = lastSentAt,
+            UserId = user.Id, Frequency = freq, LastSentAt = lastSentAt, DayOfWeek = dayOfWeek,
         });
         var title = $"Digest update {tag}";
         for (var i = 0; i < notifications; i++)
@@ -217,5 +218,163 @@ public class DigestTests(ApiFixture fx)
 
         var resp = await user.PostAsJsonAsync("/api/digests/send-now", new { });
         Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    // ── 23.1 weekly-day cadence + preview + test send ─────────────────────────
+
+    // 2026-01-05 is a Monday; 2026-01-06 a Tuesday (used to drive DayOfWeek without
+    // depending on the wall clock).
+    static readonly DateTime MondayNoon  = new(2026, 1, 5, 12, 0, 0, DateTimeKind.Utc);
+    static readonly DateTime TuesdayNoon = new(2026, 1, 6, 12, 0, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public async Task Weekly_digest_fires_only_on_the_chosen_day_of_week()
+    {
+        // A "Weekly on Monday" preference is due on Monday but skipped on Tuesday, even
+        // though plenty of time has elapsed in both cases.
+        var (_, emailMon, titleMon) = await SeedAsync("default", DigestFrequency.Weekly,
+            lastSentAt: null, notifications: 1, notifCreatedAt: MondayNoon.AddMinutes(-10),
+            dayOfWeek: DayOfWeek.Monday);
+        var (_, emailTue, _) = await SeedAsync("default", DigestFrequency.Weekly,
+            lastSentAt: null, notifications: 1, notifCreatedAt: MondayNoon.AddMinutes(-10),
+            dayOfWeek: DayOfWeek.Tuesday);
+
+        await RunAllAsync(MondayNoon);
+
+        Assert.Contains(Mail.To(emailMon), m => m.Body.Contains(titleMon));
+        Assert.Empty(Mail.To(emailTue));   // Tuesday-scheduled user not due yet on Monday
+    }
+
+    [Fact]
+    public async Task Weekly_digest_skipped_within_six_days_even_on_the_right_day()
+    {
+        // Sent two days ago on the same weekday (impossible in practice but a useful guard
+        // against an off-by-one in the elapsed check). Even with DayOfWeek matching, the
+        // 6-day floor blocks a re-send.
+        var twoDaysBefore = MondayNoon.AddDays(-2);
+        var (_, email, _) = await SeedAsync("default", DigestFrequency.Weekly,
+            lastSentAt: twoDaysBefore, notifications: 1, notifCreatedAt: MondayNoon.AddMinutes(-5),
+            dayOfWeek: DayOfWeek.Monday);
+
+        await RunAllAsync(MondayNoon);
+
+        Assert.Empty(Mail.To(email));
+    }
+
+    [Fact]
+    public async Task Preview_returns_pending_notification_count_and_body()
+    {
+        var admin = await fx.AdminClientAsync();
+        // Opt the shared admin into Daily for the preview path; restore Off in finally so a
+        // later platform pass doesn't email them.
+        (await admin.PutAsJsonAsync("/api/digests/preferences", new { frequency = "Daily" })).EnsureSuccessStatusCode();
+        try
+        {
+            // Drop a notification for the admin so there's something to preview.
+            var tag = Guid.NewGuid().ToString("N");
+            var title = $"Preview update {tag}";
+            using (var scope = await fx.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var tc = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+                var adminUid = await db.Users.IgnoreQueryFilters()
+                    .Where(u => u.TenantId == tc.TenantId && u.Email == "admin@bidbuilder.local")
+                    .Select(u => u.Id).FirstAsync();
+                db.Notifications.Add(new Notification
+                {
+                    RecipientUserId = adminUid, Type = "test.preview", Title = title, Body = "Hi",
+                    CreatedAt = DateTime.UtcNow,
+                });
+                await db.SaveChangesAsync();
+            }
+
+            var resp = await admin.PostAsJsonAsync("/api/digests/preview", new { });
+            resp.EnsureSuccessStatusCode();
+            var body = await resp.Json();
+
+            Assert.True(body.GetProperty("itemCount").GetInt32() >= 1);
+            Assert.Contains(title, body.GetProperty("body").GetString() ?? "");
+            Assert.Contains("digest", body.GetProperty("subject").GetString() ?? "", StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            (await admin.PutAsJsonAsync("/api/digests/preferences", new { frequency = "Off" })).EnsureSuccessStatusCode();
+        }
+    }
+
+    [Fact]
+    public async Task Preview_does_not_advance_the_watermark()
+    {
+        var admin = await fx.AdminClientAsync();
+        (await admin.PutAsJsonAsync("/api/digests/preferences", new { frequency = "Daily" })).EnsureSuccessStatusCode();
+        try
+        {
+            var before = (await (await admin.GetAsync("/api/digests/preferences")).Json())
+                .GetProperty("lastSentAt");
+            (await admin.PostAsJsonAsync("/api/digests/preview", new { })).EnsureSuccessStatusCode();
+            var after = (await (await admin.GetAsync("/api/digests/preferences")).Json())
+                .GetProperty("lastSentAt");
+
+            // Both should serialize to the same JSON (null or identical timestamp).
+            Assert.Equal(before.GetRawText(), after.GetRawText());
+        }
+        finally
+        {
+            (await admin.PutAsJsonAsync("/api/digests/preferences", new { frequency = "Off" })).EnsureSuccessStatusCode();
+        }
+    }
+
+    [Fact]
+    public async Task Send_test_emails_caller_and_does_not_advance_watermark()
+    {
+        var admin = await fx.AdminClientAsync();
+        (await admin.PutAsJsonAsync("/api/digests/preferences", new { frequency = "Daily" })).EnsureSuccessStatusCode();
+        try
+        {
+            var before = (await (await admin.GetAsync("/api/digests/preferences")).Json())
+                .GetProperty("lastSentAt");
+
+            var resp = await admin.PostAsJsonAsync("/api/digests/test", new { });
+            resp.EnsureSuccessStatusCode();
+            var body = await resp.Json();
+            Assert.True(body.GetProperty("configured").GetBoolean());
+            Assert.True(body.GetProperty("sent").GetBoolean());
+
+            // Watermark unchanged — a test send must NOT count as the next scheduled digest.
+            var after = (await (await admin.GetAsync("/api/digests/preferences")).Json())
+                .GetProperty("lastSentAt");
+            Assert.Equal(before.GetRawText(), after.GetRawText());
+
+            // The captured email is addressed to the admin and carries the "[TEST]" marker.
+            var got = Mail.To("admin@bidbuilder.local");
+            Assert.Contains(got, m => m.Subject.StartsWith("[TEST]") || m.Subject.Contains("test digest", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            (await admin.PutAsJsonAsync("/api/digests/preferences", new { frequency = "Off" })).EnsureSuccessStatusCode();
+        }
+    }
+
+    [Fact]
+    public async Task Preferences_endpoint_round_trips_day_of_week_and_rejects_garbage()
+    {
+        var admin = await fx.AdminClientAsync();
+        try
+        {
+            (await admin.PutAsJsonAsync("/api/digests/preferences",
+                new { frequency = "Weekly", dayOfWeek = "Friday" })).EnsureSuccessStatusCode();
+            var get = await (await admin.GetAsync("/api/digests/preferences")).Json();
+            Assert.Equal("Weekly", get.GetProperty("frequency").GetString());
+            Assert.Equal("Friday", get.GetProperty("dayOfWeek").GetString());
+
+            var bad = await admin.PutAsJsonAsync("/api/digests/preferences",
+                new { frequency = "Weekly", dayOfWeek = "Funday" });
+            Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        }
+        finally
+        {
+            (await admin.PutAsJsonAsync("/api/digests/preferences",
+                new { frequency = "Off", dayOfWeek = "Monday" })).EnsureSuccessStatusCode();
+        }
     }
 }

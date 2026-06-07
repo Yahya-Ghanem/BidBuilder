@@ -9,11 +9,14 @@ using BidBuilder.Api.Tenancy;
 namespace BidBuilder.Api.Endpoints;
 
 /// <summary>The signed-in user's digest preference plus whether the platform can actually
-/// send (the toggle is moot when no SMTP transport is configured).</summary>
-public record DigestPreferenceDto(string Frequency, DateTime? LastSentAt, bool EmailConfigured);
+/// send (the toggle is moot when no SMTP transport is configured).
+/// 23.1 — Added <see cref="DayOfWeek"/> (only meaningful when Frequency=Weekly).</summary>
+public record DigestPreferenceDto(string Frequency, string DayOfWeek, DateTime? LastSentAt, bool EmailConfigured);
 
-/// <summary>Set the caller's digest frequency. <c>Off | Daily | Weekly</c>.</summary>
-public record DigestPreferenceInput(string Frequency);
+/// <summary>Set the caller's digest frequency (<c>Off | Daily | Weekly</c>) and, optionally,
+/// the day-of-week the weekly digest fires (any <see cref="System.DayOfWeek"/> name; defaults
+/// to Monday when omitted). Ignored for Daily/Off.</summary>
+public record DigestPreferenceInput(string Frequency, string? DayOfWeek);
 
 /// <summary>Admin trigger: a userId sends that one user a digest now (preview/test);
 /// omitted sends every opted-in user in the tenant immediately.</summary>
@@ -36,15 +39,26 @@ public static class DigestEndpoints
             var uid = me.Id();
             var pref = await db.NotificationDigestPreferences.FirstOrDefaultAsync(p => p.UserId == uid);
             return Results.Ok(new DigestPreferenceDto(
-                (pref?.Frequency ?? DigestFrequency.Off).ToString(), pref?.LastSentAt, email.Configured));
+                (pref?.Frequency ?? DigestFrequency.Off).ToString(),
+                (pref?.DayOfWeek ?? System.DayOfWeek.Monday).ToString(),
+                pref?.LastSentAt,
+                email.Configured));
         });
 
-        // Upsert the caller's frequency.
+        // Upsert the caller's frequency + day-of-week.
         grp.MapPut("/preferences", async (DigestPreferenceInput input, ClaimsPrincipal me, AppDbContext db, EmailService email) =>
         {
             if (!Enum.TryParse<DigestFrequency>(input.Frequency, ignoreCase: true, out var freq)
                 || !Enum.IsDefined(freq))
                 return Results.BadRequest(new { error = "Frequency must be Off, Daily, or Weekly." });
+
+            var dow = System.DayOfWeek.Monday;
+            if (!string.IsNullOrWhiteSpace(input.DayOfWeek))
+            {
+                if (!Enum.TryParse<System.DayOfWeek>(input.DayOfWeek, ignoreCase: true, out dow)
+                    || !Enum.IsDefined(dow))
+                    return Results.BadRequest(new { error = "DayOfWeek must be a valid weekday name (Sunday…Saturday)." });
+            }
 
             var uid = me.Id();
             var pref = await db.NotificationDigestPreferences.FirstOrDefaultAsync(p => p.UserId == uid);
@@ -54,9 +68,26 @@ public static class DigestEndpoints
                 db.NotificationDigestPreferences.Add(pref);
             }
             pref.Frequency = freq;
+            pref.DayOfWeek = dow;
             pref.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
-            return Results.Ok(new DigestPreferenceDto(pref.Frequency.ToString(), pref.LastSentAt, email.Configured));
+            return Results.Ok(new DigestPreferenceDto(
+                pref.Frequency.ToString(), pref.DayOfWeek.ToString(), pref.LastSentAt, email.Configured));
+        });
+
+        // 23.1 — Preview the next digest body without sending. Any signed-in user, for themselves.
+        grp.MapPost("/preview", async (ClaimsPrincipal me, ITenantContext tc, DigestService digest) =>
+        {
+            var p = await digest.PreviewForUserAsync(tc.TenantId, me.Id());
+            return Results.Ok(p);
+        });
+
+        // 23.1 — Send a one-off test digest to the caller's own email. Bypasses watermark.
+        grp.MapPost("/test", async (ClaimsPrincipal me, ITenantContext tc, DigestService digest, EmailService email) =>
+        {
+            if (!email.Configured) return Results.Ok(new { configured = false, sent = false });
+            var ok = await digest.SendTestForUserAsync(tc.TenantId, me.Id());
+            return Results.Ok(new { configured = true, sent = ok });
         });
 
         // Admin: send a digest now. With a userId → that one user (a preview that bypasses

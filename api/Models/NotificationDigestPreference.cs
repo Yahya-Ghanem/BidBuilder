@@ -28,6 +28,11 @@ public class NotificationDigestPreference : IHasTenant
 
     public DigestFrequency Frequency { get; set; } = DigestFrequency.Off;
 
+    /// <summary>23.1 — When <see cref="Frequency"/> is Weekly, the day-of-week the digest
+    /// is sent. Defaults to Monday (start-of-work-week). Ignored for Daily and Off.
+    /// Compared against <c>nowUtc.DayOfWeek</c> in <see cref="Services.DigestService"/>.</summary>
+    public DayOfWeek DayOfWeek { get; set; } = DayOfWeek.Monday;
+
     /// <summary>When the last digest was sent. Advanced on every send AND on an empty
     /// due-run, so it is both the "notifications since" cursor and the idempotency guard.
     /// Null = a digest has never been sent for this user.</summary>

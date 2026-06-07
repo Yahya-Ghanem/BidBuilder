@@ -104,12 +104,23 @@ export interface TenantSettings {
   emailConfigured: boolean
 }
 
-/** 22.1 — A user's email-digest opt-in. Frequency is "Off" | "Daily" | "Weekly". */
+/** 22.1 — A user's email-digest opt-in. Frequency is "Off" | "Daily" | "Weekly".
+ *  23.1 — `dayOfWeek` (Sunday…Saturday) gates the weekly send to a chosen weekday. */
 export interface DigestPreference {
   frequency: string
+  dayOfWeek: string
   lastSentAt: string | null
   /** Read-only: whether the platform SMTP transport is configured (else digests can't send). */
   emailConfigured: boolean
+}
+
+/** 23.1 — Preview body the next digest would carry, without sending or
+ *  advancing the user's watermark. `itemCount` is the number of pending notifications. */
+export interface DigestPreviewDto {
+  frequency: string
+  itemCount: number
+  subject: string
+  body: string
 }
 
 /** 21.2 — A programmatic API key (never carries the secret after creation).

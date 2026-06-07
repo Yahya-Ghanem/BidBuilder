@@ -613,6 +613,10 @@
       "DigestPreferenceInput": {
         "additionalProperties": false,
         "properties": {
+          "dayOfWeek": {
+            "nullable": true,
+            "type": "string"
+          },
           "frequency": {
             "nullable": true,
             "type": "string"
@@ -2637,6 +2641,18 @@
         ]
       }
     },
+    "/api/digests/preview": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
     "/api/digests/send-now": {
       "post": {
         "requestBody": {
@@ -2649,6 +2665,18 @@
           },
           "required": true
         },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/digests/test": {
+      "post": {
         "responses": {
           "200": {
             "description": "OK"
