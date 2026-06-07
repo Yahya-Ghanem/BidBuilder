@@ -12,24 +12,31 @@ import { test, expect } from "@playwright/test"
  *
  * Coverage:
  *   1. The login page renders and accepts the seeded admin credentials.
- *   2. After auth, /projects loads — the projects tree's "Untyped" group
- *      (the seeded sample has no project type) expands to surface the
- *      PRJ-2026-001 row. Proves API auth + tenant resolution + the projects
- *      query all wire end-to-end.
+ *   2. After auth, /projects loads — the projects tree's portfolio group that
+ *      contains PRJ-2026-001 expands to surface the project row. Proves API
+ *      auth + tenant resolution + the projects query all wire end-to-end.
  *   3. Direct navigation to the project detail page renders the new
  *      _components-based layout (header card, TeamsPanel, AreasPanel,
  *      EstimatesSection). Proves the 19.6 split kept route composition intact.
  *
  * Why fetch the project id via the API rather than click "Full display" in the
- * tree? The production UX (click Untyped → click project → click revision →
+ * tree? The production UX (click portfolio → click project → click revision →
  * double-click "Full display") is four fragile interactions for a smoke. The
  * direct goto proves the route composition just as well with one navigation.
+ *
+ * Why discover the portfolio name from the API? On the seed it's "Untyped",
+ * but on long-lived dev DBs the sample project drifts as admin/settings runs
+ * reclassify it. The spec used to hard-code "Untyped" and broke on live smoke
+ * once that happened. Reading projectTypeName from /api/projects mirrors the
+ * tree's own grouping (components/projects-tree.tsx:102) and stays correct
+ * regardless of drift.
  *
  * Deliberately NOT covered here: BOQ edits, publish flow, exports. Those have
  * solid API-level coverage in api.Tests/ and benefit less from a brittle UI test.
  */
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8081"
+const UNTYPED = "Untyped"
 
 test.describe("Happy path", () => {
   test("login → projects → open project", async ({ page, request }) => {
@@ -42,25 +49,27 @@ test.describe("Happy path", () => {
 
     await expect(page).toHaveURL(/\/projects/, { timeout: 15_000 })
 
-    // The projects tree groups by project type; the seeded sample has none, so
-    // it's under "Untyped". Expanding the group exposes the project row whose
-    // hint is the code "PRJ-2026-001" — proves the API auth + tenant + projects
-    // query are all wired correctly.
-    await page.getByText(/^Untyped/).click()
-    await expect(page.locator("text=PRJ-2026-001").first()).toBeVisible({ timeout: 10_000 })
-
-    // Read the authenticated session and discover the project id via the API,
-    // then goto the detail page directly — proves the extracted _components/
-    // still compose into the same route.
+    // Read the authenticated session and discover the seeded project via the
+    // API. Done before any tree interaction so the click target (portfolio
+    // header) reflects the project's *current* projectTypeName rather than a
+    // hard-coded "Untyped" that drifts on long-lived dev DBs.
     const token = await page.evaluate(() => localStorage.getItem("bb_token"))
     expect(token, "JWT should be in localStorage after login").toBeTruthy()
     const projectsRes = await request.get(`${API_URL}/api/projects`, {
       headers: { Authorization: `Bearer ${token}`, "X-Tenant-Id": "default" },
     })
     expect(projectsRes.ok(), `GET /api/projects → ${projectsRes.status()}`).toBeTruthy()
-    const projects = (await projectsRes.json()) as Array<{ id: number; code: string }>
+    const projects = (await projectsRes.json()) as Array<{ id: number; code: string; projectTypeName: string | null }>
     const seeded = projects.find((p) => p.code === "PRJ-2026-001")
     expect(seeded, "seeded project PRJ-2026-001 should exist").toBeTruthy()
+
+    // Expand the portfolio group that owns PRJ-2026-001. The header label is
+    // exactly projectTypeName (or "Untyped" when null) — matches the grouping
+    // logic in components/projects-tree.tsx. .first() guards against the name
+    // also appearing elsewhere in the tree (e.g. inside a project name row).
+    const portfolioName = seeded!.projectTypeName ?? UNTYPED
+    await page.getByText(portfolioName, { exact: true }).first().click()
+    await expect(page.locator("text=PRJ-2026-001").first()).toBeVisible({ timeout: 10_000 })
 
     await page.goto(`/projects/${seeded!.id}`)
     // Each landmark proves a different extracted module renders:
