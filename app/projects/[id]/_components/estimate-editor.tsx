@@ -6,7 +6,7 @@ import { FileDown, FileSpreadsheet, FileText, Table, Upload } from "lucide-react
 import { ApiError, downloadFile, fetchApi, uploadFile } from "@/lib/api"
 import type { Area, AssemblyRow, CostComponentType, CurrencyRates, EstimateBreakdown, EstimateSummary, ImportResult } from "@/lib/types"
 import { usePermissions } from "@/lib/permissions"
-import { Badge, Button, statusColor } from "@/components/ui"
+import { Badge, Button, DropdownButton, statusColor, type DropdownItem } from "@/components/ui"
 import { Select } from "@/components/form"
 import { Money } from "@/components/money"
 import { money } from "@/lib/utils"
@@ -227,12 +227,20 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
           )}
         </div>
         {canReports && (
-          <div className="flex gap-2">
-            <Button variant="outline" className="h-8 text-xs" onClick={() => dl("xlsx")}><FileSpreadsheet className="h-4 w-4" /> {t("ed.export.excel")}</Button>
-            <Button variant="outline" className="h-8 text-xs" onClick={() => dl("csv")}><Table className="h-4 w-4" /> {t("ed.export.csv")}</Button>
-            <Button variant="outline" className="h-8 text-xs" onClick={() => dl("pdf")}><FileText className="h-4 w-4" /> {t("ed.export.pdf")}</Button>
-            <Button variant="outline" className="h-8 text-xs" onClick={() => setBidLetter(true)}><FileText className="h-4 w-4" /> {t("ed.export.bidLetter")}</Button>
-          </div>
+          /* 25.4 — Export buttons (Excel + CSV + PDF + Bid Letter) collapsed
+             into a single Export ▾ dropdown so the meta header stays one row.
+             Same destinations, same handlers — only the affordance changes. */
+          <DropdownButton
+            ariaLabel={t("ed.export.aria")}
+            className="h-8 text-xs"
+            label={<><FileDown className="h-4 w-4" /> {t("ed.export")}</>}
+            items={[
+              { key: "xlsx", label: <><FileSpreadsheet className="h-4 w-4" /> {t("ed.export.excel")}</>, onSelect: () => dl("xlsx") },
+              { key: "csv", label: <><Table className="h-4 w-4" /> {t("ed.export.csv")}</>, onSelect: () => dl("csv") },
+              { key: "pdf", label: <><FileText className="h-4 w-4" /> {t("ed.export.pdf")}</>, onSelect: () => dl("pdf") },
+              { key: "bidLetter", label: <><FileText className="h-4 w-4" /> {t("ed.export.bidLetter")}</>, onSelect: () => setBidLetter(true) },
+            ] satisfies DropdownItem[]}
+          />
         )}
       </div>
       {locked && (

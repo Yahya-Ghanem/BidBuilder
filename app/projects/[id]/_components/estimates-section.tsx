@@ -7,14 +7,23 @@ import { Copy, FileStack, FolderInput, Plus, Save, Trash2 } from "lucide-react"
 import { fetchApi } from "@/lib/api"
 import { usePermissions } from "@/lib/permissions"
 import type { EstimateSummary, EstimateTemplate, Project } from "@/lib/types"
-import { Card, Button, Input } from "@/components/ui"
+import { Card, Button, DropdownButton, Input, type DropdownItem } from "@/components/ui"
 import { Field, Modal, Select, Textarea } from "@/components/form"
 import { money } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 import { EstimateEditor } from "./estimate-editor"
 
 /** Estimate revision picker: pick a revision, create blank / duplicate, view & edit it.
- *  The displayed revision is whatever the user picked OR the latest if none. */
+ *  The displayed revision is whatever the user picked OR the latest if none.
+ *
+ *  25.4 — Six lifecycle buttons (New / Duplicate / Copy to… / Save as template /
+ *  From template / Delete) used to wrap to a second row on a 1366-px viewport.
+ *  Now they live behind a single "Actions ▾" dropdown alongside the revision
+ *  picker, dropping the visible-control count from 7 to 2. The Delete entry is
+ *  rendered in destructive color and confirms via the existing `confirm()`
+ *  guard so a mis-click can't silently destroy a revision. */
 export function EstimatesSection({ projectId }: { projectId: number }) {
+  const t = useT()
   const qc = useQueryClient()
   const { can } = usePermissions()
   const canManage = can("estimate-admin", "add")
@@ -71,11 +80,62 @@ export function EstimatesSection({ projectId }: { projectId: number }) {
     )
   }
 
+  // 25.4 — Lifecycle actions collapsed into a single Actions ▾ dropdown so the
+  // revision strip fits in one row on a 1366-px viewport. Each entry mirrors
+  // the old button's disabled state; Delete keeps its destructive coloring and
+  // confirm() guard so a mis-click can't silently destroy a revision.
+  const actionItems: DropdownItem[] = []
+  if (canManage) {
+    actionItems.push({
+      key: "new",
+      label: <><Plus className="h-4 w-4" /> {t("rev.new")}</>,
+      disabled: createBlank.isPending,
+      onSelect: () => createBlank.mutate(`Revision ${(list[list.length - 1]?.revision ?? 0) + 1}`),
+    })
+    actionItems.push({
+      key: "duplicate",
+      label: <><Copy className="h-4 w-4" /> {t("rev.duplicate")}</>,
+      disabled: clone.isPending || currentId == null,
+      onSelect: () => { if (currentId != null) clone.mutate(currentId) },
+    })
+    actionItems.push({
+      key: "copyTo",
+      label: <><FolderInput className="h-4 w-4" /> {t("rev.copyTo")}</>,
+      disabled: currentId == null,
+      onSelect: () => setCopyOpen(true),
+    })
+    actionItems.push({
+      key: "saveAsTemplate",
+      label: <><Save className="h-4 w-4" /> {t("rev.saveAsTemplate")}</>,
+      disabled: currentId == null,
+      onSelect: () => setSaveTplOpen(true),
+    })
+    actionItems.push({
+      key: "fromTemplate",
+      label: <><FileStack className="h-4 w-4" /> {t("rev.fromTemplate")}</>,
+      onSelect: () => setFromTplOpen(true),
+    })
+  }
+  if (canDelete) {
+    actionItems.push({
+      key: "delete",
+      label: <><Trash2 className="h-4 w-4" /> {t("rev.delete")}</>,
+      danger: true,
+      disabled: del.isPending || currentId == null,
+      onSelect: () => {
+        const cur = list.find((e) => e.id === currentId)
+        if (cur && confirm(`Delete Rev ${cur.revision}? This permanently removes its BOQ, preliminaries and markups.`)) del.mutate(cur.id)
+      },
+    })
+  }
+
   return (
     <div className="space-y-4">
-      {/* 25.3 — Revision strip: just the dropdown + lifecycle actions. The
-          Compare button is gone from here — comparison lives in the Insights
-          tab below, beside the other cross-revision analyses. */}
+      {/* 25.4 — One-row revision strip: dropdown + Actions ▾. Lifecycle actions
+          (was 5–6 visible buttons that wrapped to a second row) are now collapsed
+          into the Actions menu; export buttons (4) are collapsed into Export ▾
+          inside EstimateEditor. The Compare control moved into the Insights tab
+          back in 25.3 and is no longer in the strip at all. */}
       <Card className="flex flex-wrap items-center justify-between gap-3 p-3">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-slate-600">Revision</span>
@@ -85,20 +145,13 @@ export function EstimatesSection({ projectId }: { projectId: number }) {
             ))}
           </Select>
         </div>
-        {(canManage || canDelete) && (
-          <div className="flex flex-wrap gap-2">
-            {canManage && <Button variant="outline" className="h-8 text-xs" disabled={createBlank.isPending} onClick={() => createBlank.mutate(`Revision ${(list[list.length - 1]?.revision ?? 0) + 1}`)}><Plus className="h-4 w-4" /> New</Button>}
-            {canManage && <Button variant="outline" className="h-8 text-xs" disabled={clone.isPending || currentId == null} onClick={() => currentId != null && clone.mutate(currentId)}><Copy className="h-4 w-4" /> Duplicate</Button>}
-            {canManage && <Button variant="outline" className="h-8 text-xs" disabled={currentId == null} onClick={() => setCopyOpen(true)}><FolderInput className="h-4 w-4" /> Copy to…</Button>}
-            {canManage && <Button variant="outline" className="h-8 text-xs" disabled={currentId == null} onClick={() => setSaveTplOpen(true)}><Save className="h-4 w-4" /> Save as template</Button>}
-            {canManage && <Button variant="outline" className="h-8 text-xs" onClick={() => setFromTplOpen(true)}><FileStack className="h-4 w-4" /> From template</Button>}
-            {canDelete && (
-              <Button variant="outline" className="h-8 text-xs text-rose-600 hover:bg-rose-50" disabled={del.isPending || currentId == null}
-                onClick={() => { const cur = list.find((e) => e.id === currentId); if (cur && confirm(`Delete Rev ${cur.revision}? This permanently removes its BOQ, preliminaries and markups.`)) del.mutate(cur.id) }}>
-                <Trash2 className="h-4 w-4" /> Delete
-              </Button>
-            )}
-          </div>
+        {actionItems.length > 0 && (
+          <DropdownButton
+            ariaLabel={t("rev.actions.aria")}
+            className="h-8 text-xs"
+            label={t("rev.actions")}
+            items={actionItems}
+          />
         )}
       </Card>
 
