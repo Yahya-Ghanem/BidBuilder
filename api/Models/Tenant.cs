@@ -26,6 +26,13 @@ public class Tenant
 
     /// <summary>When true, /auth/login refuses sign-ins for users in this tenant.</summary>
     public bool IsSuspended { get; set; }
+
+    /// <summary>23.3 — Tenant-scoped HMAC key (base64, 32 bytes) used by
+    /// <see cref="Services.PortalLinkSigner"/> to sign anonymous-portal URLs. Each tenant
+    /// gets its own so leaking one tenant's link secret never compromises another's.
+    /// Auto-generated on tenant creation; rotated by overwriting (existing signed links
+    /// then immediately fail validation, so rotation = an emergency revoke).</summary>
+    public string PortalSigningKey { get; set; } = "";
 }
 
 /// <summary>

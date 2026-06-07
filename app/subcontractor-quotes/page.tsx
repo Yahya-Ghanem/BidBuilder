@@ -69,12 +69,19 @@ function Register() {
     onError: (e) => toast.error((e as Error).message),
   })
 
-  function copyLink(q: SubcontractorQuote) {
-    const url = `${window.location.origin}${q.portalPath}`
-    navigator.clipboard.writeText(url).then(
-      () => toast.success("Portal link copied"),
-      () => toast.error("Could not copy — link: " + url),
-    )
+  // 23.3 — Fetch a freshly signed portal URL (HMAC+exp) from the backend and copy it
+  // to the clipboard. The default expiry is 7 days; the dropdown next to each row
+  // (24h / 7d / 30d) is plumbed through validDays.
+  async function copySignedLink(q: SubcontractorQuote, validDays = 7) {
+    try {
+      const r = await fetchApi<{ portalPath: string; expiresAt: string }>(
+        `/api/subcontractor-quotes/${q.id}/signed-link?validDays=${validDays}`)
+      const url = `${window.location.origin}${r.portalPath}`
+      await navigator.clipboard.writeText(url)
+      toast.success(`Portal link copied — expires ${r.expiresAt.slice(0, 10)}`)
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
   }
 
   return (
@@ -120,10 +127,18 @@ function Register() {
                   <td className="px-2 py-2">
                     <div className="flex items-center justify-end gap-1">
                       {(q.status === "Pending" || q.status === "Submitted") && (
-                        <button title="Copy portal link" onClick={() => copyLink(q)}
-                          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-[var(--brand)]">
-                          <Link2 className="h-3.5 w-3.5" />
-                        </button>
+                        // 23.3 — A small <details> popover so the row stays tidy. Click the link
+                        // icon to expand; pick an expiry (24h / 7d / 30d). One-click = 7 days.
+                        <details className="relative">
+                          <summary title="Copy signed portal link" className="list-none cursor-pointer rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-[var(--brand)]">
+                            <Link2 className="h-3.5 w-3.5" />
+                          </summary>
+                          <div className="absolute end-0 z-10 mt-1 flex flex-col gap-1 rounded-md border border-[var(--border)] bg-white p-1 shadow-md">
+                            <button onClick={() => copySignedLink(q, 1)}  className="rounded px-2 py-1 text-xs text-slate-700 hover:bg-slate-100 whitespace-nowrap text-start">Copy — 24 hours</button>
+                            <button onClick={() => copySignedLink(q, 7)}  className="rounded px-2 py-1 text-xs text-slate-700 hover:bg-slate-100 whitespace-nowrap text-start">Copy — 7 days</button>
+                            <button onClick={() => copySignedLink(q, 30)} className="rounded px-2 py-1 text-xs text-slate-700 hover:bg-slate-100 whitespace-nowrap text-start">Copy — 30 days</button>
+                          </div>
+                        </details>
                       )}
                       {canEdit && q.status === "Submitted" && (
                         <>
@@ -155,11 +170,8 @@ function Register() {
       {adding && <NewRequestModal onClose={() => setAdding(false)} onCreated={(q) => {
         setAdding(false)
         qc.invalidateQueries({ queryKey: ["subcontractor-quotes"] })
-        const url = `${window.location.origin}${q.portalPath}`
-        navigator.clipboard.writeText(url).then(
-          () => toast.success("Request created — portal link copied to clipboard"),
-          () => toast.success("Request created"),
-        )
+        // 23.3 — Auto-copy a signed 7-day link on create so the estimator can paste right away.
+        void copySignedLink(q, 7)
       }} />}
     </Card>
   )

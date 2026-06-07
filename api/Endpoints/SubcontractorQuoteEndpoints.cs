@@ -57,6 +57,9 @@ public static class SubcontractorQuoteEndpoints
         MapPublicPortal(app.MapGroup("/api/portal"));
     }
 
+    /// <summary>23.3 — Lightweight DTO returned by the new signed-link endpoint.</summary>
+    public record SignedLinkDto(string PortalPath, DateTime ExpiresAt);
+
     // ── Estimator-facing API ───────────────────────────────────────────────────
     private static void MapEstimatorApi(RouteGroupBuilder grp)
     {
@@ -73,7 +76,7 @@ public static class SubcontractorQuoteEndpoints
         // POST create an RFQ — mints the token + portal link.
         grp.MapPost("/", async (CreateSubQuoteInput input, ClaimsPrincipal me,
             AppDbContext db, PermissionService perms, AuditService audit,
-            EmailService email, ITenantContext tc) =>
+            EmailService email, ITenantContext tc, PortalLinkSigner signer) =>
         {
             if (!await perms.CanAsync(me, Module, ModuleAction.Add)) return Forbid();
 
@@ -114,7 +117,10 @@ public static class SubcontractorQuoteEndpoints
             if (quote.ContractorEmail is { Length: > 0 } toEmail)
             {
                 var company = await CompanyNameAsync(db, tc.TenantId);
-                var link = email.AbsoluteLink($"/portal/{quote.Token}");
+                // 23.3 — Email a SIGNED portal URL (default expiry) so the link the
+                // subcontractor receives carries the HMAC + expiry from day one.
+                var signedPath = await signer.SignAsync(tc.TenantId, quote.Token, validDays: null);
+                var link = email.AbsoluteLink(signedPath);
                 var body =
                     $"{company} has invited you to submit a quote for \"{trade}\" on project {project.Code} — {project.Name}.\n\n" +
                     $"Scope:\n{scope}\n\n" +
@@ -145,6 +151,19 @@ public static class SubcontractorQuoteEndpoints
             return Results.Ok(ToDto(quote));
         });
 
+        // 23.3 — Mint a freshly signed portal link with a caller-chosen expiry (default 7 days,
+        // clamped to [1, 365]). The estimator UI calls this to copy a time-bounded URL.
+        grp.MapGet("/{id:int}/signed-link", async (int id, int? validDays, ClaimsPrincipal me,
+            AppDbContext db, PermissionService perms, PortalLinkSigner signer, ITenantContext tc) =>
+        {
+            if (!await perms.CanAsync(me, Module, ModuleAction.View)) return Forbid();
+            var quote = await db.SubcontractorQuotes.FirstOrDefaultAsync(s => s.Id == id);
+            if (quote is null) return Results.NotFound(new { error = "Quote not found" });
+            var path = await signer.SignAsync(tc.TenantId, quote.Token, validDays);
+            var days = Math.Clamp(validDays ?? PortalLinkSigner.DefaultValidDays, 1, 365);
+            return Results.Ok(new SignedLinkDto(path, DateTime.UtcNow.AddDays(days)));
+        });
+
         // DELETE — revoke the RFQ (kills the portal link; keeps the record).
         grp.MapDelete("/{id:int}", async (int id, ClaimsPrincipal me,
             AppDbContext db, PermissionService perms, AuditService audit) =>
@@ -165,20 +184,29 @@ public static class SubcontractorQuoteEndpoints
     private static void MapPublicPortal(RouteGroupBuilder grp)
     {
         // GET the RFQ a subcontractor was invited to price.
-        grp.MapGet("/{token}", async (string token, AppDbContext db) =>
+        grp.MapGet("/{token}", async (string token, string? exp, string? sig,
+            AppDbContext db, PortalLinkSigner signer) =>
         {
             var quote = await FindByTokenAsync(db, token);
             if (quote is null) return Results.NotFound(new { error = "This link is not valid." });
+            // 23.3 — Validate sig/exp against the tenant's HMAC key. Per the PortalLinkSigner
+            // back-compat flag, a bare token (no sig+exp) is still accepted for one release.
+            var v = await signer.VerifyAsync(quote.TenantId, token, exp, sig);
+            if (!v.Ok) return PortalAuthFailed(v.Reason);
             var company = await CompanyNameAsync(db, quote.TenantId);
             return Results.Ok(ToPortalView(quote, company));
         }).AllowAnonymous();
 
         // POST the subcontractor's price. Allowed once, while Pending and unexpired.
-        grp.MapPost("/{token}", async (string token, PortalSubmitInput input,
-            AppDbContext db, ITenantContext tenantCtx, AuditService audit, NotificationService notif) =>
+        grp.MapPost("/{token}", async (string token, string? exp, string? sig, PortalSubmitInput input,
+            AppDbContext db, ITenantContext tenantCtx, AuditService audit, NotificationService notif,
+            PortalLinkSigner signer) =>
         {
             var quote = await FindByTokenAsync(db, token);
             if (quote is null) return Results.NotFound(new { error = "This link is not valid." });
+            // 23.3 — Same sig+exp check on submit, so a leaked signed URL can't be POST'd after expiry.
+            var v = await signer.VerifyAsync(quote.TenantId, token, exp, sig);
+            if (!v.Ok) return PortalAuthFailed(v.Reason);
 
             if (quote.Status == SubcontractorQuoteStatus.Revoked)
                 return Bad("This request has been withdrawn.");
@@ -251,4 +279,19 @@ public static class SubcontractorQuoteEndpoints
 
     private static IResult Bad(string msg) => Results.BadRequest(new { error = msg });
     private static IResult Forbid() => Results.Json(new { error = "You don't have access to subcontractor quotes." }, statusCode: 403);
+
+    /// <summary>23.3 — Map the PortalLinkSigner verdict to a single 401 with a precise reason
+    /// (so the public portal page can show "expired" vs "invalid" distinctly). "missing" is
+    /// returned when AllowUnsigned is off and no sig/exp was presented at all.</summary>
+    private static IResult PortalAuthFailed(string reason)
+    {
+        var message = reason switch
+        {
+            "expired"  => "This link has expired. Ask the sender for a fresh one.",
+            "invalid"  => "This link is invalid or has been tampered with.",
+            "missing"  => "This link is no longer valid. Ask the sender for a fresh one.",
+            _          => "This link is no longer valid.",
+        };
+        return Results.Json(new { error = message, reason }, statusCode: 401);
+    }
 }

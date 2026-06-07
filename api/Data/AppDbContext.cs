@@ -97,6 +97,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             // Unique only among rows that set it — many tenants have NULL.
             b.HasIndex(t => t.CustomDomain).IsUnique().HasFilter("\"CustomDomain\" IS NOT NULL");
             b.Property(t => t.DefaultLocale).HasMaxLength(8).IsRequired();
+            // 23.3 — HMAC key for signed anonymous-portal URLs (base64 of 32 random bytes ≈ 44 chars).
+            b.Property(t => t.PortalSigningKey).HasMaxLength(120).IsRequired();
         });
 
         // ── TenantSettings (1:1 with Tenant) ──────────────────────────────────

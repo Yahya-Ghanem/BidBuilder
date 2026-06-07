@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import { useQuery, useMutation } from "@tanstack/react-query"
 import { HardHat, CheckCircle2, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
@@ -20,10 +20,16 @@ import { money } from "@/lib/utils"
 export default function PortalPage() {
   const params = useParams<{ token: string }>()
   const token = params?.token ?? ""
+  // 23.3 — forward the optional signed-URL query params (exp + sig) so the API can
+  // validate the HMAC before serving the RFQ.
+  const searchParams = useSearchParams()
+  const exp = searchParams?.get("exp") ?? ""
+  const sig = searchParams?.get("sig") ?? ""
+  const qs = exp && sig ? `?exp=${encodeURIComponent(exp)}&sig=${encodeURIComponent(sig)}` : ""
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["portal", token],
-    queryFn: () => fetchApi<SubcontractorPortalView>(`/api/portal/${token}`),
+    queryKey: ["portal", token, exp, sig],
+    queryFn: () => fetchApi<SubcontractorPortalView>(`/api/portal/${token}${qs}`),
     retry: false,
   })
 
@@ -45,14 +51,14 @@ export default function PortalPage() {
             <p className="text-sm text-slate-600">{error instanceof ApiError ? error.message : "This link is not valid."}</p>
           </Card>
         ) : data ? (
-          <Body view={data} token={token} onSubmitted={() => refetch()} />
+          <Body view={data} token={token} qs={qs} onSubmitted={() => refetch()} />
         ) : null}
       </main>
     </div>
   )
 }
 
-function Body({ view, token, onSubmitted }: { view: SubcontractorPortalView; token: string; onSubmitted: () => void }) {
+function Body({ view, token, qs, onSubmitted }: { view: SubcontractorPortalView; token: string; qs: string; onSubmitted: () => void }) {
   const canSubmit = view.status === "Pending" && !view.expired
 
   return (
@@ -94,19 +100,19 @@ function Body({ view, token, onSubmitted }: { view: SubcontractorPortalView; tok
           <AlertTriangle className="h-4 w-4" /> This request has expired and is no longer accepting quotes.
         </Card>
       ) : (
-        <SubmitForm token={token} currency={view.currency} onSubmitted={onSubmitted} disabled={!canSubmit} />
+        <SubmitForm token={token} qs={qs} currency={view.currency} onSubmitted={onSubmitted} disabled={!canSubmit} />
       )}
     </div>
   )
 }
 
-function SubmitForm({ token, currency, onSubmitted, disabled }: { token: string; currency: string; onSubmitted: () => void; disabled: boolean }) {
+function SubmitForm({ token, qs, currency, onSubmitted, disabled }: { token: string; qs: string; currency: string; onSubmitted: () => void; disabled: boolean }) {
   const [amount, setAmount] = useState("")
   const [respondentName, setRespondentName] = useState("")
   const [notes, setNotes] = useState("")
 
   const submit = useMutation({
-    mutationFn: () => fetchApi<SubcontractorPortalView>(`/api/portal/${token}`, {
+    mutationFn: () => fetchApi<SubcontractorPortalView>(`/api/portal/${token}${qs}`, {
       method: "POST",
       body: JSON.stringify({ amount: Number(amount || 0), respondentName: respondentName.trim(), notes: notes.trim() || null }),
     }),
