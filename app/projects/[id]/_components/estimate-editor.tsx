@@ -8,6 +8,7 @@ import type { Area, AssemblyRow, CostComponentType, CurrencyRates, EstimateBreak
 import { usePermissions } from "@/lib/permissions"
 import { Badge, Button, statusColor } from "@/components/ui"
 import { Select } from "@/components/form"
+import { Money } from "@/components/money"
 import { money } from "@/lib/utils"
 import { useT } from "@/lib/i18n"
 import { ExpandCollapseAll, Row, Stat, useCollapse, type CompInput } from "./shared"
@@ -235,7 +236,7 @@ export function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number
       )}
       {e.fx && (
         <p className="text-sm text-slate-500">
-          ≈ <b className="text-slate-700">{money(e.fx.convertedBidPrice, e.fx.secondaryCurrency)}</b>
+          ≈ <Money className="text-slate-700 font-bold" as="span" value={e.fx.convertedBidPrice} currency={e.fx.secondaryCurrency} />
           {" "}· 1 {c} = {e.fx.rate.toLocaleString(undefined, { maximumFractionDigits: 6 })} {e.fx.secondaryCurrency}
           {" "}· {e.fx.frozen ? `${t("ed.fx.frozen")}${e.fx.frozenAt ? " " + e.fx.frozenAt.slice(0, 10) : ""}` : t("ed.fx.live")}
         </p>

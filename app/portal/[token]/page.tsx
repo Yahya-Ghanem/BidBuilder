@@ -9,7 +9,7 @@ import { fetchApi, ApiError } from "@/lib/api"
 import type { SubcontractorPortalView } from "@/lib/types"
 import { Card, Button, Input } from "@/components/ui"
 import { Field, Textarea } from "@/components/form"
-import { money } from "@/lib/utils"
+import { Money } from "@/components/money"
 
 /**
  * 20.6 — Public subcontractor quote portal. NO login: the unguessable token in
@@ -88,7 +88,10 @@ function Body({ view, token, qs, onSubmitted }: { view: SubcontractorPortalView;
             <span className="text-sm font-semibold">Quote received — thank you.</span>
           </div>
           <p className="text-sm text-slate-600">
-            You quoted <span className="font-semibold">{money(view.quotedAmount ?? 0)} {view.currency}</span>
+            {/* 25.1 — Was "AED 187,500.50 USD" or similar dup: `money(...)` defaulted
+                the currency to AED and then `{view.currency}` was appended as a
+                trailing suffix. <Money> takes the currency as a required prop. */}
+            You quoted <Money className="font-semibold" value={view.quotedAmount ?? 0} currency={view.currency} />
             {view.respondentName ? <> as {view.respondentName}</> : null}.
           </p>
           {view.submissionNotes && <p className="text-sm text-slate-500">“{view.submissionNotes}”</p>}

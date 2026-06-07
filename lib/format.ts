@@ -30,6 +30,23 @@ export function formatCurrency(value: number, currency = "AED", locale: Locale =
   }).format(value)
 }
 
+/**
+ * 25.1 — Compose the full text the `<Money>` component renders, including any
+ * secondary (FX-converted) currency. Pure, so unit tests can assert the full
+ * visible string in one place — most importantly, that the primary currency
+ * code never appears twice (the "AED 187,500.50 AED" anti-pattern).
+ */
+export function composeMoney(
+  value: number,
+  currency: string,
+  locale: Locale = "en",
+  secondary?: { value: number; currency: string },
+): string {
+  const primary = formatCurrency(value, currency, locale)
+  if (!secondary) return primary
+  return `${primary} ≈ ${formatCurrency(secondary.value, secondary.currency, locale)}`
+}
+
 /** Format a date (Date or ISO string) in the locale's medium style (Western digits).
  *  Returns the input string unchanged if it isn't a parseable date. */
 export function formatDate(value: string | Date, locale: Locale = "en", opts: Intl.DateTimeFormatOptions = { dateStyle: "medium" }): string {

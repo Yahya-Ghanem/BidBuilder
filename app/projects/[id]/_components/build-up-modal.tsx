@@ -3,7 +3,7 @@ import { useState } from "react"
 import type { CostComponentType } from "@/lib/types"
 import { Modal } from "@/components/form"
 import { Input, Button } from "@/components/ui"
-import { money } from "@/lib/utils"
+import { Money } from "@/components/money"
 import type { CompInput } from "./shared"
 
 /** Edit a BOQ item / activity's unit-rate build-up. Amount components are entered as
@@ -67,7 +67,7 @@ export function BuildUpModal({ open, onClose, costTypes, currency, initial, onSa
                 <Input type="number" step="0.0001" value={pct[t.id] ?? ""} placeholder="0"
                        onChange={(e) => setPct({ ...pct, [t.id]: e.target.value })} />
                 <span />
-                <span className="text-right text-xs text-slate-500">{money(amountSubtotal * n(pct, t.id) / 100, currency)}</span>
+                <Money className="text-right text-xs text-slate-500" value={amountSubtotal * n(pct, t.id) / 100} currency={currency} />
               </>
             ) : (
               <>
@@ -75,14 +75,14 @@ export function BuildUpModal({ open, onClose, costTypes, currency, initial, onSa
                        onChange={(e) => setQty({ ...qty, [t.id]: e.target.value })} />
                 <Input type="number" step="0.0001" value={rate[t.id] ?? ""} placeholder="0"
                        onChange={(e) => setRate({ ...rate, [t.id]: e.target.value })} />
-                <span className="text-right text-xs text-slate-500">{money(lineAmount(t.id), currency)}</span>
+                <Money className="text-right text-xs text-slate-500" value={lineAmount(t.id)} currency={currency} />
               </>
             )}
           </div>
         ))}
       </div>
       <div className="mt-4 flex items-center justify-between border-t border-[var(--border)] pt-3">
-        <span className="text-sm font-semibold">Unit rate: {money(unitRate, currency)}</span>
+        <span className="text-sm font-semibold">Unit rate: <Money value={unitRate} currency={currency} /></span>
         <div className="flex gap-2">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={save}>Apply</Button>

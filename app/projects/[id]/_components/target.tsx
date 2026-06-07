@@ -6,7 +6,7 @@ import { Target } from "lucide-react"
 import { fetchApi } from "@/lib/api"
 import { Card, Button, Input } from "@/components/ui"
 import { Field } from "@/components/form"
-import { money } from "@/lib/utils"
+import { Money } from "@/components/money"
 import { useT } from "@/lib/i18n"
 
 /** Solve the commercial adjustment to land the bid on a target price (the final
@@ -49,13 +49,13 @@ export function TargetPanel({ estimateId, currency, currentBid, currentAdjustmen
         <p className="mt-2 text-sm text-slate-600">
           {t("ed.target.adjPrefix")}{" "}
           <b className={preview.requiredAdjustment >= 0 ? "text-emerald-600" : "text-rose-600"}>
-            {preview.requiredAdjustment >= 0 ? "+" : ""}{money(preview.requiredAdjustment, currency)}
-          </b>{" "}{t("ed.target.toBid")} {money(preview.targetBidPrice, currency)}
+            {preview.requiredAdjustment >= 0 ? "+" : ""}<Money value={preview.requiredAdjustment} currency={currency} />
+          </b>{" "}{t("ed.target.toBid")} <Money value={preview.targetBidPrice} currency={currency} />
         </p>
       )}
       {currentAdjustment !== 0 && (
         <p className="mt-2 flex items-center justify-between text-sm text-slate-500">
-          <span>{t("ed.target.current")} <b className="text-slate-700">{currentAdjustment > 0 ? "+" : ""}{money(currentAdjustment, currency)}</b></span>
+          <span>{t("ed.target.current")} <b className="text-slate-700">{currentAdjustment > 0 ? "+" : ""}<Money value={currentAdjustment} currency={currency} /></b></span>
           {canApply && <button onClick={() => clear.mutate()} className="text-xs text-slate-400 hover:text-rose-600">{t("ed.target.clear")}</button>}
         </p>
       )}

@@ -4,7 +4,7 @@ import { toast } from "sonner"
 import { downloadFile } from "@/lib/api"
 import { Button, Input } from "@/components/ui"
 import { Field, Modal, Textarea } from "@/components/form"
-import { money } from "@/lib/utils"
+import { Money } from "@/components/money"
 
 /** Bid submission letter: a small form over the auto-filled tender cover letter PDF.
  *  Blank fields fall back to server defaults (recipient = client, signatory = you, 90 days). */
@@ -42,7 +42,7 @@ export function BidLetterModal({ estimateId, bidPrice, currency, onClose }: { es
   return (
     <Modal open onClose={onClose} title="Bid submission letter">
       <form id="bid-letter-form" onSubmit={submit} className="space-y-3">
-        <p className="text-xs text-slate-500">Tender sum <b>{money(bidPrice, currency)}</b>. Leave a field blank to use the default (recipient = client, signatory = you, validity = 90 days).</p>
+        <p className="text-xs text-slate-500">Tender sum <b><Money value={bidPrice} currency={currency} /></b>. Leave a field blank to use the default (recipient = client, signatory = you, validity = 90 days).</p>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Recipient name"><Input value={to} onChange={(e) => setTo(e.target.value)} placeholder="(client)" /></Field>
           <Field label="Recipient title"><Input value={toTitle} onChange={(e) => setToTitle(e.target.value)} placeholder="e.g. Tender Committee" /></Field>

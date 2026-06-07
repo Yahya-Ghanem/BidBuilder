@@ -5,6 +5,7 @@ import { GitCompareArrows, X } from "lucide-react"
 import { fetchApi } from "@/lib/api"
 import type { CompareView, EstimateSummary } from "@/lib/types"
 import { Card, Badge, statusColor } from "@/components/ui"
+import { Money } from "@/components/money"
 import { money } from "@/lib/utils"
 
 /**
@@ -181,7 +182,7 @@ function Cell({ value, baseline, currency, isBaseline, mixed }: {
   if (value == null) return <td className="px-3 py-1.5 text-right tabular-nums text-slate-300">—</td>
   return (
     <td className="px-3 py-1.5 text-right tabular-nums">
-      <span className="text-slate-700">{money(value, currency)}</span>
+      <Money className="text-slate-700" value={value} currency={currency} />
       {!isBaseline && !mixed && baseline != null && <Delta value={value} baseline={baseline} />}
     </td>
   )

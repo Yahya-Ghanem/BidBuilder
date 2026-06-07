@@ -5,6 +5,7 @@ import type { Area, AssemblyRow, CostComponentType, ItemBreakdown, SectionBreakd
 import { Button, Input } from "@/components/ui"
 import { Field, Select } from "@/components/form"
 import { money, cn } from "@/lib/utils"
+import { Money } from "@/components/money"
 import { CollapseToggle, ITEM_KINDS, kindLabel, type CompInput } from "./shared"
 import { BuildUpModal } from "./build-up-modal"
 
@@ -40,7 +41,7 @@ export function SectionBlock({ section, currency, assemblies, costTypes, areas, 
           {!open && section.items.length > 0 && <span className="text-xs font-normal text-slate-400">· {section.items.length} item(s)</span>}
         </span>
         <div className="flex items-center gap-3">
-          <span className="font-semibold">{money(section.sectionTotal, currency)}</span>
+          <Money className="font-semibold" value={section.sectionTotal} currency={currency} />
           {canDelete && <button onClick={onDelSection} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
         </div>
       </div>
@@ -172,9 +173,9 @@ export function ItemRow({ item, currency, costTypes, areas, canEdit, canDelete, 
         {adHoc && canEdit && !hasComps
           ? <Input className="w-24 py-1 text-right" type="number" step="0.0001" defaultValue={item.unitRate}
               onBlur={(ev) => { const r = Number(ev.target.value); if (r !== item.unitRate) onUpd({ ...base, quantity: item.quantity, unitRate: r }) }} />
-          : <span className="text-slate-600">{money(item.unitRate, currency)}</span>}
+          : <Money className="text-slate-600" value={item.unitRate} currency={currency} />}
       </td>
-      <td className="px-4 py-1.5 text-right font-medium">{money(item.lineTotal, currency)}</td>
+      <td className="px-4 py-1.5 text-right font-medium"><Money value={item.lineTotal} currency={currency} /></td>
       <td className="px-2 py-1.5 text-right">
         <div className="flex items-center justify-end gap-1">
           {adHoc && canEdit && (

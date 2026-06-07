@@ -5,7 +5,7 @@ import { toast } from "sonner"
 import { fetchApi } from "@/lib/api"
 import type { CashFlowMonth, CashFlowProjection, EstimateBreakdown, RiskBreakdown } from "@/lib/types"
 import { Card, Button } from "@/components/ui"
-import { money } from "@/lib/utils"
+import { Money } from "@/components/money"
 import { ifMatchHeaders } from "./shared"
 
 /**
@@ -46,7 +46,7 @@ export function RiskAndCashFlowPanel({ estimateId, currency, risks, suggestedAmo
         <div className="flex flex-wrap items-center gap-3">
           <div className="rounded-md border border-[var(--border)] px-3 py-2 text-xs">
             <span className="text-slate-500">Suggested EV </span>
-            <span className="font-semibold tabular-nums">{money(suggestedAmount, currency)}</span>
+            <Money className="font-semibold tabular-nums" value={suggestedAmount} currency={currency} />
             <span className="ml-2 text-slate-500">≈ </span>
             <span className="font-semibold tabular-nums">{suggestedPct.toFixed(2)}%</span>
           </div>
@@ -79,8 +79,8 @@ export function RiskAndCashFlowPanel({ estimateId, currency, risks, suggestedAmo
                 <td className="px-2 py-1">{r.title}{r.note ? <span className="ml-1 text-slate-400" title={r.note}>·</span> : null}</td>
                 <td className="px-2 py-1 text-slate-600">{r.category}</td>
                 <td className="px-2 py-1 text-right tabular-nums">{r.probabilityPct.toFixed(2)}%</td>
-                <td className="px-2 py-1 text-right tabular-nums">{money(r.impactAmount, currency)}</td>
-                <td className="px-2 py-1 text-right tabular-nums font-medium">{money(r.expectedValue, currency)}</td>
+                <td className="px-2 py-1 text-right tabular-nums"><Money value={r.impactAmount} currency={currency} /></td>
+                <td className="px-2 py-1 text-right tabular-nums font-medium"><Money value={r.expectedValue} currency={currency} /></td>
                 <td className="px-2 py-1 text-right">
                   {canEdit && (
                     <button onClick={() => { if (confirm(`Remove "${r.title}"?`)) delRisk.mutate(r.id) }}
@@ -100,7 +100,7 @@ export function RiskAndCashFlowPanel({ estimateId, currency, risks, suggestedAmo
         <div className="rounded-md border border-[var(--border)] p-3">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-semibold">Cash-flow S-curve</span>
-            <span className="text-xs text-slate-500">{cashFlow.durationMonths} mo · total {money(cashFlow.total, currency)}</span>
+            <span className="text-xs text-slate-500">{cashFlow.durationMonths} mo · total <Money value={cashFlow.total} currency={currency} /></span>
           </div>
           <SCurveSparkline months={cashFlow.monthly} />
           <table className="mt-2 w-full text-[11px]">
@@ -114,8 +114,8 @@ export function RiskAndCashFlowPanel({ estimateId, currency, risks, suggestedAmo
               {cashFlow.monthly.map((m) => (
                 <tr key={m.month} className="border-t border-[var(--border)]">
                   <td className="px-1 py-0.5">{m.month}</td>
-                  <td className="px-1 py-0.5 text-right tabular-nums">{money(m.spend, currency)}</td>
-                  <td className="px-1 py-0.5 text-right tabular-nums">{money(m.cumulative, currency)}</td>
+                  <td className="px-1 py-0.5 text-right tabular-nums"><Money value={m.spend} currency={currency} /></td>
+                  <td className="px-1 py-0.5 text-right tabular-nums"><Money value={m.cumulative} currency={currency} /></td>
                   <td className="px-1 py-0.5 text-right tabular-nums">{cashFlow.total > 0 ? ((m.cumulative / cashFlow.total) * 100).toFixed(1) : "0.0"}%</td>
                 </tr>
               ))}

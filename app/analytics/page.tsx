@@ -21,6 +21,10 @@ import { AppShell } from "@/components/app-shell"
 import { Card, Input, TableScroll } from "@/components/ui"
 import { Modal, Field, ModalActions } from "@/components/form"
 import { usePermissions } from "@/lib/permissions"
+import { Money } from "@/components/money"
+// 25.1 — `money()` is kept for non-JSX contexts (passed to Stat's string-typed
+// `value` prop on line 88; Stat would need its prop type widened to ReactNode
+// to accept <Money>).
 import { money } from "@/lib/utils"
 
 /**
@@ -135,7 +139,8 @@ function BucketTable({ title, rows }: { title: string; rows: BidAnalyticsBucket[
                       </span>}
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums">
-                  {money(b.awardedValueSum ?? 0)}
+                  {/* 25.1 — TODO: confirm currency source */}
+                  <Money value={b.awardedValueSum ?? 0} currency="AED" />
                   {b.mixedCurrency && <span className="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] uppercase text-amber-800" title="Aggregated across multiple project currencies — see register below for the mix.">mixed</span>}
                 </td>
               </tr>
@@ -188,8 +193,8 @@ function Register({ rows, onChanged }: { rows: BidRegisterRow[]; onChanged: () =
                   <td className="px-4 py-2 text-slate-600">{r.projectTypeName ?? <span className="text-slate-300">—</span>}</td>
                   <td className="px-4 py-2"><StatusPill status={r.status ?? "(unknown)"} /></td>
                   <td className="px-4 py-2 text-slate-500">{r.decisionAt?.slice(0,10) ?? <span className="text-slate-300">—</span>}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{r.submittedBidValue == null ? <span className="text-slate-300">—</span> : money(r.submittedBidValue)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{r.awardedValue == null ? <span className="text-slate-300">—</span> : money(r.awardedValue)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{r.submittedBidValue == null ? <span className="text-slate-300">—</span> : <Money value={r.submittedBidValue} currency={r.currency ?? "AED"} />}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{r.awardedValue == null ? <span className="text-slate-300">—</span> : <Money value={r.awardedValue} currency={r.currency ?? "AED"} />}</td>
                   <td className="px-4 py-2 text-right tabular-nums">
                     {/* Generated types make optional fields `undefined`-bearing, so `== null` (loose)
                         is the right test — it catches both null and undefined in one check. */}
@@ -198,7 +203,7 @@ function Register({ rows, onChanged }: { rows: BidRegisterRow[]; onChanged: () =
                           {r.bidVsAwardPct > 0 ? "+" : ""}{r.bidVsAwardPct.toFixed(2)}%
                         </span>}
                   </td>
-                  <td className="px-4 py-2 text-right tabular-nums">{r.finalCost == null ? <span className="text-slate-300">—</span> : money(r.finalCost)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{r.finalCost == null ? <span className="text-slate-300">—</span> : <Money value={r.finalCost} currency={r.currency ?? "AED"} />}</td>
                   <td className="px-2 py-2">
                     {canEdit && (
                       <button onClick={() => setEditing(r)} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Record outcome">

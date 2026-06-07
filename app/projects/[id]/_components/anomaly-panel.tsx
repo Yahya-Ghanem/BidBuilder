@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query"
 import { fetchApi } from "@/lib/api"
 import type { AnomalyReport } from "@/lib/types"
 import { Badge, Button } from "@/components/ui"
-import { money } from "@/lib/utils"
+import { Money } from "@/components/money"
 import { useT } from "@/lib/i18n"
 
 /**
@@ -96,8 +96,8 @@ export function AnomalyPanel({ estimateId, currency }: { estimateId: number; cur
                           {it.unit} · n={it.sampleSize}
                         </div>
                       </td>
-                      <td className="px-2 py-1 text-end tabular-nums">{money(it.unitRate, currency)}</td>
-                      <td className="px-2 py-1 text-end tabular-nums">{money(it.historicalMedian, currency)}</td>
+                      <td className="px-2 py-1 text-end tabular-nums"><Money value={it.unitRate} currency={currency} /></td>
+                      <td className="px-2 py-1 text-end tabular-nums"><Money value={it.historicalMedian} currency={currency} /></td>
                       <td className="px-2 py-1 text-end tabular-nums">{it.medianMultiple.toFixed(2)}×</td>
                       <td className="px-2 py-1 text-end tabular-nums">{it.zScore.toFixed(1)}</td>
                       <td className="px-2 py-1 text-[var(--muted-foreground)]">{it.reason}</td>

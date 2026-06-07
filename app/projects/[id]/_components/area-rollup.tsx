@@ -5,7 +5,7 @@ import { FileSpreadsheet, FileText, FolderTree, Table } from "lucide-react"
 import { fetchApi } from "@/lib/api"
 import type { AreaRollup, AreaRollupRow } from "@/lib/types"
 import { Card, Button } from "@/components/ui"
-import { money } from "@/lib/utils"
+import { Money } from "@/components/money"
 import { CollapseToggle, ExpandCollapseAll, useCollapse } from "./shared"
 
 /** Per-estimate cost roll-up: item line totals escalated up the area tree. */
@@ -29,8 +29,8 @@ export function AreaRollupPanel({ estimateId, currency, canExport, onExport }: {
             {a.name} <span className="ml-1 text-xs text-slate-400">{a.kind}{a.itemCount ? ` · ${a.itemCount} item${a.itemCount > 1 ? "s" : ""}` : ""}{a.quantity > 0 ? ` · ${a.quantity}${a.unit ? ` ${a.unit}` : ""}` : ""}{!open && kids.length > 0 ? ` · ${kids.length} sub-area${kids.length > 1 ? "s" : ""}` : ""}</span>
           </span>
           <span className="text-right">
-            <span className="font-medium">{money(a.rollupTotal, currency)}</span>
-            {a.costPerUnit != null && <span className="ml-2 text-xs text-slate-400">{money(a.costPerUnit, currency)}/{a.unit || "unit"}</span>}
+            <Money className="font-medium" value={a.rollupTotal} currency={currency} />
+            {a.costPerUnit != null && <span className="ml-2 text-xs text-slate-400"><Money value={a.costPerUnit} currency={currency} />/{a.unit || "unit"}</span>}
           </span>
         </div>
         {open && kids.map((k) => <RollupRow key={k.id} a={k} depth={depth + 1} />)}
@@ -65,8 +65,8 @@ export function AreaRollupPanel({ estimateId, currency, canExport, onExport }: {
       </div>
       {childrenOf(null).map((r) => <RollupRow key={r.id} a={r} depth={0} />)}
       <div className="mt-2 flex items-center justify-between border-t border-[var(--border)] pt-2 text-sm">
-        <span className="text-slate-500">Assigned to areas{data.unassignedTotal > 0 ? ` · unassigned ${money(data.unassignedTotal, currency)}` : ""}</span>
-        <span className="font-semibold">{money(data.assignedTotal, currency)}</span>
+        <span className="text-slate-500">Assigned to areas{data.unassignedTotal > 0 ? <> · unassigned <Money value={data.unassignedTotal} currency={currency} /></> : ""}</span>
+        <span className="font-semibold"><Money value={data.assignedTotal} currency={currency} /></span>
       </div>
     </Card>
   )

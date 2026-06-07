@@ -11,7 +11,8 @@ import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input, Badge, TableScroll } from "@/components/ui"
 import { Modal, Field } from "@/components/form"
-import { money, cn } from "@/lib/utils"
+import { Money } from "@/components/money"
+import { cn } from "@/lib/utils"
 
 type StatusFilter = "active" | "all" | "inactive"
 
@@ -67,7 +68,8 @@ export default function AssembliesPage() {
                     </td>
                     <td className="px-4 py-2 text-slate-500">{a.unit}</td>
                     <td className="px-4 py-2 text-right">{a.componentCount}</td>
-                    <td className="px-4 py-2 text-right font-medium">{money(a.computedRate)}</td>
+                    {/* 25.1 — TODO: confirm currency source */}
+                    <td className="px-4 py-2 text-right"><Money className="font-medium" value={a.computedRate} currency="AED" /></td>
                   </tr>
                 ))}
               </tbody>

@@ -12,6 +12,7 @@ import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input, TableScroll } from "@/components/ui"
 import { Modal, Field } from "@/components/form"
 import { money } from "@/lib/utils"
+import { Money } from "@/components/money"
 import { useI18n } from "@/lib/i18n"
 
 type Kind = "labor" | "materials" | "equipment" | "subcontractors"
@@ -124,7 +125,7 @@ function ResourceTable({ cfg }: { cfg: TabCfg }) {
                   <td className="px-4 py-2 text-slate-500">{r.unit}</td>
                   <td className="px-4 py-2 text-end">
                     <span className="inline-flex items-center justify-end gap-1">
-                      <span className="tabular-nums">{money((r[cfg.rateField] as number) ?? 0, "AED", locale)}</span>
+                      <Money value={(r[cfg.rateField] as number) ?? 0} currency="AED" />
                       <RateTrendCell apiType={cfg.apiType} id={r.id} />
                     </span>
                   </td>
@@ -247,7 +248,7 @@ function ResourceEditor({ cfg, row, onClose }: { cfg: TabCfg; row: ResourceRow |
                 <>
                   <div className="mb-2 flex items-center justify-between">
                     <span className="font-medium text-slate-700">
-                      {t("resources.aiSuggested")} <span className="font-mono">{money(s.suggestedRate, "AED", locale)}</span>
+                      {t("resources.aiSuggested")} <Money className="font-mono" value={s.suggestedRate} currency="AED" />
                     </span>
                     <div className="flex items-center gap-2">
                       {confidenceChip(s.confidence)}
@@ -259,7 +260,7 @@ function ResourceEditor({ cfg, row, onClose }: { cfg: TabCfg; row: ResourceRow |
                       {s.comparables.slice(0, 5).map((c, i) => (
                         <li key={i} className="flex items-center justify-between text-slate-500">
                           <span className="truncate max-w-[55%]">{c.name}</span>
-                          <span className="font-mono text-slate-700">{money(c.rate, "AED", locale)}/{c.unit}</span>
+                          <span className="font-mono text-slate-700"><Money value={c.rate} currency="AED" />/{c.unit}</span>
                         </li>
                       ))}
                     </ul>
