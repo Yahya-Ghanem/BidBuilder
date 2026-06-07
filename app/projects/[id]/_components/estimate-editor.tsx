@@ -129,7 +129,7 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
   }
 
   if (isLoading) return <p className="text-slate-400">Loading estimate…</p>
-  if (error) return <p className="text-rose-600">{(error as Error).message}</p>
+  if (error) return <p className="text-danger">{(error as Error).message}</p>
   const e = data!
   const c = e.currency
   // A Published/Superseded revision is locked: content edits are blocked server-side,
@@ -222,7 +222,7 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
                        else updateMeta.mutate({ title: e.title, pricingDate: v })
                      }} />
               {e.pricingDate && (
-                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium uppercase text-amber-800">{t("ed.historicalPricing")}</span>
+                <span className="rounded bg-warning-soft px-1.5 py-0.5 text-[10px] font-medium uppercase text-warning">{t("ed.historicalPricing")}</span>
               )}
             </label>
           )}
@@ -245,7 +245,7 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
         )}
       </div>
       {locked && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <div className="rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-warning">
           {t("ed.lockedBanner", { status: e.status })}
         </div>
       )}

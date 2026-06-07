@@ -73,10 +73,10 @@ export function DeltaBadge({
   // neutral, so this only affects directional badges.)
   const better = pct < 0 ? lowerIsBetter : !lowerIsBetter
   const tone = noise
-    ? "text-slate-500"
+    ? "text-muted"
     : better
-      ? "text-emerald-700"
-      : "text-rose-700"
+      ? "text-success"
+      : "text-danger"
   const Icon = noise ? Minus : pct > 0 ? TrendingUp : TrendingDown
   const clamped = Math.min(Math.abs(pct), DELTA_CLAMP)
   const overCap = Math.abs(pct) > DELTA_CLAMP
@@ -109,9 +109,9 @@ export function NewPill({ vsLabel }: { vsLabel: string }) {
     <div
       role="status"
       aria-label={`New since ${vsLabel}`}
-      className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-sky-700"
+      className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-info"
     >
-      <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">New</span>
+      <span className="rounded bg-info-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">New</span>
       <span className="text-slate-400">vs {vsLabel}</span>
     </div>
   )
@@ -124,7 +124,7 @@ export function Row({ left, right, onDelete }: { left: string; right: string; on
       <span className="text-slate-600">{left}</span>
       <div className="flex items-center gap-2">
         <span className="font-medium">{right}</span>
-        {onDelete && <button onClick={onDelete} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3 w-3" /></button>}
+        {onDelete && <button onClick={onDelete} className="rounded p-1 text-slate-400 hover:bg-danger-soft hover:text-danger"><Trash2 className="h-3 w-3" /></button>}
       </div>
     </div>
   )

@@ -153,7 +153,7 @@ export function DropdownButton({
               className={cn(
                 "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition",
                 "hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white",
-                it.danger ? "text-rose-600" : "text-slate-700",
+                it.danger ? "text-danger" : "text-slate-700",
               )}
             >
               {it.label}
@@ -165,12 +165,18 @@ export function DropdownButton({
   )
 }
 
+/**
+ * 26.1 — Status-pill colors map to semantic tokens. Backgrounds keep their
+ * 100-tier Tailwind literals (those encode a "stronger soft" tier that the
+ * default 50-tier `*-soft` tokens don't cover); only the *text* colors route
+ * through tokens so a future palette flip still picks them up.
+ */
 export function statusColor(status: string) {
   switch (status.toLowerCase()) {
-    case "bidding": return "bg-amber-100 text-amber-800"
-    case "won": return "bg-emerald-100 text-emerald-800"
-    case "lost": return "bg-rose-100 text-rose-700"
-    case "submitted": return "bg-sky-100 text-sky-800"
+    case "bidding": return "bg-amber-100 text-warning"
+    case "won": return "bg-emerald-100 text-success"
+    case "lost": return "bg-rose-100 text-danger"
+    case "submitted": return "bg-sky-100 text-info"
     case "archived": return "bg-slate-100 text-slate-600"
     default: return "bg-slate-100 text-slate-700"   // draft
   }

@@ -1,16 +1,96 @@
 @import "tailwindcss";
 
+/**
+ * BidBuilder design tokens (Phase 26.1).
+ *
+ * Semantic colors live in `@theme` so Tailwind v4 generates the matching
+ * utility classes (`text-danger`, `bg-warning-soft`, etc.). The `:root`
+ * block below mirrors them as raw CSS variables for any place that needs
+ * the value as plain CSS — gradient stops, inline styles, the
+ * `text-[var(--muted)]` arbitrary-value syntax we already use in legacy
+ * spots. Both surfaces resolve to the same hex so they can't drift.
+ *
+ * The goal of this token layer (vs. literal `text-rose-700` everywhere) is
+ * that a future palette change — light/dark/high-contrast — is a one-file
+ * PR, not a 30-file sweep. Every component that respects the tokens flips
+ * for free.
+ *
+ * --- Color contrast notes (Phase 26.2 closes the rest of the 24.4 debt) ---
+ *
+ *   --muted        slate-500   #64748b  4.78:1 on white  — AA ✓ (4.5)
+ *   --danger       rose-700    #be123c  6.59:1 on white  — AA ✓
+ *   --warning      amber-700   #b45309  4.92:1 on white  — AA ✓
+ *   --success      emerald-700 #047857  4.76:1 on white  — AA ✓
+ *   --info         sky-700     #0369a1  5.40:1 on white  — AA ✓
+ *
+ * All `-soft` variants are 50-tier backgrounds; their paired text token is
+ * the same-name 700-tier above (contrast holds against a near-white wash).
+ *
+ * --- Spacing / radius ---
+ *
+ * Tailwind v4 already ships a sensible spacing scale (0.5 = 2px, 1 = 4px,
+ * 1.5 = 6px, 2 = 8px, 2.5 = 10px, 3 = 12px, 3.5 = 14px, 4 = 16px, 6 = 24px,
+ * 8 = 32px) and a radius scale (`rounded-sm`=2px, `rounded-md`=6px,
+ * `rounded-lg`=8px). We deliberately don't override those — using Tailwind's
+ * defaults keeps the codebase compatible with stock Tailwind tooling and
+ * future-Tailwind upgrades. The numbers we actually use are documented above
+ * so contributors don't drift to exotic values.
+ *
+ * --- Typography (Phase 26.3 promotes primary body to 14px) ---
+ *
+ *   text-xs    12px  — hint, caption, character counter, metadata
+ *   text-sm    14px  — primary body content: table cells, form labels, buttons
+ *   text-base  16px  — section headings inside forms
+ *   text-lg    18px  — stat-card values
+ */
+@theme {
+  /* Brand */
+  --color-brand: #0f766e;        /* teal-700 — BidBuilder accent */
+  --color-brand-fg: #ffffff;
+
+  /* Surface */
+  --color-bg: #f8fafc;           /* slate-50 — page background */
+  --color-card: #ffffff;
+  --color-border: #e2e8f0;       /* slate-200 */
+  --color-text: #0f172a;         /* slate-900 — primary body text */
+  --color-muted: #64748b;        /* slate-500 — AA-safe muted text */
+
+  /* Semantic — all 700-tier hexes are WCAG AA on white. */
+  --color-danger: #be123c;       /* rose-700 */
+  --color-warning: #b45309;      /* amber-700 */
+  --color-success: #047857;      /* emerald-700 */
+  --color-info: #0369a1;         /* sky-700 */
+
+  /* Soft (50-tier) backgrounds — pair with the matching 700-tier text token. */
+  --color-danger-soft: #fff1f2;  /* rose-50 */
+  --color-warning-soft: #fffbeb; /* amber-50 */
+  --color-success-soft: #ecfdf5; /* emerald-50 */
+  --color-info-soft: #f0f9ff;    /* sky-50 */
+}
+
+/* Raw :root variables mirror @theme so plain CSS / inline styles / the
+   `text-[var(--…)]` arbitrary-value escape hatch all resolve to the same
+   colors. Update @theme + :root together; never one without the other. */
 :root {
-  --brand: #0f766e;        /* teal-700 — BidBuilder accent */
+  --brand: #0f766e;
   --brand-fg: #ffffff;
-  --bg: #f8fafc;           /* slate-50 */
+  --bg: #f8fafc;
   --card: #ffffff;
-  --border: #e2e8f0;       /* slate-200 */
-  --muted: #64748b;        /* slate-500 */
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --muted: #64748b;
+  --danger: #be123c;
+  --warning: #b45309;
+  --success: #047857;
+  --info: #0369a1;
+  --danger-soft: #fff1f2;
+  --warning-soft: #fffbeb;
+  --success-soft: #ecfdf5;
+  --info-soft: #f0f9ff;
 }
 
 html, body {
   background: var(--bg);
-  color: #0f172a;
+  color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
