@@ -17,6 +17,7 @@ import { ApprovalPanel } from "./approval-panel"
 import { AddMarkup, AddPrelim } from "./prelim-markup-controls"
 import { RiskAndCashFlowPanel } from "./risk-cashflow"
 import { AreaRollupPanel } from "./area-rollup"
+import { AnomalyPanel } from "./anomaly-panel"
 import { ActivitiesPanel } from "./activities"
 import { BidLetterModal } from "./bid-letter-modal"
 
@@ -279,6 +280,9 @@ export function EstimateEditor({ estimateId, canEditMeta }: { estimateId: number
       )}
 
       <AreaRollupPanel estimateId={estimateId} currency={c} canExport={canReports} onExport={dlCostByArea} />
+
+      {/* 23.5 — Cost-anomaly scan. Lazy: only fetches after the user clicks Scan. */}
+      <AnomalyPanel estimateId={estimateId} currency={c} />
 
       {bidLetter && <BidLetterModal estimateId={estimateId} bidPrice={e.bidPriceInclTax} currency={c} onClose={() => setBidLetter(false)} />}
 

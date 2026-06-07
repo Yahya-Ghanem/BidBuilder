@@ -332,6 +332,17 @@ public static class EstimateEndpoints
             return bd is null ? NotFound() : Results.Ok(bd);
         }).AllowWhenFinalised();
 
+        // GET cost-anomaly report — flags BOQ lines whose UnitRate is statistically
+        // out of line with the tenant's historical priced lines (same unit, optional
+        // description-token narrowing). Read-only; safe on any status. boq View.
+        // 23.5.
+        grp.MapGet("/{id:int}/anomalies", async (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, CostAnomalyService anomalies) =>
+        {
+            var g = await Guard(me, id, Boq, ModuleAction.View, access, perm); if (g is not null) return g;
+            var report = await anomalies.AnalyzeAsync(id);
+            return Results.Ok(report);
+        }).AllowWhenFinalised();
+
         // POST reconcile — recompute and report whether the cached totals have drifted
         // from a clean recomputation (the safety net for the denormalised money cache).
         // Read-only by default; persists the corrected totals only with ?commit=true.

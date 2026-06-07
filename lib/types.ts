@@ -139,6 +139,33 @@ export interface RateTrendDto {
   points: RateTrendPoint[]
 }
 
+/** 23.5 — One BOQ line flagged as anomalous in a tenant cost-anomaly scan. */
+export interface AnomalyItem {
+  itemId: number
+  sectionId: number
+  itemCode: string
+  description: string
+  unit: string
+  quantity: number
+  unitRate: number
+  lineTotal: number
+  historicalMean: number
+  historicalMedian: number
+  zScore: number
+  medianMultiple: number
+  severity: "high" | "medium"
+  reason: string
+  sampleSize: number
+}
+
+/** 23.5 — Cost-anomaly scan summary for an estimate. */
+export interface AnomalyReport {
+  estimateId: number
+  itemsScanned: number
+  itemsFlagged: number
+  items: AnomalyItem[]
+}
+
 /** 21.2 — A programmatic API key (never carries the secret after creation).
  *  22.2 adds scopes, an optional per-minute rate limit, and live usage.
  *  23.2 adds an optional CIDR allowlist (empty array = any IP). */
