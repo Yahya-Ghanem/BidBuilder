@@ -18,7 +18,10 @@ import { money } from "@/lib/utils"
  * currency the deltas are hidden (you can't subtract AED from USD) and a
  * warning is shown instead — each column is still formatted in its own currency.
  */
-export function CompareRevisions({ estimates, onClose }: { estimates: EstimateSummary[]; onClose: () => void }) {
+// 25.3 — `onClose` is now optional. The Insights tab embeds this panel inline
+// with no close affordance; the original revision-bar toggle in EstimatesSection
+// kept the X button for parity with that flow.
+export function CompareRevisions({ estimates, onClose }: { estimates: EstimateSummary[]; onClose?: () => void }) {
   // Selection order matters: the first picked revision is the baseline. A Set
   // preserves insertion order, so iterating it yields the column order.
   const [selected, setSelected] = useState<number[]>(() => estimates.slice(0, 2).map((e) => e.id))
@@ -45,9 +48,11 @@ export function CompareRevisions({ estimates, onClose }: { estimates: EstimateSu
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
           <GitCompareArrows className="h-4 w-4 text-[var(--brand)]" /> Compare revisions
         </h3>
-        <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Close comparison">
-          <X className="h-4 w-4" />
-        </button>
+        {onClose && (
+          <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Close comparison">
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Revision picker — tick 2 to 4. The order you tick sets the baseline (first). */}
