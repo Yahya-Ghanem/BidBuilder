@@ -370,6 +370,23 @@ export interface EstimateBreakdown {
   cashFlow: CashFlowProjection
   rowVersion: string
   fx: FxView | null
+  /** 25.5 — Percent change of each cached total against revision N-1 in the
+   *  same project. Null when this IS revision 1 (no previous to compare to).
+   *  Each per-card percent is null when the previous value was zero
+   *  (div-by-0 guard) — the frontend reads null as "no badge for this card". */
+  previousDelta: PreviousRevisionDelta | null
+}
+
+/** 25.5 — Per-card percent change vs. the immediately-prior revision.
+ *  Positive = current is HIGHER than previous (frontend decides the color
+ *  based on whether that direction is "better" for that particular card). */
+export interface PreviousRevisionDelta {
+  fromRevision: number
+  directCostPct: number | null
+  indirectCostPct: number | null
+  markupCostPct: number | null
+  bidPricePct: number | null
+  bidPriceInclTaxPct: number | null
 }
 
 // ── Dated resource rates + supplier quotes (18.3) ────────────────────────────

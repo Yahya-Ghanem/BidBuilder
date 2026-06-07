@@ -287,6 +287,9 @@ const en: Dict = {
   "stab.workspace":      "Workspace",
   "stab.catalogues":     "Catalogues",
   "stab.integrations":   "Integrations",
+  // ── Stat cards: trend deltas + per-unit toggle (25.5) ──────────────────
+  "stat.perUnit.toggle": "Per {unit}",
+  "stat.perUnit.aria":   "Show totals per {unit}",
 }
 
 const ar: Dict = {
@@ -559,6 +562,9 @@ const ar: Dict = {
   "stab.workspace":      "مساحة العمل",
   "stab.catalogues":     "الكتالوجات",
   "stab.integrations":   "التكاملات",
+  // ── بطاقات الإحصاء: دلتا الاتجاه + التبديل لكل وحدة (25.5) ────────────
+  "stat.perUnit.toggle": "لكل {unit}",
+  "stat.perUnit.aria":   "عرض الإجماليات لكل {unit}",
 }
 
 export const messages: Record<Locale, Dict> = { en, ar }

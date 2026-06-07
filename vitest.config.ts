@@ -10,6 +10,9 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["lib/**/*.test.ts", "tests/**/*.test.ts"],
+    // app/**/*.test.ts added in 25.5 so the StatCards divisor helper can be
+    // unit-tested next to its source. lib/ remains the home for shared helpers;
+    // app/ tests should be small + pure (no React rendering).
+    include: ["lib/**/*.test.ts", "tests/**/*.test.ts", "app/**/*.test.ts"],
   },
 })

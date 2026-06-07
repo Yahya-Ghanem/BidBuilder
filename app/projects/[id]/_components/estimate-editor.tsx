@@ -12,7 +12,8 @@ import { Money } from "@/components/money"
 import { money } from "@/lib/utils"
 import { useT } from "@/lib/i18n"
 import { Tabs } from "@/components/tabs"
-import { ExpandCollapseAll, Row, Stat, useCollapse, type CompInput } from "./shared"
+import { ExpandCollapseAll, Row, useCollapse, type CompInput } from "./shared"
+import { StatCards } from "./stat-cards"
 import { AddItemForm as _UnusedAddItemForm, AddSection, SectionBlock } from "./boq"
 import { WhatIfPanel } from "./what-if"
 import { TargetPanel } from "./target"
@@ -248,21 +249,16 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
           {t("ed.lockedBanner", { status: e.status })}
         </div>
       )}
-      {/* 25.3 — Stat cards: ALWAYS visible above the tab strip (and sticky just
-          below the project header so the bid total never leaves the screen while
-          the user scrolls deep into a tab). The top offset `top-[100px]` clears
-          the sticky project header above; if you change the header's padding,
-          re-tune this number. */}
-      <div className="sticky top-[100px] z-10 -mx-4 grid gap-4 bg-slate-50/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:grid-cols-4 sm:px-6">
-        <Stat label={t("ed.stat.directCost")} value={money(e.directCost, c)} />
-        <Stat label={t("ed.stat.indirect")} value={money(e.indirectCost, c)} />
-        <Stat label={t("ed.stat.markups")} value={money(e.markupCost, c)} />
-        <Stat label={e.taxAmount > 0 ? t("ed.stat.bidExclTax") : t("ed.stat.bidPrice")} value={money(e.bidPrice, c)} highlight={e.taxAmount <= 0} />
-        {e.taxAmount > 0 && <Stat label={t("ed.stat.vat", { pct: e.taxRatePct ?? 0 })} value={money(e.taxAmount, c)} />}
-        {e.taxAmount > 0 && <Stat label={t("ed.stat.totalInclTax")} value={money(e.bidPriceInclTax, c)} highlight />}
-        {e.alternatesTotal > 0 && <Stat label={t("ed.stat.alternates")} value={money(e.alternatesTotal, c)} />}
-        {e.commercialAdjustment !== 0 && <Stat label={t("ed.stat.commercialAdj")} value={money(e.commercialAdjustment, c)} />}
-      </div>
+      {/* 25.3 + 25.5 — Stat cards: ALWAYS visible above the tab strip (sticky
+          just below the project header so the bid total never leaves the screen
+          while the user scrolls deep into a tab). 25.5 extracted the grid into
+          <StatCards> which adds per-card trend deltas vs. the prior revision
+          and a "Per m²/room/unit" toggle when the project has areas with a
+          positive top-level quantity. The top offset `top-[100px]` still
+          clears the sticky project header — re-tune if header padding changes. */}
+      {/* key on e.id forces remount when the user switches revisions so the
+          per-estimate per-unit-toggle preference is freshly read from localStorage. */}
+      <StatCards key={e.id} e={e} areas={areas.data} />
       {e.markupCost > 0 && (
         <p className="text-sm text-slate-500">{t("ed.grossMargin")} <b className="text-slate-700">{e.marginOnPricePct}%</b> <span className="text-slate-400">{t("ed.markupsOnCost")}</span></p>
       )}
