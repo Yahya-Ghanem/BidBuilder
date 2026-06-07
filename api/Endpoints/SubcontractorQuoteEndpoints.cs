@@ -72,7 +72,8 @@ public static class SubcontractorQuoteEndpoints
 
         // POST create an RFQ — mints the token + portal link.
         grp.MapPost("/", async (CreateSubQuoteInput input, ClaimsPrincipal me,
-            AppDbContext db, PermissionService perms, AuditService audit) =>
+            AppDbContext db, PermissionService perms, AuditService audit,
+            EmailService email, ITenantContext tc) =>
         {
             if (!await perms.CanAsync(me, Module, ModuleAction.Add)) return Forbid();
 
@@ -106,6 +107,21 @@ public static class SubcontractorQuoteEndpoints
             quote.Project = project;
             await audit.LogAsync(me, "subcontractor-quote.create", "SubcontractorQuote", quote.Id.ToString(),
                 $"RFQ to {contractor} for {trade} on {project.Code}");
+
+            // 21.1 — email the portal link to the subcontractor when an address was given
+            // and the platform SMTP transport + tenant toggle allow it. Best-effort: a
+            // mail failure never fails the RFQ (the estimator can still copy the link).
+            if (quote.ContractorEmail is { Length: > 0 } toEmail)
+            {
+                var company = await CompanyNameAsync(db, tc.TenantId);
+                var link = email.AbsoluteLink($"/portal/{quote.Token}");
+                var body =
+                    $"{company} has invited you to submit a quote for \"{trade}\" on project {project.Code} — {project.Name}.\n\n" +
+                    $"Scope:\n{scope}\n\n" +
+                    (link is null ? "" : $"Submit your price here:\n{link}\n\n") +
+                    $"This request expires on {quote.ExpiresAt:yyyy-MM-dd} (UTC).";
+                await email.SendAsync(toEmail, contractor, $"Quote request: {trade} — {company}", body);
+            }
             return Results.Created($"/api/subcontractor-quotes/{quote.Id}", ToDto(quote));
         });
 

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { ImageIcon, Trash2, Upload, Plus, Check } from "lucide-react"
+import { ImageIcon, Trash2, Upload, Plus, Check, Mail } from "lucide-react"
 import { fetchApi, uploadFile, fetchObjectUrl } from "@/lib/api"
 import type { TenantSettings, CurrencyRate, CurrencyRates, CostComponentType, ActivityType, ProjectType } from "@/lib/types"
 import { AppShell } from "@/components/app-shell"
@@ -94,6 +94,10 @@ function SettingsForm() {
         </div>
       </Card>
 
+      {/* 21.1 — Email notifications. The toggle persists with "Save settings"; the
+          test button verifies the platform SMTP transport end-to-end. */}
+      <EmailCard f={f} setF={setF} ro={ro} isAdmin={isAdmin} />
+
       {isAdmin
         ? <Button disabled={save.isPending} onClick={() => save.mutate(f)}>{save.isPending ? "Saving…" : "Save settings"}</Button>
         : <p className="text-xs text-slate-400">Only a tenant admin can edit settings.</p>}
@@ -106,6 +110,60 @@ function SettingsForm() {
       <SsoCard isAdmin={isAdmin} />
       <WebhooksCard isAdmin={isAdmin} />
     </div>
+  )
+}
+
+/** 21.1 — Email-notification toggle + a "send test email" action. The toggle edits
+ *  the shared settings state so it saves with the page's "Save settings" button; the
+ *  test send is independent and only enabled when the platform transport is configured. */
+function EmailCard({ f, setF, ro, isAdmin }: { f: TenantSettings; setF: (s: TenantSettings) => void; ro: boolean; isAdmin: boolean }) {
+  const [testing, setTesting] = useState(false)
+
+  async function sendTest() {
+    setTesting(true)
+    try {
+      const r = await fetchApi<{ configured: boolean; sent: boolean }>("/api/settings/email/test", { method: "POST" })
+      if (!r.configured) toast.error("Platform email transport is not configured.")
+      else if (r.sent) toast.success("Test email sent — check your inbox.")
+      else toast.error("Email is configured but the test send failed. Check the server logs.")
+    } catch (e) { toast.error((e as Error).message) } finally { setTesting(false) }
+  }
+
+  return (
+    <Card className="space-y-4 p-5">
+      <div>
+        <h3 className="text-sm font-semibold text-slate-600">Email notifications</h3>
+        <p className="text-xs text-slate-400">
+          Email a copy of in-app notifications (estimate publish / approvals / subcontractor quotes) to your
+          workspace's users, and email subcontractor RFQ invites. Requires the platform SMTP transport to be configured.
+        </p>
+      </div>
+
+      <label className="flex items-center gap-2 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          checked={f.notificationEmailsEnabled}
+          disabled={ro}
+          onChange={(e) => setF({ ...f, notificationEmailsEnabled: e.target.checked })}
+        />
+        Email notification copies to this workspace's users
+      </label>
+
+      <p className="text-xs">
+        {f.emailConfigured
+          ? <span className="text-emerald-600">Platform email transport is configured.</span>
+          : <span className="text-amber-600">Platform email transport is not configured — set the SMTP environment variables to enable sending.</span>}
+      </p>
+
+      {isAdmin && (
+        <div className="flex items-center gap-3">
+          <Button variant="outline" className="h-8 text-xs" disabled={testing || !f.emailConfigured} onClick={sendTest}>
+            <Mail className="h-4 w-4" /> {testing ? "Sending…" : "Send test email"}
+          </Button>
+          <span className="text-xs text-slate-400">The toggle is saved with “Save settings”.</span>
+        </div>
+      )}
+    </Card>
   )
 }
 

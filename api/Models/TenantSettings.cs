@@ -36,6 +36,13 @@ public class TenantSettings : IHasTenant
     /// PUT returns 409 with details if the threshold isn't met.</summary>
     public int RequiredApprovalsToPublish { get; set; }
 
+    /// <summary>21.1 — When true (default), the tenant's users receive an email copy
+    /// of the in-app notifications they're sent (publish / under-review / approval /
+    /// subcontractor-quote events), and subcontractor RFQ invites are emailed. A tenant
+    /// admin can turn this off without affecting the platform's global SMTP transport.
+    /// Email is only ever sent when the platform SMTP transport is also configured.</summary>
+    public bool NotificationEmailsEnabled { get; set; } = true;
+
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // ── Navigation ─────────────────────────────────────────────────────────────

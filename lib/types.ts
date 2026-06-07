@@ -98,6 +98,10 @@ export interface TenantSettings {
   requiredApprovalsToPublish: number
   /** 20.11 — the tenant's vanity host, or null if none is registered. */
   customDomain: string | null
+  /** 21.1 — whether this tenant emails notification copies (admin-toggleable). */
+  notificationEmailsEnabled: boolean
+  /** 21.1 — read-only: whether the platform's SMTP transport is configured. */
+  emailConfigured: boolean
 }
 
 /** 20.2 — One recorded sign-off on an estimate revision. */

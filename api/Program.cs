@@ -85,6 +85,13 @@ builder.Services.AddScoped<BidBuilder.Api.Services.RateCascadeService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.ExportService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.ImportService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.AuditService>();
+// 21.1 — Outbound email. The SMTP transport is a singleton (stateless, reads bound
+// options); the EmailService layer (recipient resolution + tenant toggle + link
+// building) is scoped because it uses the request DbContext. Both no-op unless the
+// Email section is configured + enabled, so a deployment without SMTP is unaffected.
+builder.Services.Configure<BidBuilder.Api.Services.EmailOptions>(builder.Configuration.GetSection("Email"));
+builder.Services.AddSingleton<BidBuilder.Api.Services.IEmailSender, BidBuilder.Api.Services.SmtpEmailSender>();
+builder.Services.AddScoped<BidBuilder.Api.Services.EmailService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.NotificationService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<BidBuilder.Api.Services.IWebhookSender, BidBuilder.Api.Services.HttpWebhookSender>();

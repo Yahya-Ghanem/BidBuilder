@@ -11,17 +11,19 @@ namespace BidBuilder.Api.Services;
 /// notification must never break the action that prompted it. TenantId is
 /// auto-stamped by <see cref="AppDbContext"/>.
 /// </summary>
-public class NotificationService(AppDbContext db, ILogger<NotificationService> logger)
+public class NotificationService(AppDbContext db, EmailService email, ILogger<NotificationService> logger)
 {
     /// <summary>Fan a single event out to a set of recipients (deduped; invalid
-    /// ids dropped). A no-op when the audience is empty.</summary>
+    /// ids dropped). A no-op when the audience is empty. After the in-app rows are
+    /// written, the same audience is emailed (21.1) — best-effort, gated by the
+    /// platform SMTP transport and the tenant's notification-email toggle.</summary>
     public async Task NotifyAsync(IEnumerable<int> recipientUserIds, string type, string title,
         string? body = null, string? link = null, string? entityType = null, string? entityKey = null)
     {
+        var ids = recipientUserIds.Where(id => id > 0).Distinct().ToList();
+        if (ids.Count == 0) return;
         try
         {
-            var ids = recipientUserIds.Where(id => id > 0).Distinct().ToList();
-            if (ids.Count == 0) return;
             foreach (var uid in ids)
                 db.Notifications.Add(new Notification
                 {
@@ -34,6 +36,10 @@ public class NotificationService(AppDbContext db, ILogger<NotificationService> l
         {
             logger.LogWarning(ex, "Notification write failed: {Type} {EntityKey}", type, entityKey);
         }
+
+        // Email the same audience (separate try/catch inside) — an email failure must
+        // never undo or hide the in-app notifications that were just written.
+        await email.NotifyByEmailAsync(ids, title, body, link);
     }
 
     /// <summary>Active TenantAdmins in the current tenant (the approver/coordinator

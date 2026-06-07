@@ -62,6 +62,32 @@ Run it: `docker compose -f docker-compose.prod.yml up -d --build`
 2. `POST /api/auth/login` with the admin creds → token.
 3. `GET /api/projects` with the token → the seeded project.
 
+## Email / SMTP (21.1)
+
+Outbound transactional email is **off by default**; the app never sends mail unless
+the platform SMTP transport is both enabled and configured. When it is, BidBuilder emails:
+
+- a copy of in-app notifications (estimate publish / approval-needed / new approval /
+  subcontractor-quote received) to the same audience the bell notifies, and
+- the portal link of a subcontractor RFQ to the contractor's address on creation.
+
+Configure it via environment variables (see `.env.example`):
+
+| Env var | Meaning |
+|---|---|
+| `Email__Enabled` | Master switch — must be `true` to send anything. |
+| `Email__Host` / `Email__Port` | SMTP server (port defaults to 587). |
+| `Email__Username` / `Email__Password` | SMTP credentials. **Secret** — set from the environment / a secret store, never in `appsettings`. |
+| `Email__UseSsl` | STARTTLS / SSL (default `true`). |
+| `Email__FromAddress` / `Email__FromName` | Envelope From. |
+| `Email__AppBaseUrl` | Base URL for absolute links in emails (defaults to the first `AllowedOrigins` / `PUBLIC_URL`). |
+
+Each tenant can opt its workspace out under **Settings → Email notifications**
+(`NotificationEmailsEnabled`, default on). A tenant admin can verify the transport with
+**Send test email** (`POST /api/settings/email/test`), which mails the calling admin and
+reports whether the transport is configured and the send succeeded. Sending is best-effort:
+a mail failure is logged and swallowed — it never breaks the action that triggered it.
+
 ## Per-tenant custom domains (20.11)
 
 A workspace can be reached at its own host (e.g. `bids.acme.com`). A tenant admin
