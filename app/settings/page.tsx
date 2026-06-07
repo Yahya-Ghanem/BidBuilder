@@ -12,6 +12,7 @@ import { Card, Button, Input } from "@/components/ui"
 import { Field } from "@/components/form"
 import { WebhooksCard } from "./webhooks-card"
 import { ApiKeysCard } from "./api-keys-card"
+import { TemplatesCard } from "./templates-card"
 import { CustomDomainCard } from "./custom-domain-card"
 import { SsoCard } from "./sso-card"
 
@@ -105,6 +106,7 @@ function SettingsForm() {
 
       <CurrencyRatesCard isAdmin={isAdmin} />
       <CostTypesCard isAdmin={isAdmin} />
+      <TemplatesCard />
       <ActivitiesCard isAdmin={isAdmin} />
       <ProjectTypesCard isAdmin={isAdmin} />
       <CustomDomainCard isAdmin={isAdmin} />
