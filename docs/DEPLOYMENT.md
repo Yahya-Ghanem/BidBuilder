@@ -88,6 +88,25 @@ Each tenant can opt its workspace out under **Settings → Email notifications**
 reports whether the transport is configured and the send succeeded. Sending is best-effort:
 a mail failure is logged and swallowed — it never breaks the action that triggered it.
 
+### Notification digests (22.1)
+
+Instead of (or as well as) the in-app bell, each user can have their notifications **batched
+into a periodic email**. They pick a frequency under **Settings → Email digests** — `Off`
+(default), `Daily`, or `Weekly` (`PUT /api/digests/preferences`). A background scheduler
+periodically sends each opted-in user the notifications they accrued since their last digest;
+the send respects the same per-tenant `NotificationEmailsEnabled` toggle and only ever runs
+when the SMTP transport above is configured. A tenant admin can trigger a send immediately
+with **Send digests now** (`POST /api/digests/send-now`).
+
+| Variable | Purpose |
+| --- | --- |
+| `Digests__Enabled` | Master switch for the background scheduler (default `true`). Set `false` to disable digests entirely. |
+| `Digests__IntervalSeconds` | How often the scheduler wakes to check for due digests (default `900`, minimum `60`). |
+
+The scheduler is idempotent: each user's last-sent watermark is advanced atomically, so a
+restart or an overlapping run never double-sends. Like all email here, a delivery failure is
+logged and swallowed.
+
 ## Programmatic API keys (21.2)
 
 Headless callers (CI jobs, integrations, scripts) authenticate with a tenant-scoped

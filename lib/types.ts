@@ -104,6 +104,14 @@ export interface TenantSettings {
   emailConfigured: boolean
 }
 
+/** 22.1 — A user's email-digest opt-in. Frequency is "Off" | "Daily" | "Weekly". */
+export interface DigestPreference {
+  frequency: string
+  lastSentAt: string | null
+  /** Read-only: whether the platform SMTP transport is configured (else digests can't send). */
+  emailConfigured: boolean
+}
+
 /** 21.2 — A programmatic API key (never carries the secret after creation). */
 export interface ApiKey {
   id: number

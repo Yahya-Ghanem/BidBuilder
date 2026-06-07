@@ -110,6 +110,9 @@ public sealed class ApiFixture : IAsyncLifetime
         // a Hangfire queue, the next assertion would race the background worker. The
         // production Hangfire path is exercised separately by a smoke flow.
         Environment.SetEnvironmentVariable("Hangfire__Enabled", "false");
+        // Disable the digest scheduler's background timer (22.1) so no thread sends digests
+        // out-of-band; DigestTests invoke DigestService directly with a controlled "now".
+        Environment.SetEnvironmentVariable("Digests__Enabled", "false");
         _factory = new Factory();
         _ = _factory.Services;   // force host build → runs DbInitializer (migrate + seed)
         return Task.CompletedTask;
