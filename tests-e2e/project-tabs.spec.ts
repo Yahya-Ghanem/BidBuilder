@@ -70,10 +70,14 @@ test("project detail page renders five tabs and deep-links via ?tab=", async ({ 
   // URL deep-link writes the new tab id without scrolling.
   await expect(page).toHaveURL(/\?tab=overview/)
 
-  // 6. Click Insights → Cost-by-area + Compare panels appear.
+  // 6. Click Insights → tab activates and its panel becomes the visible one.
+  //    Don't assert on the panel CONTENT — AreaRollupPanel / CompareRevisions /
+  //    ActivitiesPanel all hide themselves when their data is empty, and the
+  //    seeded sample project on a fresh DB has no areas / one estimate.
   await tablist.getByRole("tab", { name: "Insights" }).click()
   await expect(tablist.getByRole("tab", { name: "Insights" })).toHaveAttribute("aria-selected", "true")
-  await expect(page.locator("text=/cost.by.area/i").first()).toBeVisible({ timeout: 5_000 })
+  await expect(page.locator("#panel-insights")).toBeVisible({ timeout: 5_000 })
+  await expect(page.locator("#panel-overview")).toBeHidden()
 
   // 7. Direct deep-link via URL works on a fresh load. Land on Activity tab.
   await page.goto(`/projects/${projectId}?tab=activity`)
