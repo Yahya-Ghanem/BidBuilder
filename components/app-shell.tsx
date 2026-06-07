@@ -5,20 +5,22 @@ import { usePathname } from "next/navigation"
 import { LayoutGrid, FolderKanban, Library, Boxes, LogOut, Settings, ScrollText, Users, BarChart3, Menu, X, Receipt, Trophy, HardHat, ShieldCheck } from "lucide-react"
 import { useAuth, useRequireAuth } from "@/lib/auth"
 import { usePermissions } from "@/lib/permissions"
+import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { ProjectsTreeProvider, ProjectsSidebarTree } from "@/components/projects-tree"
 import { NotificationsBell } from "@/components/notifications-bell"
 import { SearchPalette } from "@/components/search-palette"
+import { LanguageSwitcher } from "@/components/language-switcher"
 import { useState, type ReactNode } from "react"
 
 const NAV = [
-  { href: "/projects", label: "BidBuilder", icon: FolderKanban, module: "projects" },
-  { href: "/resources", label: "Resource Library", icon: Library, module: "resource-library" },
-  { href: "/quotes", label: "Quotes Register", icon: Receipt, module: "resource-library" },
-  { href: "/subcontractor-quotes", label: "Subcontractor Quotes", icon: HardHat, module: "projects" },
-  { href: "/assemblies", label: "Assemblies", icon: Boxes, module: "assemblies" },
-  { href: "/benchmarks", label: "Benchmarks", icon: BarChart3, module: "reports" },
-  { href: "/analytics", label: "Bid Analytics", icon: Trophy, module: "reports" },
+  { href: "/projects", labelKey: "nav.projects", icon: FolderKanban, module: "projects" },
+  { href: "/resources", labelKey: "nav.resources", icon: Library, module: "resource-library" },
+  { href: "/quotes", labelKey: "nav.quotes", icon: Receipt, module: "resource-library" },
+  { href: "/subcontractor-quotes", labelKey: "nav.subQuotes", icon: HardHat, module: "projects" },
+  { href: "/assemblies", labelKey: "nav.assemblies", icon: Boxes, module: "assemblies" },
+  { href: "/benchmarks", labelKey: "nav.benchmarks", icon: BarChart3, module: "reports" },
+  { href: "/analytics", labelKey: "nav.analytics", icon: Trophy, module: "reports" },
 ]
 
 /** Authenticated layout: sidebar + topbar. Redirects to /login if signed out. */
@@ -26,21 +28,22 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
   const { isLoading, isAuthenticated } = useRequireAuth()
   const { user, logout } = useAuth()
   const { can, isAdmin } = usePermissions()
+  const t = useT()
   const pathname = usePathname()
   // Below md the sidebar is an off-canvas drawer toggled by the header hamburger.
   const [navOpen, setNavOpen] = useState(false)
 
   if (isLoading || !isAuthenticated) {
-    return <div className="grid min-h-screen place-items-center text-slate-400">Loading…</div>
+    return <div className="grid min-h-screen place-items-center text-slate-400">{t("shell.loading")}</div>
   }
 
   // Only show nav entries for modules the user may view (admins see all);
   // Settings is a tenant-admin area.
   const nav = NAV.filter((n) => can(n.module, "view"))
   if (isAdmin) {
-    nav.push({ href: "/admin", label: "Users & Teams", icon: Users, module: "admin" })
-    nav.push({ href: "/audit", label: "Audit log", icon: ScrollText, module: "audit" })
-    nav.push({ href: "/settings", label: "Settings", icon: Settings, module: "settings" })
+    nav.push({ href: "/admin", labelKey: "nav.users", icon: Users, module: "admin" })
+    nav.push({ href: "/audit", labelKey: "nav.audit", icon: ScrollText, module: "audit" })
+    nav.push({ href: "/settings", labelKey: "nav.settings", icon: Settings, module: "settings" })
   }
 
   return (
@@ -52,9 +55,10 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
       )}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex max-h-screen w-[280px] transform flex-col border-r border-[var(--border)] bg-white transition-transform",
+          "fixed inset-y-0 start-0 z-40 flex max-h-screen w-[280px] transform flex-col border-e border-[var(--border)] bg-white transition-transform",
           "md:static md:z-auto md:w-auto md:translate-x-0",
-          navOpen ? "translate-x-0" : "-translate-x-full",
+          // In RTL the drawer lives on the right, so it hides by sliding the other way.
+          navOpen ? "translate-x-0" : "-translate-x-full rtl:translate-x-full",
         )}
       >
         <div className="flex items-center justify-between px-5 py-4 text-lg font-bold">
@@ -62,12 +66,12 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
             <LayoutGrid className="h-5 w-5 text-[var(--brand)]" />
             BidBuilder
           </span>
-          <button onClick={() => setNavOpen(false)} aria-label="Close menu" className="rounded p-1 text-slate-400 hover:bg-slate-100 md:hidden">
+          <button onClick={() => setNavOpen(false)} aria-label={t("shell.closeMenu")} className="rounded p-1 text-slate-400 hover:bg-slate-100 md:hidden">
             <X className="h-5 w-5" />
           </button>
         </div>
         <nav className="flex-1 space-y-1 overflow-auto px-3">
-          {nav.map(({ href, label, icon: Icon }) => {
+          {nav.map(({ href, labelKey, icon: Icon }) => {
             const active = pathname.startsWith(href)
             return (
               <div key={href}>
@@ -80,7 +84,7 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
                   )}
                 >
                   <Icon className="h-4 w-4" />
-                  {label}
+                  {t(labelKey)}
                 </Link>
                 {href === "/projects" && pathname.startsWith("/projects") && <ProjectsSidebarTree />}
               </div>
@@ -100,24 +104,25 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
               pathname.startsWith("/account") ? "bg-[var(--brand)]/10 text-[var(--brand)]" : "text-slate-600 hover:bg-slate-100",
             )}
           >
-            <ShieldCheck className="h-4 w-4" /> Account &amp; security
+            <ShieldCheck className="h-4 w-4" /> {t("shell.account")}
           </Link>
           <button
             onClick={logout}
             className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-600 hover:bg-slate-100"
           >
-            <LogOut className="h-4 w-4" /> Sign out
+            <LogOut className="h-4 w-4" /> {t("shell.signOut")}
           </button>
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-col">
         <header className="flex h-14 items-center gap-3 border-b border-[var(--border)] bg-white px-4 md:px-6">
-          <button onClick={() => setNavOpen(true)} aria-label="Open menu" className="rounded p-1 text-slate-600 hover:bg-slate-100 md:hidden">
+          <button onClick={() => setNavOpen(true)} aria-label={t("shell.openMenu")} className="rounded p-1 text-slate-600 hover:bg-slate-100 md:hidden">
             <Menu className="h-5 w-5" />
           </button>
           <h1 className="truncate text-lg font-semibold">{title}</h1>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ms-auto flex items-center gap-2">
+            <LanguageSwitcher />
             <SearchPalette />
             <NotificationsBell />
           </div>

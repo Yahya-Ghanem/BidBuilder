@@ -5,11 +5,14 @@ import { useRouter } from "next/navigation"
 import { LayoutGrid, ShieldCheck, KeyRound } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth"
+import { useT } from "@/lib/i18n"
 import { API_URL } from "@/lib/api"
 import { Button, Input, Card } from "@/components/ui"
+import { LanguageSwitcher } from "@/components/language-switcher"
 
 export default function LoginPage() {
   const { login, isAuthenticated, isLoading } = useAuth()
+  const t = useT()
   const router = useRouter()
   const [email, setEmail] = useState("admin@bidbuilder.local")
   const [password, setPassword] = useState("")
@@ -68,36 +71,39 @@ export default function LoginPage() {
   return (
     <div className="grid min-h-screen place-items-center p-4">
       <Card className="w-full max-w-sm p-6">
-        <div className="mb-6 flex items-center gap-2 text-xl font-bold">
-          <LayoutGrid className="h-6 w-6 text-[var(--brand)]" /> BidBuilder
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xl font-bold">
+            <LayoutGrid className="h-6 w-6 text-[var(--brand)]" /> BidBuilder
+          </div>
+          <LanguageSwitcher />
         </div>
 
         {!mfa ? (
           <>
-            <p className="mb-4 text-sm text-slate-500">Sign in to your estimating workspace.</p>
+            <p className="mb-4 text-sm text-slate-500">{t("login.subtitle")}</p>
             <form onSubmit={onSubmit} className="space-y-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Company (tenant)</label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">{t("login.tenant")}</label>
                 <Input value={tenant} onChange={(e) => setTenant(e.target.value)} placeholder="default" />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Email</label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">{t("login.email")}</label>
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Password</label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">{t("login.password")}</label>
                 <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
               </div>
               <Button type="submit" className="w-full" disabled={busy}>
-                {busy ? "Signing in…" : "Sign in"}
+                {busy ? t("login.signingIn") : t("login.signIn")}
               </Button>
             </form>
 
             <div className="my-4 flex items-center gap-3 text-xs text-slate-400">
-              <span className="h-px flex-1 bg-[var(--border)]" /> or <span className="h-px flex-1 bg-[var(--border)]" />
+              <span className="h-px flex-1 bg-[var(--border)]" /> {t("login.or")} <span className="h-px flex-1 bg-[var(--border)]" />
             </div>
             <Button type="button" variant="outline" className="w-full" onClick={signInWithSso}>
-              <KeyRound className="h-4 w-4" /> Continue with SSO
+              <KeyRound className="h-4 w-4" /> {t("login.sso")}
             </Button>
           </>
         ) : (
@@ -138,7 +144,7 @@ export default function LoginPage() {
         )}
 
         <p className="mt-4 text-center text-xs text-slate-400">
-          <a href="/platform" className="hover:text-[var(--brand)] hover:underline">Platform administration</a>
+          <a href="/platform" className="hover:text-[var(--brand)] hover:underline">{t("login.platformAdmin")}</a>
         </p>
       </Card>
     </div>
