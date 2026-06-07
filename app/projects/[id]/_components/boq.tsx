@@ -1,37 +1,61 @@
 "use client"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useMemo, useState } from "react"
 import { Layers, Plus, Trash2 } from "lucide-react"
 import type { Area, AssemblyRow, CostComponentType, ItemBreakdown, SectionBreakdown } from "@/lib/types"
 import { Button, Input } from "@/components/ui"
 import { Field, Select } from "@/components/form"
 import { money, cn } from "@/lib/utils"
 import { Money } from "@/components/money"
+import { DataTable, type ColumnDef } from "@/components/data-table"
 import { CollapseToggle, ITEM_KINDS, kindLabel, type CompInput } from "./shared"
 import { BuildUpModal } from "./build-up-modal"
 
-/** Threshold above which the section uses the virtualized row list. Anything
- *  smaller doesn't justify the windowing overhead — a 50-row section is fine
- *  as a plain <table>. 150 is comfortably below the point where React DevTools
- *  starts noticing the cost on a typical office laptop. */
+/** 26.4 — Threshold above which a section virtualizes its rows. Matches the
+ *  pre-26.4 custom virtualizer threshold; below this, paying the windowing
+ *  cost (extra wrapper div, scroll listener, padding spacers) is net-
+ *  negative. The `<DataTable>` primitive now owns the virtualization itself
+ *  (via `@tanstack/react-virtual`) so this number just decides when to flip
+ *  it on. */
 const VIRTUALIZE_THRESHOLD = 150
-/** Pixel height we estimate per BOQ row. The actual row is taller when the
- *  cost build-up is shown inline, but the virtualizer only needs an
- *  approximation — it positions windows of rows, not pixel-perfect layout. */
+/** Estimated row height in px. The actual row is taller when the cost
+ *  build-up legend is shown inline; the virtualizer re-measures on mount
+ *  so the displayed positions correct themselves regardless. */
 const ROW_ESTIMATED_PX = 56
-/** How many rows past the viewport to render on each side. A buffer is
- *  cheap (rows are cheap) and avoids visible "tearing" on fast scrolls. */
-const OVERSCAN = 12
 
-/** One BOQ section: collapsible header + table of items + add-item form.
- *  For very long sections (> VIRTUALIZE_THRESHOLD rows) we switch to a
- *  windowed row renderer so a 5k-row section doesn't blow up the page. */
+/** Shared edit-flag bundle for the per-cell renderers. Passed through the
+ *  column factory so each cell stays a closure-free pure component. */
+type CellDeps = {
+  currency: string
+  costTypes: CostComponentType[]
+  areas: Area[]
+  canEdit: boolean
+  canDelete: boolean
+  onUpd: (v: unknown) => void
+  onDel: (iid: number) => void
+}
+
+/** One BOQ section: collapsible header + DataTable of items + add-item form.
+ *  Long sections (> VIRTUALIZE_THRESHOLD rows) automatically virtualize via
+ *  the DataTable wrapper. */
 export function SectionBlock({ section, currency, assemblies, costTypes, areas, open, onToggle, canAdd, canEdit, canDelete, onAddItem, onUpdItem, onDelItem, onDelSection }: {
   section: SectionBreakdown; currency: string; assemblies: AssemblyRow[]; costTypes: CostComponentType[]; areas: Area[]
   open: boolean; onToggle: () => void
   canAdd: boolean; canEdit: boolean; canDelete: boolean
   onAddItem: (v: unknown) => void; onUpdItem: (v: unknown) => void; onDelItem: (iid: number) => void; onDelSection: () => void
 }) {
+  // Memoize the column defs so the table doesn't rebuild on every parent
+  // render — TanStack Table internals compare column identity to decide
+  // whether to recompute the model.
+  const columns = useMemo<ColumnDef<ItemBreakdown, unknown>[]>(
+    () => boqColumns({ currency, costTypes, areas, canEdit, canDelete, onUpd: onUpdItem, onDel: onDelItem }),
+    [currency, costTypes, areas, canEdit, canDelete, onUpdItem, onDelItem],
+  )
   const longList = section.items.length > VIRTUALIZE_THRESHOLD
+  const virtBanner = longList && (
+    <div className="border-b border-dashed border-warning/30 bg-warning-soft px-4 py-1 text-[11px] text-warning">
+      Virtualized — {section.items.length} rows
+    </div>
+  )
   return (
     <div className="border-t border-[var(--border)]">
       <div className="flex items-center justify-between bg-slate-50/60 px-4 py-2">
@@ -42,22 +66,27 @@ export function SectionBlock({ section, currency, assemblies, costTypes, areas, 
         </span>
         <div className="flex items-center gap-3">
           <Money className="font-semibold" value={section.sectionTotal} currency={currency} />
-          {canDelete && <button onClick={onDelSection} className="rounded p-1 text-muted hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
+          {canDelete && <button onClick={onDelSection} className="rounded p-1 text-muted hover:bg-danger-soft hover:text-danger"><Trash2 className="h-3.5 w-3.5" /></button>}
         </div>
       </div>
       {open && (
         <>
-          {longList
-            ? <VirtualizedItemList items={section.items} currency={currency} costTypes={costTypes} areas={areas} canEdit={canEdit} canDelete={canDelete} onUpd={onUpdItem} onDel={onDelItem} />
-            : (
-              <table className="w-full text-sm">
-                <tbody>
-                  {section.items.map((i) => (
-                    <ItemRow key={i.id} item={i} currency={currency} costTypes={costTypes} areas={areas} canEdit={canEdit} canDelete={canDelete} onUpd={onUpdItem} onDel={() => onDelItem(i.id)} />
-                  ))}
-                </tbody>
-              </table>
-            )}
+          <DataTable
+            data={section.items}
+            columns={columns}
+            getRowId={(row) => String(row.id)}
+            // Sticky thead (26.4 acceptance) gives a visual anchor when the
+            // section is long; previously BOQ had no thead at all.
+            showHeader
+            stickyHeader
+            virtualizeThreshold={VIRTUALIZE_THRESHOLD}
+            rowEstimatedPx={ROW_ESTIMATED_PX}
+            // Preserve the original data-testid so the existing virtualized-
+            // scroll E2E selector keeps working post-migration.
+            testId="boq-virtual-scroll"
+            banner={virtBanner}
+            tableClassName="text-sm"
+          />
           {canAdd && <AddItemForm assemblies={assemblies} costTypes={costTypes} areas={areas} onAdd={onAddItem} />}
         </>
       )}
@@ -65,133 +94,176 @@ export function SectionBlock({ section, currency, assemblies, costTypes, areas, 
   )
 }
 
-/** Custom windowed list — 19.6 perf win for large BOQs. Renders ONLY the
- *  rows currently in (or near) the viewport. We measure scroll/viewport on
- *  the scroll container, compute first/last visible row indices from the
- *  estimated row height, then spacer-pad the top + bottom so the scrollbar
- *  matches the full list height. Pure DOM math, no extra dependency.
+/** Column factory. Built outside the component so the deps memoization in
+ *  SectionBlock has a stable function to call. Each cell is a small inline
+ *  closure rather than a separate component to keep the column structure
+ *  visible in one place — readability beats one-extra-component per cell.
  *
- *  Why not @tanstack/react-virtual? For a single fixed-height row table this
- *  is ~40 lines and zero install — fewer moving parts. If we later need
- *  variable heights or window-of-windows behavior, swap this for the lib. */
-function VirtualizedItemList({ items, currency, costTypes, areas, canEdit, canDelete, onUpd, onDel }: {
-  items: ItemBreakdown[]; currency: string; costTypes: CostComponentType[]; areas: Area[]
-  canEdit: boolean; canDelete: boolean; onUpd: (v: unknown) => void; onDel: (iid: number) => void
-}) {
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const [scrollTop, setScrollTop] = useState(0)
-  const [viewportH, setViewportH] = useState(600)   // sane default until layout settles
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const onScroll = () => setScrollTop(el.scrollTop)
-    const onResize = () => setViewportH(el.clientHeight)
-    onResize()
-    el.addEventListener("scroll", onScroll, { passive: true })
-    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(onResize) : null
-    ro?.observe(el)
-    return () => { el.removeEventListener("scroll", onScroll); ro?.disconnect() }
-  }, [])
-  const { startIdx, endIdx, padTop, padBottom } = useMemo(() => {
-    const first = Math.max(0, Math.floor(scrollTop / ROW_ESTIMATED_PX) - OVERSCAN)
-    const visibleCount = Math.ceil(viewportH / ROW_ESTIMATED_PX) + OVERSCAN * 2
-    const last = Math.min(items.length, first + visibleCount)
-    return {
-      startIdx: first,
-      endIdx: last,
-      padTop: first * ROW_ESTIMATED_PX,
-      padBottom: (items.length - last) * ROW_ESTIMATED_PX,
-    }
-  }, [scrollTop, viewportH, items.length])
-  const slice = items.slice(startIdx, endIdx)
-  return (
-    <div className="relative">
-      <div className="border-b border-dashed border-amber-200 bg-amber-50/60 px-4 py-1 text-[11px] text-amber-800">
-        Showing {slice.length} of {items.length} rows (virtualized)
-      </div>
-      <div ref={scrollRef} className="max-h-[60vh] overflow-y-auto" data-testid="boq-virtual-scroll">
-        <div style={{ paddingTop: padTop, paddingBottom: padBottom }}>
-          <table className="w-full text-sm">
-            <tbody>
-              {slice.map((i) => (
-                <ItemRow key={i.id} item={i} currency={currency} costTypes={costTypes} areas={areas} canEdit={canEdit} canDelete={canDelete} onUpd={onUpd} onDel={() => onDel(i.id)} />
-              ))}
-            </tbody>
-          </table>
+ *  Column order matches the pre-26.4 layout: Description, Unit, Qty, Rate,
+ *  Total, Actions. The description column is rich (kind badge + cost build-
+ *  up legend + area/kind selects) and gets a larger `size` hint to push the
+ *  numeric columns into a tighter right-aligned cluster. */
+function boqColumns({ currency, costTypes, areas, canEdit, canDelete, onUpd, onDel }: CellDeps): ColumnDef<ItemBreakdown, unknown>[] {
+  return [
+    {
+      id: "description",
+      header: "Description",
+      cell: ({ row }) => <DescriptionCell item={row.original} {...{ areas, canEdit, onUpd }} />,
+    },
+    {
+      id: "unit",
+      header: "Unit",
+      size: 80,
+      cell: ({ row }) => <span className="text-slate-500">{row.original.unit}</span>,
+    },
+    {
+      id: "qty",
+      header: "Qty",
+      size: 96,
+      cell: ({ row }) => <QtyCell item={row.original} canEdit={canEdit} onUpd={onUpd} />,
+    },
+    {
+      id: "rate",
+      header: "Rate",
+      size: 120,
+      cell: ({ row }) => <RateCell item={row.original} currency={currency} canEdit={canEdit} onUpd={onUpd} />,
+    },
+    {
+      id: "total",
+      header: "Total",
+      size: 120,
+      cell: ({ row }) => (
+        <div className="text-right">
+          <Money className="font-medium" value={row.original.lineTotal} currency={currency} />
         </div>
+      ),
+    },
+    {
+      id: "actions",
+      // Empty header keeps the column width but reads "no action available"
+      // as the accessible label via aria-label on the cell-level buttons.
+      header: "",
+      size: 80,
+      cell: ({ row }) => <ActionsCell item={row.original} costTypes={costTypes} currency={currency} canEdit={canEdit} canDelete={canDelete} onUpd={onUpd} onDel={() => onDel(row.original.id)} />,
+    },
+  ]
+}
+
+/** Description column — the rich one. Renders the line description, an
+ *  optional kind badge (Provisional / PC / Alternate / Daywork), the cost
+ *  build-up legend (`Material 50 + Labour 5×80 + Daywork 20%`), and the
+ *  area+kind selects beneath. Most of the BOQ "feel" lives in this cell. */
+function DescriptionCell({ item, areas, canEdit, onUpd }: { item: ItemBreakdown; areas: Area[]; canEdit: boolean; onUpd: (v: unknown) => void }) {
+  const hasComps = item.components.length > 0
+  const base = baseUpd(item)
+  const areaName = areas.find((a) => a.id === item.areaId)?.name
+  return (
+    <div>
+      <div>
+        {item.description}
+        {item.kind !== "Normal" && <span className="ml-2 rounded bg-warning-soft px-1.5 py-0.5 text-[10px] font-medium text-warning">{kindLabel(item.kind)}</span>}
+      </div>
+      {hasComps && (
+        <div className="text-xs text-muted">
+          {item.components.map((c) => `${c.code} ${c.calcKind === "Percent" ? c.value + "%" : (c.quantity != null && c.rate != null ? `${c.quantity}×${c.rate}` : c.value)}`).join(" + ")}
+        </div>
+      )}
+      <div className="mt-1 flex items-center gap-1">
+        {canEdit && areas.length > 0
+          ? <select value={item.areaId ?? ""} onChange={(ev) => onUpd({ ...base, quantity: item.quantity, areaId: ev.target.value === "" ? null : Number(ev.target.value) })}
+                    aria-label="Area"
+                    className="rounded border border-[var(--border)] bg-white px-1 py-0.5 text-xs text-slate-500">
+              <option value="">— no area —</option>
+              {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          : areaName && <span className="text-xs text-muted">📍 {areaName}</span>}
+        {canEdit && (
+          <select value={item.kind} onChange={(ev) => onUpd({ ...base, quantity: item.quantity, kind: ev.target.value })}
+                  title="Line kind" aria-label="Line kind"
+                  className="rounded border border-[var(--border)] bg-white px-1 py-0.5 text-xs text-slate-500">
+            {ITEM_KINDS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+          </select>
+        )}
       </div>
     </div>
   )
 }
 
-export function ItemRow({ item, currency, costTypes, areas, canEdit, canDelete, onUpd, onDel }: { item: ItemBreakdown; currency: string; costTypes: CostComponentType[]; areas: Area[]; canEdit: boolean; canDelete: boolean; onUpd: (v: unknown) => void; onDel: () => void }) {
+function QtyCell({ item, canEdit, onUpd }: { item: ItemBreakdown; canEdit: boolean; onUpd: (v: unknown) => void }) {
+  const base = baseUpd(item)
+  return (
+    <div className="text-right">
+      {canEdit
+        ? <Input className="w-20 py-1 text-right" type="number" step="0.0001" defaultValue={item.quantity}
+            aria-label="Quantity"
+            onBlur={(ev) => { const q = Number(ev.target.value); if (q !== item.quantity) onUpd({ ...base, quantity: q }) }} />
+        : <span className="text-slate-600">{item.quantity}</span>}
+    </div>
+  )
+}
+
+function RateCell({ item, currency, canEdit, onUpd }: { item: ItemBreakdown; currency: string; canEdit: boolean; onUpd: (v: unknown) => void }) {
+  const adHoc = item.assemblyId == null
+  const hasComps = item.components.length > 0
+  const base = baseUpd(item)
+  return (
+    <div className="text-right">
+      {adHoc && canEdit && !hasComps
+        ? <Input className="w-24 py-1 text-right" type="number" step="0.0001" defaultValue={item.unitRate}
+            aria-label="Unit rate"
+            onBlur={(ev) => { const r = Number(ev.target.value); if (r !== item.unitRate) onUpd({ ...base, quantity: item.quantity, unitRate: r }) }} />
+        : <Money className="text-slate-600" value={item.unitRate} currency={currency} />}
+    </div>
+  )
+}
+
+function ActionsCell({ item, costTypes, currency, canEdit, canDelete, onUpd, onDel }: { item: ItemBreakdown; costTypes: CostComponentType[]; currency: string; canEdit: boolean; canDelete: boolean; onUpd: (v: unknown) => void; onDel: () => void }) {
   const adHoc = item.assemblyId == null
   const hasComps = item.components.length > 0
   const [buildup, setBuildup] = useState(false)
-  // IMPORTANT: carry the current components so quantity/area edits don't wipe the build-up
-  // (the PUT replaces components wholesale).
-  const base = {
-    id: item.id, itemCode: item.itemCode, description: item.description, unit: item.unit,
-    assemblyId: item.assemblyId, unitRate: item.unitRate, sortOrder: item.sortOrder, areaId: item.areaId, kind: item.kind,
-    components: hasComps ? item.components.map((c) => ({ typeId: c.typeId, value: c.value, quantity: c.quantity ?? undefined, rate: c.rate ?? undefined })) : undefined,
-  }
-  const areaName = areas.find((a) => a.id === item.areaId)?.name
+  const base = baseUpd(item)
   return (
-    <tr className="border-t border-[var(--border)]">
-      <td className="px-4 py-1.5">
-        {item.description}
-        {item.kind !== "Normal" && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">{kindLabel(item.kind)}</span>}
-        {hasComps && (
-          <div className="text-xs text-muted">
-            {item.components.map((c) => `${c.code} ${c.calcKind === "Percent" ? c.value + "%" : (c.quantity != null && c.rate != null ? `${c.quantity}×${c.rate}` : c.value)}`).join(" + ")}
-          </div>
-        )}
-        <div className="mt-1 flex items-center gap-1">
-          {canEdit && areas.length > 0
-            ? <select value={item.areaId ?? ""} onChange={(ev) => onUpd({ ...base, quantity: item.quantity, areaId: ev.target.value === "" ? null : Number(ev.target.value) })}
-                      className="rounded border border-[var(--border)] bg-white px-1 py-0.5 text-xs text-slate-500">
-                <option value="">— no area —</option>
-                {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            : areaName && <span className="text-xs text-muted">📍 {areaName}</span>}
-          {canEdit && (
-            <select value={item.kind} onChange={(ev) => onUpd({ ...base, quantity: item.quantity, kind: ev.target.value })}
-                    title="Line kind" className="rounded border border-[var(--border)] bg-white px-1 py-0.5 text-xs text-slate-500">
-              {ITEM_KINDS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-            </select>
-          )}
-        </div>
-      </td>
-      <td className="px-2 py-1.5 text-slate-500">{item.unit}</td>
-      <td className="px-2 py-1.5 text-right">
-        {canEdit
-          ? <Input className="w-20 py-1 text-right" type="number" step="0.0001" defaultValue={item.quantity}
-              onBlur={(ev) => { const q = Number(ev.target.value); if (q !== item.quantity) onUpd({ ...base, quantity: q }) }} />
-          : <span className="text-slate-600">{item.quantity}</span>}
-      </td>
-      <td className="px-2 py-1.5 text-right">
-        {adHoc && canEdit && !hasComps
-          ? <Input className="w-24 py-1 text-right" type="number" step="0.0001" defaultValue={item.unitRate}
-              onBlur={(ev) => { const r = Number(ev.target.value); if (r !== item.unitRate) onUpd({ ...base, quantity: item.quantity, unitRate: r }) }} />
-          : <Money className="text-slate-600" value={item.unitRate} currency={currency} />}
-      </td>
-      <td className="px-4 py-1.5 text-right font-medium"><Money value={item.lineTotal} currency={currency} /></td>
-      <td className="px-2 py-1.5 text-right">
-        <div className="flex items-center justify-end gap-1">
-          {adHoc && canEdit && (
-            <button onClick={() => setBuildup(true)} title="Unit-rate build-up"
-                    className={cn("rounded p-1 hover:bg-slate-100", hasComps ? "text-[var(--brand)]" : "text-muted")}>
-              <Layers className="h-3.5 w-3.5" />
-            </button>
-          )}
-          {canDelete && <button onClick={onDel} className="rounded p-1 text-muted hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
-        </div>
-      </td>
+    <div className="flex items-center justify-end gap-1">
+      {adHoc && canEdit && (
+        <button onClick={() => setBuildup(true)} title="Unit-rate build-up" aria-label="Edit unit-rate build-up"
+                className={cn("rounded p-1 hover:bg-slate-100", hasComps ? "text-[var(--brand)]" : "text-muted")}>
+          <Layers className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {canDelete && <button onClick={onDel} aria-label="Delete row" className="rounded p-1 text-muted hover:bg-danger-soft hover:text-danger"><Trash2 className="h-3.5 w-3.5" /></button>}
       {buildup && (
         <BuildUpModal open={buildup} onClose={() => setBuildup(false)} costTypes={costTypes} currency={currency}
           initial={item.components.map((c) => ({ typeId: c.typeId, value: c.value, quantity: c.quantity ?? undefined, rate: c.rate ?? undefined }))}
           onSave={(comps) => onUpd({ ...base, quantity: item.quantity, components: comps })} />
       )}
+    </div>
+  )
+}
+
+/** Carry the current components alongside any edited fields. Quantity / area
+ *  / kind edits must NOT wipe the build-up — the PUT replaces components
+ *  wholesale. */
+function baseUpd(item: ItemBreakdown) {
+  const hasComps = item.components.length > 0
+  return {
+    id: item.id, itemCode: item.itemCode, description: item.description, unit: item.unit,
+    assemblyId: item.assemblyId, unitRate: item.unitRate, sortOrder: item.sortOrder, areaId: item.areaId, kind: item.kind,
+    components: hasComps ? item.components.map((c) => ({ typeId: c.typeId, value: c.value, quantity: c.quantity ?? undefined, rate: c.rate ?? undefined })) : undefined,
+  }
+}
+
+/** ItemRow is kept as a thin export for legacy consumers that still reference
+ *  it. Inside the BOQ it's no longer used directly — the DataTable handles
+ *  row composition via the column factory above. */
+export function ItemRow({ item, currency, costTypes, areas, canEdit, canDelete, onUpd, onDel }: { item: ItemBreakdown; currency: string; costTypes: CostComponentType[]; areas: Area[]; canEdit: boolean; canDelete: boolean; onUpd: (v: unknown) => void; onDel: () => void }) {
+  return (
+    <tr className="border-t border-[var(--border)]">
+      <td className="px-4 py-1.5"><DescriptionCell item={item} areas={areas} canEdit={canEdit} onUpd={onUpd} /></td>
+      <td className="px-2 py-1.5 text-slate-500">{item.unit}</td>
+      <td className="px-2 py-1.5"><QtyCell item={item} canEdit={canEdit} onUpd={onUpd} /></td>
+      <td className="px-2 py-1.5"><RateCell item={item} currency={currency} canEdit={canEdit} onUpd={onUpd} /></td>
+      <td className="px-4 py-1.5"><div className="text-right"><Money className="font-medium" value={item.lineTotal} currency={currency} /></div></td>
+      <td className="px-2 py-1.5"><ActionsCell item={item} costTypes={costTypes} currency={currency} canEdit={canEdit} canDelete={canDelete} onUpd={onUpd} onDel={onDel} /></td>
     </tr>
   )
 }
