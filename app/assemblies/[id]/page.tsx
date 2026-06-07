@@ -11,7 +11,7 @@ import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input, TableScroll } from "@/components/ui"
 import { Modal, Field, Select } from "@/components/form"
-import { money } from "@/lib/utils"
+import { Money } from "@/components/money"
 
 const RES_PATH: Record<string, string> = {
   Labor: "/api/resources/labor", Material: "/api/resources/materials",
@@ -69,7 +69,8 @@ function Detail({ id }: { id: number }) {
         <div className="flex items-center gap-4">
           <div className="text-right">
             <div className="text-xs text-slate-500">Computed unit rate</div>
-            <div className="text-2xl font-bold text-[var(--brand)]">{money(a.computedRate)}</div>
+            {/* 25.1 — TODO: confirm currency source */}
+            <Money className="text-2xl font-bold text-[var(--brand)]" as="div" value={a.computedRate} currency="AED" />
           </div>
           {(canEdit || canDelete) && (
             <div className="flex flex-col gap-2">
@@ -96,8 +97,10 @@ function Detail({ id }: { id: number }) {
                 <td className="px-4 py-2 text-slate-500">{c.resourceType}</td>
                 <td className="px-4 py-2"><span className="font-mono text-xs text-slate-400">{c.resourceCode}</span> {c.resourceName}</td>
                 <td className="px-4 py-2 text-right">{c.factor}</td>
-                <td className="px-4 py-2 text-right">{money(c.resourceRate)}</td>
-                <td className="px-4 py-2 text-right font-medium">{money(c.cost)}</td>
+                {/* 25.1 — TODO: confirm currency source */}
+                <td className="px-4 py-2 text-right"><Money value={c.resourceRate} currency="AED" /></td>
+                {/* 25.1 — TODO: confirm currency source */}
+                <td className="px-4 py-2 text-right font-medium"><Money value={c.cost} currency="AED" /></td>
                 <td className="px-2 py-2 text-right">
                   {canEdit && <button onClick={() => del.mutate(c.id)} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
                 </td>

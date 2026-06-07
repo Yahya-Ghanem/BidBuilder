@@ -8,7 +8,7 @@ import { usePermissions } from "@/lib/permissions"
 import type { ActivityType, Area, CostComponentType, EstimateBreakdown, ItemBreakdown } from "@/lib/types"
 import { Card, Button, Input } from "@/components/ui"
 import { Field, Modal, Select } from "@/components/form"
-import { money } from "@/lib/utils"
+import { Money } from "@/components/money"
 import { CollapseToggle, ExpandCollapseAll, useCollapse, type CompInput } from "./shared"
 import { BuildUpModal } from "./build-up-modal"
 
@@ -65,9 +65,9 @@ export function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd,
         {open && acts.map((it) => (
           <div key={it.id} className="grid grid-cols-[1fr_96px_96px_100px_auto] items-center gap-2 py-1 text-sm" style={{ paddingLeft: depth * 16 + 22 }}>
             <span className="text-slate-700">{it.description}</span>
-            <span className="text-right text-xs text-slate-500" title="Material">M {money(compAmount(it, "MAT"), currency)}</span>
-            <span className="text-right text-xs text-slate-500" title="Manpower">L {money(compAmount(it, "LAB"), currency)}</span>
-            <span className="text-right font-medium">{money(it.lineTotal, currency)}</span>
+            <span className="text-right text-xs text-slate-500" title="Material">M <Money value={compAmount(it, "MAT")} currency={currency} /></span>
+            <span className="text-right text-xs text-slate-500" title="Manpower">L <Money value={compAmount(it, "LAB")} currency={currency} /></span>
+            <Money className="text-right font-medium" value={it.lineTotal} currency={currency} />
             <span className="flex justify-end gap-1">
               {canEdit && <button onClick={() => setEditing(it)} className="rounded p-1 text-slate-400 hover:text-[var(--brand)]" title="Material & manpower"><Layers className="h-3.5 w-3.5" /></button>}
               {canDelete && <button onClick={() => { if (confirm(`Delete activity "${it.description}"?`)) onDelItem(it.id) }} className="rounded p-1 text-slate-400 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}

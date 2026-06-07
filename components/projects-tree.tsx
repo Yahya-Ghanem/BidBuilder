@@ -13,6 +13,7 @@ import { usePermissions } from "@/lib/permissions"
 import type { Project, EstimateSummary, EstimateBreakdown, Area, AreaRollup, ProjectType } from "@/lib/types"
 import { Button, Input, Card } from "@/components/ui"
 import { Modal, Field, Select } from "@/components/form"
+import { Money } from "@/components/money"
 
 /* ── Selection context (shared between the sidebar tree and the detail pane) ── */
 
@@ -41,7 +42,9 @@ export function useProjectsTree(): TreeCtx {
   return ctx
 }
 
-export const money = (n: number, c: string) => `${c} ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+// 25.1 — Removed the local `money` helper that duplicated `lib/utils.ts:money`
+// with subtly different output (no Intl, no locale-aware grouping). All
+// money-rendering sites now use the <Money> component for single-source-of-truth.
 
 /* ── Sidebar tree (master) ─────────────────────────────────────────────────── */
 
@@ -272,7 +275,7 @@ function BoqView({ estimateId }: { estimateId: number }) {
         <Card key={s.id} className="overflow-hidden">
           <div className="flex items-center justify-between border-b border-[var(--border)] bg-slate-50 px-4 py-2">
             <h3 className="text-sm font-semibold text-slate-700">{s.code && <span className="mr-1 font-mono text-xs text-slate-500">{s.code}</span>}{s.title}</h3>
-            <span className="text-sm text-slate-500">{s.items.length} item(s) · {money(s.sectionTotal, c)}</span>
+            <span className="text-sm text-slate-500">{s.items.length} item(s) · <Money value={s.sectionTotal} currency={c} /></span>
           </div>
           {s.items.length ? (
             <div className="overflow-x-auto">
@@ -292,8 +295,8 @@ function BoqView({ estimateId }: { estimateId: number }) {
                     <td className="px-4 py-1.5">{it.itemCode && <span className="mr-1 font-mono text-xs text-slate-500">{it.itemCode}</span>}{it.description}</td>
                     <td className="px-2 py-1.5 text-right">{it.quantity}</td>
                     <td className="px-2 py-1.5">{it.unit}</td>
-                    <td className="px-2 py-1.5 text-right">{money(it.unitRate, c)}</td>
-                    <td className="px-4 py-1.5 text-right font-medium">{money(it.lineTotal, c)}</td>
+                    <td className="px-2 py-1.5 text-right"><Money value={it.unitRate} currency={c} /></td>
+                    <td className="px-4 py-1.5 text-right font-medium"><Money value={it.lineTotal} currency={c} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -331,9 +334,9 @@ function ActivitiesView({ estimateId, projectId }: { estimateId: number; project
           {acts.map((it) => (
             <div key={it.id} className="grid grid-cols-[1fr_120px_120px_120px] items-center gap-2 py-1 text-sm" style={{ paddingLeft: depth * 18 + 30 }}>
               <span className="text-slate-700">{it.description}</span>
-              <span className="text-right text-xs text-slate-500" title="Material">M {money(comp(it, "MAT"), c)}</span>
-              <span className="text-right text-xs text-slate-500" title="Manpower">L {money(comp(it, "LAB"), c)}</span>
-              <span className="text-right font-medium">{money(it.lineTotal, c)}</span>
+              <span className="text-right text-xs text-slate-500" title="Material">M <Money value={comp(it, "MAT")} currency={c} /></span>
+              <span className="text-right text-xs text-slate-500" title="Manpower">L <Money value={comp(it, "LAB")} currency={c} /></span>
+              <span className="text-right font-medium"><Money value={it.lineTotal} currency={c} /></span>
             </div>
           ))}
           {render(a.id, depth + 1)}
@@ -378,8 +381,8 @@ function CostByAreaView({ estimateId }: { estimateId: number }) {
               <span className="text-xs text-slate-500">{a.kind}{!open && has ? ` · ${kids.length} sub-area(s)` : ""}</span>
             </span>
             <span className="text-right text-xs text-slate-500">{a.itemCount} item(s)</span>
-            <span className="text-right font-medium">{money(a.rollupTotal, c)}</span>
-            <span className="text-right text-xs text-slate-500">{a.costPerUnit != null ? `${money(a.costPerUnit, c)}/${a.unit || "unit"}` : "—"}</span>
+            <span className="text-right font-medium"><Money value={a.rollupTotal} currency={c} /></span>
+            <span className="text-right text-xs text-slate-500">{a.costPerUnit != null ? <><Money value={a.costPerUnit} currency={c} />/{a.unit || "unit"}</> : "—"}</span>
           </div>
           {open && render(a.id, depth + 1)}
         </div>
@@ -397,7 +400,7 @@ function CostByAreaView({ estimateId }: { estimateId: number }) {
               <button onClick={() => setCollapsed(new Set(parentIds))} className="rounded px-1.5 py-0.5 text-slate-500 hover:bg-slate-100">Collapse all</button>
             </div>
           )}
-          <span className="text-xs text-slate-500">Assigned {money(data.assignedTotal, c)} · Unassigned {money(data.unassignedTotal, c)}</span>
+          <span className="text-xs text-slate-500">Assigned <Money value={data.assignedTotal} currency={c} /> · Unassigned <Money value={data.unassignedTotal} currency={c} /></span>
         </div>
       </div>
       <div className="grid grid-cols-[1fr_110px_130px_120px] gap-2 pb-1 text-xs text-slate-500" style={{ paddingLeft: 8 }}>
@@ -425,7 +428,7 @@ function PreliminariesView({ estimateId }: { estimateId: number }) {
             <tr key={p.id} className="border-b border-[var(--border)] last:border-0">
               <td className="px-4 py-1.5">{p.description}</td>
               <td className="px-2 py-1.5 text-slate-500">{p.kind}</td>
-              <td className="px-4 py-1.5 text-right font-medium">{money(p.computedTotal, c)}</td>
+              <td className="px-4 py-1.5 text-right font-medium"><Money value={p.computedTotal} currency={c} /></td>
             </tr>
           ))}
         </tbody>
@@ -451,7 +454,7 @@ function MarkupsView({ estimateId }: { estimateId: number }) {
             <tr key={m.id} className="border-b border-[var(--border)] last:border-0">
               <td className="px-4 py-1.5">{m.label || m.type}</td>
               <td className="px-2 py-1.5 text-right text-slate-500">{m.percentage}%</td>
-              <td className="px-4 py-1.5 text-right font-medium">{money(m.computedAmount, c)}</td>
+              <td className="px-4 py-1.5 text-right font-medium"><Money value={m.computedAmount} currency={c} /></td>
             </tr>
           ))}
         </tbody>

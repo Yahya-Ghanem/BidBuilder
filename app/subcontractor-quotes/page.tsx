@@ -10,7 +10,7 @@ import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input, TableScroll } from "@/components/ui"
 import { Modal, Field, ModalActions, Select, Textarea } from "@/components/form"
-import { money } from "@/lib/utils"
+import { Money } from "@/components/money"
 
 /**
  * 20.6 — Subcontractor quote portal (estimator side). Create a request-for-quote
@@ -120,7 +120,11 @@ function Register() {
                   <td className="px-4 py-2"><StatusBadge status={q.status} expired={q.expired} /></td>
                   <td className="px-4 py-2 text-right tabular-nums">
                     {q.quotedAmount != null
-                      ? <>{money(q.quotedAmount)} <span className="text-slate-400">{q.currency}</span></>
+                      // 25.1 — Was "AED 187,500.50 AED": `money(quotedAmount)` already prefixed
+                      // the (defaulted) currency, and `{q.currency}` was appended next to it,
+                      // producing a duplicate (or worse, conflicting) currency code. <Money>
+                      // takes currency as a required prop and renders it once via Intl.
+                      ? <Money value={q.quotedAmount} currency={q.currency} />
                       : <span className="text-slate-300">—</span>}
                   </td>
                   <td className="px-4 py-2 text-slate-500">{q.expiresAt.slice(0, 10)}</td>

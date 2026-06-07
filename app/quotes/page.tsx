@@ -10,7 +10,7 @@ import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input, TableScroll } from "@/components/ui"
 import { Modal, Field, ModalActions, Select } from "@/components/form"
-import { money } from "@/lib/utils"
+import { Money } from "@/components/money"
 import { useI18n } from "@/lib/i18n"
 
 /**
@@ -29,7 +29,7 @@ type TypeFilter = (typeof TYPES)[number]
 
 function QuotesTable() {
   const qc = useQueryClient()
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const { can } = usePermissions()
   const canAdd = can("resource-library", "add")
   const canDelete = can("resource-library", "delete")
@@ -92,7 +92,7 @@ function QuotesTable() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-2 text-end tabular-nums">{money(q.price, q.currency, locale)}</td>
+                  <td className="px-4 py-2 text-end"><Money className="tabular-nums" value={q.price} currency={q.currency} /></td>
                   <td className="px-4 py-2 text-slate-500">{q.unit}</td>
                   <td className="px-4 py-2 text-slate-500">{q.note ?? <span className="text-slate-300">—</span>}</td>
                   <td className="px-2 py-2">

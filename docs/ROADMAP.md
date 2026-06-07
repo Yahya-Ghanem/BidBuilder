@@ -647,3 +647,307 @@ the phases in order:
 **Recommended first PR: 17.1** — small, highest-risk area for a pricing tool, and it makes every
 subsequent change provably safe. Each item above is independently shippable through the existing
 PR-gated flow (branch → CI green → squash-merge → rebuild → smoke).
+
+---
+
+## 11. Forward roadmap — Senior design review → professional UX grade
+
+> Phases 20–24 (mobile, MFA/SSO, AI rate suggestion, email, API keys, templates, Arabic i18n,
+> weekly digests, IP-allowlist, HMAC portal links, rate trends, anomaly detector, i18n deepening,
+> template sharing, a11y CI gate, branding text) shipped between this section and the previous
+> one — they are tracked in `memory/bidbuilder-project.md`. The four phases below come from a
+> **senior-designer review of the live build** (47-surface walkthrough, June 2026) and address
+> the visual/UX debt that accumulated while shipping breadth.
+>
+> **Headline findings:**
+> 1. The project detail page stacks **14 sections** in one scroll (~5,000 px) — needs tabs.
+> 2. The settings page stacks **14 cards** in one scroll (~6,000 px) — needs sub-navigation.
+> 3. **Visible formatting bugs** in production demos (`AED 187,500.50 AED` on subcontractor
+>    quotes, unlabelled `· 5` count in the areas tree, leftover test data) erode user trust.
+> 4. **Color-contrast debt** (slate-400 muted text) deferred from Phase 24.4 still affects most
+>    surfaces outside /login and /settings.
+> 5. **Stat cards lack trend signals** — the headline bid price never shows ±% vs the previous
+>    revision, despite that being the single number estimators iterate on.
+>
+> The platform is **functionally complete and technically solid** — Phases 25–28 are about
+> presentation matching capability. Each phase is roughly 5 items, sized to fit the same
+> 5-feature shipping cadence as Phases 20–24.
+
+### Phase 25 — P0: design polish (visible-bug + IA fixes that block enterprise sale)
+
+Highest-leverage UX work. Every item here is a small, frontend-only change that reshapes the
+perceived quality of the product without any backend or schema change.
+
+#### 25.1 — `D1` Money component + format audit (currency-dup fix) — **S**
+- **Why.** The subcontractor-quotes page renders `AED 187,500.50 AED` (currency rendered twice);
+  multiple surfaces use ad-hoc number formatting. Construction estimators triple-check money
+  figures — visible formatting bugs break trust instantly.
+- **Steps.** Introduce `<Money value={n} currency={c} />` as the single source of truth (locale-
+  aware thousands separator, currency symbol position, secondary-currency suffix). Audit every
+  place a money value renders (`grep "currency"` across `app/` and `components/`). Wire it.
+- **Files.** `components/money.tsx` (new), every surface that displays money
+  (`app/projects/[id]/_components/*`, `app/subcontractor-quotes/*`, `app/quotes/*`,
+  `components/projects-tree.tsx`).
+- **Acceptance.** A new unit test asserts `<Money value={187500.5} currency="AED" />` renders
+  exactly `AED 187,500.50` with no duplicate suffix; visual QA on all 47 captured surfaces.
+
+#### 25.2 — `D2` Settings sub-navigation (4 logical tabs) — **S**
+- **Why.** The settings page is 14 cards stacked in a 6,000-px column. There is no visual
+  grouping and no way to find a specific setting except by scrolling.
+- **Steps.** Group cards into four tabs: **Company** (profile, logo, branding, custom domain) ·
+  **Workspace** (estimating defaults, approvals, currencies, email/digest) · **Catalogues**
+  (cost types, activities, project types, templates) · **Integrations** (SSO, webhooks, API
+  keys). Sticky tab strip below the page title; deep-link via `?tab=company`.
+- **Files.** `app/settings/page.tsx` (refactor — split out a `<SettingsTabs>` plus 4 panel
+  components), `lib/i18n-core.ts` (new tab labels in en + ar).
+- **Acceptance.** Each tab loads in a single viewport on 1080p; deep-link works; a11y gate
+  stays green; lighthouse perf doesn't regress.
+
+#### 25.3 — `D3` Project detail page — tab restructure — **M**
+- **Why.** The single biggest UX issue. 14 sections stacked vertically on the project page
+  forces a wall of scroll on a new estimator and wastes time for experienced ones.
+- **Steps.** Restructure as: sticky project header + 4 stat cards always visible; below them, a
+  tab strip: **Overview** (teams, areas, revisions) · **Estimate** (BOQ, prelims, markups,
+  what-if, target) · **Insights** (cost-by-area, activities, anomalies, compare) · **Risk**
+  (risk register, cash-flow S-curve) · **Activity** (approvals, audit excerpt, future comments).
+  The Bid price card never leaves the screen.
+- **Files.** `app/projects/[id]/page.tsx`, every `app/projects/[id]/_components/*.tsx` (no
+  behaviour change, just regrouping into tab panels), `lib/i18n-core.ts`.
+- **Acceptance.** Scroll distance on a fresh project drops from ~5,000 px to ~1,200 px; happy-
+  path E2E still passes; a11y gate green; visual diff approved.
+
+#### 25.4 — `D4` Revision bar consolidation — **S**
+- **Why.** 14 controls in one strip (revision dropdown + 6 lifecycle buttons + status + show-in
+  + date + 4 export buttons). Cognitive overload and risk of mis-click on irreversible actions.
+- **Steps.** Collapse lifecycle actions (`New`, `Duplicate`, `Copy to…`, `Save as template`,
+  `From template`, `Delete`) into one `Actions ▾` dropdown. Collapse exports
+  (`Excel`, `CSV`, `PDF`, `Bid Letter`) into one `Export ▾` dropdown. Result: 4 controls
+  visible — revision dropdown, status, Actions, Export.
+- **Files.** `app/projects/[id]/_components/estimates-section.tsx`,
+  `components/ui.tsx` (add `DropdownButton` if not present).
+- **Acceptance.** Bar fits in one row on 1366-px viewport without wrapping; every action still
+  reachable in ≤ 2 clicks; happy-path E2E green.
+
+#### 25.5 — `D5` Stat-card trend deltas + per-m² toggle — **S**
+- **Why.** The Bid price card shows `SAR 2,724,499.41` with no indication of direction vs
+  previous revision. For a tool whose whole purpose is iterating on price, this is missed
+  information. Estimators also want cost-per-m² visible.
+- **Steps.** Add a small `<DeltaBadge>` to each stat card: `↑ 4.2% vs Rev 1` (green if better
+  for the user — usually lower direct cost / higher bid). Add a per-m² toggle on the stat-card
+  row that divides totals by the top-level area's quantity when areas exist.
+- **Files.** `app/projects/[id]/_components/stat-cards.tsx` (new),
+  `app/projects/[id]/_components/estimates-section.tsx`,
+  `api/Endpoints/EstimateEndpoints.cs` (add prev-revision delta to breakdown DTO).
+- **Acceptance.** Delta badge visible when ≥ 2 revisions exist; per-m² toggle round-trips a
+  preference per estimate; tests cover the % calculation.
+
+### Phase 26 — P0: design-system foundation (compound interest for every later feature)
+
+Before more features ship, codify the visual primitives so the next batch lands faster and
+more consistently. Every line of CSS variable / shared component pays back compound interest.
+
+#### 26.1 — `D6` Design tokens — `--text`, `--danger`, `--warning`, `--success`, `--space-N`, `--radius-N` — **S**
+- **Why.** `app/globals.css` already defines `--brand` / `--bg` / `--card` / `--border` /
+  `--muted`. But literal Tailwind colors (`text-rose-600`, `text-amber-600`) appear in dozens
+  of components. Future palette work is a 30-file PR; with tokens it's a one-file PR.
+- **Steps.** Extend `globals.css` with the missing tokens (text, semantic colors, spacing
+  scale, radius scale). Add a Tailwind v4 `@theme` block exposing them. Replace literal usages
+  in the components touched by Phase 25 first; opportunistic replacement elsewhere.
+- **Files.** `app/globals.css`, `tailwind.config.ts` (or v4 `@theme`), components touched.
+- **Acceptance.** Every semantic color used in Phase 25 components routes through a token;
+  `grep "text-rose-600\|text-amber-600\|text-emerald-"` in touched files returns nothing.
+
+#### 26.2 — `D7` Color contrast sweep — close the 24.4 deferred debt — **M**
+- **Why.** Phase 24.4 a11y gate intentionally deferred the slate-400 → slate-500 sweep across
+  `/projects` and `/projects/[id]`. Dozens of hint texts in the BOQ, areas, activities, and
+  cost-by-area panels still fail WCAG AA (2.6:1 vs 4.5:1 required).
+- **Steps.** Replace every `text-slate-400` on text < 14pt with `text-[var(--muted)]` (already
+  slate-500, 4.78:1 on white). Audit dark badges and icons separately — icons under 14pt also
+  need 4.5:1 against background. Flip `A11Y_INCLUDE_SERIOUS=1` on the a11y spec to lock the
+  new bar in CI.
+- **Files.** All `app/projects/[id]/_components/*.tsx`, `components/projects-tree.tsx`,
+  `app/resources/page.tsx`, `tests-e2e/a11y.spec.ts`.
+- **Acceptance.** `A11Y_INCLUDE_SERIOUS=1 npx playwright test tests-e2e/a11y.spec.ts` returns
+  0 violations; the existing critical-only CI gate stays green; visual regression negligible.
+
+#### 26.3 — `D8` Typography scale — promote primary body text to 14px — **S**
+- **Why.** The product currently uses `text-xs` (12px) and `text-sm` (14px) heavily for primary
+  content. 12px is fine for hint text but uncomfortable for primary labels and form values
+  during long sessions.
+- **Steps.** Audit usages: keep `text-xs` for hint / caption / metadata; bump primary form
+  labels and table cell content from `text-xs` → `text-sm`. Define the scale in `globals.css`
+  comments so future contributors don't drift.
+- **Files.** `components/projects-tree.tsx`, all `app/projects/[id]/_components/*.tsx`,
+  `app/settings/*.tsx`, `app/resources/page.tsx`, `app/admin/page.tsx`.
+- **Acceptance.** Primary content readable at arm's length on a 1080p screen; no a11y regression;
+  layout/spacing visually unchanged (text-sm has same line-height bucket as text-xs).
+
+#### 26.4 — `D9` `<DataTable>` component — single dense-grid wrapper — **M**
+- **Why.** The BOQ table, area roll-up, cost-by-area, audit log, quotes register, subcontractor
+  quotes, users table — all hand-rolled, each subtly different. A single `<DataTable>` lets us
+  add column resize, sticky header, sort, and selection in one place.
+- **Steps.** Wrap a slim API around TanStack Table (already used by virtualization elsewhere).
+  Build the BOQ table on it as the first consumer; migrate other tables opportunistically.
+- **Files.** `components/data-table.tsx` (new), `app/projects/[id]/_components/boq.tsx`
+  (first consumer).
+- **Acceptance.** BOQ scrolls smoothly with sticky header on a 1,000-row example; selection
+  state for future bulk actions exposed via callback; happy-path E2E green.
+
+#### 26.5 — `D10` `<EmptyState>` component + 6 first-time screens — **M**
+- **Why.** A brand-new tenant lands on empty Projects, Resources, Assemblies, Quotes, etc. and
+  sees a blank page with no guidance. Every empty state today is just *"No items yet."*
+- **Steps.** Build `<EmptyState illustration title body cta />`. Design 6 empty states:
+  Projects · Resources · Assemblies · Subcontractor Quotes · Quotes Register · Templates.
+  Line-art SVG illustrations to keep file size tiny.
+- **Files.** `components/empty-state.tsx` (new), `public/illustrations/*.svg` (new),
+  every surface listed above.
+- **Acceptance.** A fresh tenant can read what each surface does without opening docs; the CTA
+  on each state opens the relevant create modal; a11y gate green.
+
+### Phase 27 — P1: collaboration & honest mobile
+
+Now that the IA is fixed and the design system codified, address the soft features that turn
+the product from "complete tool" into "team-ready platform."
+
+#### 27.1 — `C1` BOQ line comments + @mentions — **L**
+- **Why.** Estimators currently use Slack/email to discuss specific BOQ lines. The status
+  workflow ("Under review") implies an internal review process the UI doesn't actually
+  support. A native commenting thread per line closes the gap.
+- **Steps.** New `BoqLineComment` model (author, body, parentCommentId, mentions); endpoints
+  `GET/POST/DELETE /api/estimates/{eid}/items/{iid}/comments`; small icon at the end of each
+  BOQ row that opens a side-panel thread; @mention fires a notification using the existing
+  notification system (20.3).
+- **Files.** `api/Models/BoqLineComment.cs`, `api/Endpoints/CommentEndpoints.cs`,
+  migration **AddBoqLineComments**, `app/projects/[id]/_components/boq.tsx`,
+  `app/projects/[id]/_components/comment-panel.tsx` (new), tests.
+- **Acceptance.** A reviewer leaves a comment on item id=N; the author gets a notification;
+  resolving the comment removes it from the open-comments count; permissions: anyone with boq
+  View can comment, only author + admin can delete.
+
+#### 27.2 — `C2` Live presence cues on a revision — **M**
+- **Why.** You already have optimistic concurrency (xmin → 409). But there's no proactive cue:
+  if Sarah is editing right now, Ahmed only finds out when his save fails. For a multi-person
+  bid this is friction-by-default.
+- **Steps.** Lightweight presence — 30 s heartbeat ping (`POST /api/estimates/{id}/presence`)
+  while the user is on the editor; `GET` returns the list of recent presences (last 90 s);
+  small avatar cluster in the revision bar shows "Sarah is also viewing." Server-side cache,
+  no SignalR required for v1.
+- **Files.** `api/Endpoints/PresenceEndpoints.cs` (new), `lib/usePresence.ts` (new),
+  `app/projects/[id]/_components/estimates-section.tsx`.
+- **Acceptance.** Two browsers on the same revision see each other within ~30 s; presence
+  drops within 90 s of leaving the page; no DB writes beyond cache invalidation.
+
+#### 27.3 — `C3` Mobile honest-mode banner + read-only enforcement — **S**
+- **Why.** Phase 20.7 shipped mobile-responsive reads, but the BOQ table, build-up modal, and
+  what-if panel don't work usefully on a phone. Pretending they do is worse than admitting it.
+- **Steps.** Detect viewport ≤ 768 px on edit surfaces; show a sticky banner: *"Editing BOQ
+  requires a larger screen — switch to read-only view"*; hide edit affordances (add, delete,
+  inline-edit cells) below that threshold while preserving all read views.
+- **Files.** `lib/useViewport.ts` (new), `app/projects/[id]/_components/boq.tsx`,
+  every other edit surface inside `app/projects/[id]/_components/`.
+- **Acceptance.** A user on a 390-px viewport sees the read view + banner; can still tap a
+  stat card to scroll; can still approve a bid. A 1024-px viewport sees the normal editor.
+
+#### 27.4 — `C4` Notifications grouping + unread separator — **S**
+- **Why.** The bell dropdown is a raw event list. Three approval requests appear as three
+  separate items; "publish" events from the same project aren't grouped; there's no read /
+  unread separator.
+- **Steps.** Add `readAt` to notifications (migration); group by entity-type + entity-id in the
+  dropdown; show "Unread (N)" header then "Earlier"; mark-all-read button.
+- **Files.** `api/Models/Notification.cs`, migration **AddNotificationReadAt**,
+  `api/Endpoints/NotificationEndpoints.cs`, `components/notification-bell.tsx`.
+- **Acceptance.** 5 publish events on the same project show as one collapsed row with count;
+  unread bold, read normal; mark-all-read updates the bell counter to 0.
+
+#### 27.5 — `C5` Project favorites / pinned + recent — **S**
+- **Why.** For a user with 50+ projects, finding the active 2-3 is painful. The sidebar tree
+  groups by type but offers no personalization.
+- **Steps.** Add per-user `pinnedProjectIds` to a new `UserPreferences` model; "Pin" action
+  on the project header; pinned projects appear at the top of the sidebar tree in a "Pinned"
+  section; "Recent" section right below shows last-5 visited.
+- **Files.** `api/Models/UserPreferences.cs`, migration **AddUserPreferences**,
+  `api/Endpoints/UserPreferenceEndpoints.cs`,
+  `components/projects-tree.tsx`, `app/projects/[id]/page.tsx`.
+- **Acceptance.** Pinning a project from any session moves it to the Pinned section across
+  every session of the same user; recent list updates on every project-page visit.
+
+### Phase 28 — P2: power-user features (after IA & system foundation)
+
+Higher-effort or lower-frequency items deliberately deferred so they don't compete with the
+foundation. Each is independently shippable.
+
+#### 28.1 — `P1` Dark mode — **M**
+- **Why.** Long sessions in dense data tables benefit from reduced eye strain. The token
+  refactor in 26.1 makes dark mode a re-skinning exercise, not a rewrite.
+- **Steps.** Add a `data-theme="dark"` set of CSS variable overrides in `globals.css`; system
+  preference detection + manual override in the user menu; persist per user.
+- **Files.** `app/globals.css`, `components/theme-toggle.tsx` (new), `lib/useTheme.ts` (new),
+  every component verified for contrast in both themes (a11y gate now also runs dark).
+- **Acceptance.** Toggle in 200 ms with no flash; a11y gate green for both themes; brand teal
+  legible in both.
+
+#### 28.2 — `P2` Bulk actions in BOQ — multi-select rows — **M**
+- **Why.** Power users want to copy / move / delete several BOQ rows at once. The
+  `<DataTable>` selection callback from 26.4 already exposes the state.
+- **Steps.** Add a sticky action bar that appears when ≥ 1 row is selected: Delete, Move to
+  section…, Duplicate, Tag with area. Endpoint accepts a list of item ids.
+- **Files.** `app/projects/[id]/_components/boq.tsx`,
+  `api/Endpoints/EstimateEndpoints.cs` (bulk endpoint).
+- **Acceptance.** Selecting 10 lines and deleting them is one click instead of 10; happy-path
+  E2E green; tests cover bulk endpoint authorisation per-line.
+
+#### 28.3 — `P3` Export preview before download — **M**
+- **Why.** A user clicks PDF and 60 KB lands in their downloads. If the data is wrong they
+  send a broken document to the client. A preview catches mistakes in the loop.
+- **Steps.** Render exports to a preview modal first (PDF.js for PDF, an Excel-to-HTML
+  preview for xlsx) with a Download button. Add `?preview=1` query param on the existing
+  export endpoints.
+- **Files.** `app/projects/[id]/_components/estimates-section.tsx`,
+  `components/export-preview-modal.tsx` (new).
+- **Acceptance.** Clicking PDF opens an inline preview; clicking Download saves the file;
+  user can close the preview without downloading.
+
+#### 28.4 — `P4` Bid-letter templates — pick from 2–3 styles — **M**
+- **Why.** The bid letter currently has one fixed layout. Different clients (government,
+  private, international) expect different cover-letter tones / formats.
+- **Steps.** Add a `BidLetterTemplate` model with a name + QuestPDF layout reference. Ship
+  three: Formal (current), Concise, International (English+Arabic columns). User picks at
+  generate time; admin can mark one as default.
+- **Files.** `api/Models/BidLetterTemplate.cs`, `api/Services/ExportService.cs` (extract
+  per-style renderers), `app/projects/[id]/_components/bid-letter-modal.tsx`.
+- **Acceptance.** All three styles render with the same project data; tenant default
+  preserved; existing branding text (24.5) honoured in all three.
+
+#### 28.5 — `P5` Search palette upgrades — recent + filters + actions — **S**
+- **Why.** The search palette is great but minimal. Power users want recent items + entity-
+  type filters (`@project`, `@assembly`) + actions (`new project…`).
+- **Steps.** Top section shows last-5 visited entities when query is empty; typing `@p` filters
+  to projects only; typing `>` switches to action mode (`> new project`, `> sign out`).
+- **Files.** `components/search-palette.tsx`,
+  `lib/useRecentEntities.ts` (new).
+- **Acceptance.** Recent shows after Ctrl+K with no query; `@p Sun` returns only Sunrise project;
+  `> sign` shows the sign-out action; all keyboard-navigable.
+
+### Conclusion & sequencing (Phases 25–28)
+
+The product is **functionally complete and technically solid** after Phases 17–24. The four
+phases above are about **presentation matching capability** — the visual + IA + system foundation
+work that turns a feature-complete platform into a polished, enterprise-grade product.
+
+1. **Phase 25 (P0) — design polish — do first.** Five small, frontend-only items that fix the
+   most visible friction (the 14-section project page, the 14-card settings page, the
+   currency-dup bug, the overloaded revision bar, the missing trend signals). Two-week sprint.
+2. **Phase 26 (P0) — design-system foundation — do second.** Codify tokens, finish the a11y
+   color-contrast debt from 24.4, promote body type to 14 px, extract `<DataTable>` and
+   `<EmptyState>`. Every later phase becomes faster and more consistent. Two-week sprint.
+3. **Phase 27 (P1) — collaboration & honest mobile.** Once the IA is fixed and the system is
+   coherent, layer on BOQ line comments, presence cues, mobile honest-mode, notifications
+   grouping, project pins. Two-to-three-week sprint.
+4. **Phase 28 (P2) — power-user features.** Dark mode, bulk BOQ actions, export preview,
+   bid-letter templates, search palette upgrades — all on top of the foundation from 25–26.
+   Two-week sprint.
+
+**Recommended first PR: 25.1** — the `<Money>` component + currency-dup audit. Half a day of
+work, immediate trust impact, and zero coupling to the larger IA refactors. Every subsequent
+phase compounds on the same proven flow: branch → CI green (backend + frontend + a11y +
+happy-path) → squash-merge → rebuild → smoke.

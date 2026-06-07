@@ -3,11 +3,11 @@
 import { useQuery } from "@tanstack/react-query"
 import { BarChart3, FolderKanban } from "lucide-react"
 import { fetchApi } from "@/lib/api"
-import { money } from "@/lib/utils"
 import type { BenchmarkResult, BenchmarkUnitGroup } from "@/lib/types"
 import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
 import { Card, Badge, statusColor, TableScroll } from "@/components/ui"
+import { Money } from "@/components/money"
 
 export default function BenchmarksPage() {
   return (
@@ -63,7 +63,7 @@ function ProjectsCard({ data }: { data: BenchmarkResult }) {
                   ? <>Rev {p.revision} {p.status && <Badge className={statusColor(p.status)}>{p.status}</Badge>}</>
                   : <span className="text-slate-400">no estimate</span>}
               </td>
-              <td className="py-2 text-right font-medium">{money(p.bidPrice, p.currency)}</td>
+              <td className="py-2 text-right font-medium"><Money value={p.bidPrice} currency={p.currency} /></td>
             </tr>
           ))}
         </tbody>
@@ -87,9 +87,9 @@ function UnitGroupCard({ g }: { g: BenchmarkUnitGroup }) {
         </h3>
         {hasAgg && (
           <div className="flex gap-3 text-xs text-slate-500">
-            <span>min <b className="text-slate-700">{money(g.min!, base)}</b></span>
-            <span>avg <b className="text-slate-700">{money(g.avg!, base)}</b></span>
-            <span>max <b className="text-slate-700">{money(g.max!, base)}</b></span>
+            <span>min <b className="text-slate-700"><Money value={g.min!} currency={base} /></b></span>
+            <span>avg <b className="text-slate-700"><Money value={g.avg!} currency={base} /></b></span>
+            <span>max <b className="text-slate-700"><Money value={g.max!} currency={base} /></b></span>
           </div>
         )}
       </div>
@@ -123,12 +123,12 @@ function UnitGroupCard({ g }: { g: BenchmarkUnitGroup }) {
               <td className="py-2"><span className="font-mono text-xs text-slate-400">{pt.projectCode}</span></td>
               <td className="py-2 text-slate-700">{pt.areaName} <span className="text-xs text-slate-400">{pt.kind}</span></td>
               <td className="py-2 text-right tabular-nums">{pt.quantity} {pt.unit}</td>
-              <td className="py-2 text-right tabular-nums text-slate-500">{money(pt.total, pt.currency)}</td>
-              <td className="py-2 text-right font-medium tabular-nums">{money(pt.costPerUnit, pt.currency)}</td>
+              <td className="py-2 text-right tabular-nums text-slate-500"><Money value={pt.total} currency={pt.currency} /></td>
+              <td className="py-2 text-right font-medium tabular-nums"><Money value={pt.costPerUnit} currency={pt.currency} /></td>
               {mixed && (
                 <td className="py-2 text-right tabular-nums text-slate-500">
                   {pt.costPerUnitBase != null
-                    ? money(pt.costPerUnitBase, base)
+                    ? <Money value={pt.costPerUnitBase} currency={base} />
                     : <span className="text-amber-600" title={`No ${pt.currency}→${base} rate`}>—</span>}
                 </td>
               )}

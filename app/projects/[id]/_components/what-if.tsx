@@ -6,6 +6,7 @@ import { RotateCcw, SlidersHorizontal } from "lucide-react"
 import { fetchApi } from "@/lib/api"
 import type { MarkupBreakdown, WhatIfResult } from "@/lib/types"
 import { Card, Button, Input } from "@/components/ui"
+import { Money } from "@/components/money"
 import { money } from "@/lib/utils"
 import { useT } from "@/lib/i18n"
 import { Row } from "./shared"
@@ -83,7 +84,7 @@ export function WhatIfPanel({ estimateId, markups, currency, canEdit }: {
               <Input className="w-20 py-1 text-right" type="number" step="0.01" min={0}
                 value={draft[m.id] ?? ""} onChange={(ev) => setDraft({ ...draft, [m.id]: ev.target.value })} />
               <span className="w-8 text-xs text-slate-400">%</span>
-              <span className="w-28 text-right font-medium">{money(line?.computedAmount ?? 0, currency)}</span>
+              <Money className="w-28 text-right font-medium" value={line?.computedAmount ?? 0} currency={currency} />
             </div>
           </div>
         )
@@ -92,10 +93,10 @@ export function WhatIfPanel({ estimateId, markups, currency, canEdit }: {
       <div className="mt-2 flex items-center justify-between border-t-2 border-[var(--border)] pt-2">
         <span className="text-sm font-semibold text-slate-700">{t("ed.whatif.projected")}</span>
         <div className="text-end">
-          <div className="text-lg font-bold text-[var(--brand)]">{money(result?.bidPrice ?? 0, currency)}</div>
+          <Money as="div" className="text-lg font-bold text-[var(--brand)]" value={result?.bidPrice ?? 0} currency={currency} />
           {Math.abs(delta) >= 0.01 && (
             <div className={delta > 0 ? "text-xs text-emerald-600" : "text-xs text-rose-600"}>
-              {delta > 0 ? "+" : ""}{money(delta, currency)} {t("ed.whatif.delta")}
+              {delta > 0 ? "+" : ""}<Money value={delta} currency={currency} /> {t("ed.whatif.delta")}
             </div>
           )}
         </div>
