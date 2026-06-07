@@ -79,7 +79,11 @@ public static class DbInitializer
         var t = await db.Tenants.FirstOrDefaultAsync(x => x.Slug == slug);
         if (t is null)
         {
-            t = new Tenant { Id = Guid.NewGuid(), Slug = slug, Name = "Demo Contractor", DefaultLocale = "en" };
+            t = new Tenant {
+                Id = Guid.NewGuid(), Slug = slug, Name = "Demo Contractor", DefaultLocale = "en",
+                // 23.3 — portal signing key minted up-front so the first signed link doesn't lazy-write.
+                PortalSigningKey = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)),
+            };
             db.Tenants.Add(t);
             await db.SaveChangesAsync();
         }

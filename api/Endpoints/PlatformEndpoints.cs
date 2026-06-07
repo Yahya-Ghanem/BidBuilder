@@ -90,7 +90,12 @@ public static class PlatformEndpoints
                     return Conflict("A user with that email already exists.");
             }
 
-            var t = new Tenant { Id = Guid.NewGuid(), Slug = slug, Name = name, DefaultLocale = locale };
+            var t = new Tenant {
+                Id = Guid.NewGuid(), Slug = slug, Name = name, DefaultLocale = locale,
+                // 23.3 — Mint the portal HMAC key at provision time so the very first signed
+                // link a tenant ever produces is already keyed (no lazy first-touch surprise).
+                PortalSigningKey = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)),
+            };
             db.Tenants.Add(t);
             await db.SaveChangesAsync();
 

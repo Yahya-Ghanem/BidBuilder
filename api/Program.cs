@@ -111,6 +111,9 @@ builder.Services.AddScoped<BidBuilder.Api.Services.EstimateTemplateService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.DigestService>();
 if (builder.Configuration.GetValue("Digests:Enabled", true))
     builder.Services.AddHostedService<BidBuilder.Api.Services.DigestSchedulerService>();
+// 23.3 — HMAC-signed anonymous-portal URLs (subcontractor RFQ today; extensible).
+// Scoped because it touches the request DbContext to read/upsert the tenant's signing key.
+builder.Services.AddScoped<BidBuilder.Api.Services.PortalLinkSigner>();
 
 // ── FluentValidation (19.7) ───────────────────────────────────────────────────
 // Auto-register every IValidator<T> in the API assembly so the ValidationFilter
