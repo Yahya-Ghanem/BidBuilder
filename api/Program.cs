@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
@@ -227,7 +228,20 @@ builder.Configuration["Jwt:SigningKey"] = jwtKey;
 var jwtIssuer   = builder.Configuration["Jwt:Issuer"]   ?? "bidbuilder";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "bidbuilder";
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+builder.Services.AddAuthentication(o =>
+    {
+        // Default to a policy scheme that routes each request to the right authenticator:
+        // an X-Api-Key header → the ApiKey scheme (21.2); otherwise the JWT bearer scheme.
+        o.DefaultScheme          = "Multi";
+        o.DefaultChallengeScheme = "Multi";
+    })
+    .AddPolicyScheme("Multi", "JWT or API key", o =>
+    {
+        o.ForwardDefaultSelector = ctx =>
+            ctx.Request.Headers.ContainsKey(BidBuilder.Api.Auth.ApiKeyTokens.Header)
+                ? BidBuilder.Api.Auth.ApiKeyTokens.Scheme
+                : JwtBearerDefaults.AuthenticationScheme;
+    })
     .AddJwtBearer(o =>
     {
         o.MapInboundClaims = false;
@@ -271,7 +285,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     ctx.Fail("Token has been superseded.");
             },
         };
-    });
+    })
+    .AddScheme<AuthenticationSchemeOptions, BidBuilder.Api.Auth.ApiKeyAuthenticationHandler>(
+        BidBuilder.Api.Auth.ApiKeyTokens.Scheme, null);
 builder.Services.AddAuthorization();
 
 builder.Services.AddEndpointsApiExplorer();
@@ -432,6 +448,7 @@ app.MapAuditEndpoints();
 app.MapNotificationEndpoints();
 app.MapSearchEndpoints();
 app.MapWebhookEndpoints();
+app.MapApiKeyEndpoints();
 app.MapSubcontractorQuoteEndpoints();
 app.MapCostComponentEndpoints();
 app.MapAreaEndpoints();

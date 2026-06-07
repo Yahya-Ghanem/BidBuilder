@@ -104,6 +104,23 @@ export interface TenantSettings {
   emailConfigured: boolean
 }
 
+/** 21.2 — A programmatic API key (never carries the secret after creation). */
+export interface ApiKey {
+  id: number
+  name: string
+  prefix: string
+  createdAt: string
+  lastUsedAt: string | null
+  expiresAt: string | null
+  revoked: boolean
+}
+
+/** 21.2 — The create response — the only time the raw secret is returned. */
+export interface ApiKeyCreated {
+  key: ApiKey
+  secret: string
+}
+
 /** 20.2 — One recorded sign-off on an estimate revision. */
 export interface ApprovalRow {
   id: number; approverUserId: number; approverEmail: string; approverName: string

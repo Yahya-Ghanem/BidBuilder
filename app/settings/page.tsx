@@ -11,6 +11,7 @@ import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input } from "@/components/ui"
 import { Field } from "@/components/form"
 import { WebhooksCard } from "./webhooks-card"
+import { ApiKeysCard } from "./api-keys-card"
 import { CustomDomainCard } from "./custom-domain-card"
 import { SsoCard } from "./sso-card"
 
@@ -109,6 +110,7 @@ function SettingsForm() {
       <CustomDomainCard isAdmin={isAdmin} />
       <SsoCard isAdmin={isAdmin} />
       <WebhooksCard isAdmin={isAdmin} />
+      <ApiKeysCard isAdmin={isAdmin} />
     </div>
   )
 }

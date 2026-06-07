@@ -88,6 +88,22 @@ Each tenant can opt its workspace out under **Settings → Email notifications**
 reports whether the transport is configured and the send succeeded. Sending is best-effort:
 a mail failure is logged and swallowed — it never breaks the action that triggered it.
 
+## Programmatic API keys (21.2)
+
+Headless callers (CI jobs, integrations, scripts) authenticate with a tenant-scoped
+**API key** instead of a JWT. A tenant admin mints one under **Settings → API keys**
+(`POST /api/admin/api-keys`); the secret (`bbk_…`) is shown **once** and only its
+SHA-256 hash is stored. Present it in an `X-Api-Key` header — no `Authorization`
+bearer and no `X-Tenant-Id` are needed (the tenant resolves from the key):
+
+```
+curl https://bid.example.com/api/projects -H "X-Api-Key: bbk_…"
+```
+
+A key acts **as the admin who created it** (inherits that user's role + team
+permissions) and is disabled automatically if the key is revoked, its optional expiry
+passes, or the owning user is deactivated. Revoke a key any time from the same screen.
+
 ## Per-tenant custom domains (20.11)
 
 A workspace can be reached at its own host (e.g. `bids.acme.com`). A tenant admin
