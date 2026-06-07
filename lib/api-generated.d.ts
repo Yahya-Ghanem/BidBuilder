@@ -5601,6 +5601,9 @@ export interface components {
             /** Format: int32 */
             expiresInDays?: number | null;
             name?: string | null;
+            /** Format: int32 */
+            rateLimitPerMinute?: number | null;
+            scopes?: string[] | null;
         };
         CreateEstimateRequest: {
             title?: string | null;

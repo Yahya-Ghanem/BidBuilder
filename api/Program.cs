@@ -78,6 +78,9 @@ builder.Services.AddProblemDetails(options =>
             System.Diagnostics.Activity.Current?.Id ?? ctx.HttpContext.TraceIdentifier;
 });
 builder.Services.AddScoped<JwtService>();
+// 22.2 — in-process per-API-key rate limiter (singleton; the fixed-window state must be
+// shared across requests). Read by ApiKeyGuard on every API-key request.
+builder.Services.AddSingleton<BidBuilder.Api.Auth.ApiKeyRateLimiter>();
 builder.Services.AddScoped<PermissionService>();
 builder.Services.AddScoped<ProjectAccessService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.RateEngine>();
@@ -403,6 +406,11 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseTenantResolution();
 app.UseAuthorization();
+
+// 22.2 — Enforce API-key scopes + per-key rate limits. Runs after auth (so the key's
+// claims are populated) and is a no-op for JWT/anonymous requests, so no existing
+// endpoint behavior changes; only X-Api-Key callers are gated.
+app.UseApiKeyGuard();
 
 // ── Hangfire dashboard (operator UI for the job queue) ───────────────────────
 // Mounted at /hangfire when Hangfire is enabled. Auth is HTTP Basic via

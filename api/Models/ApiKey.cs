@@ -29,6 +29,18 @@ public class ApiKey : IHasTenant
     /// <summary>SHA-256 (lowercase hex) of the full secret. Unique. The secret is never persisted.</summary>
     public string KeyHash { get; set; } = "";
 
+    /// <summary>22.2 — Comma-separated grants that gate what the key may do, on top of its
+    /// owner's RBAC permissions. <c>read</c> permits safe methods (GET/HEAD/OPTIONS);
+    /// <c>write</c> permits mutations (POST/PUT/PATCH/DELETE). A request whose method class
+    /// isn't granted is rejected 403 by <see cref="Auth.ApiKeyGuard"/>. Pre-22.2 keys are
+    /// backfilled to <c>read,write</c> (full access) so they keep working unchanged.</summary>
+    public string Scopes { get; set; } = "read,write";
+
+    /// <summary>22.2 — Optional throughput cap: max requests per minute for this key
+    /// (fixed window). Null = unlimited. Enforced in-process by <see cref="Auth.ApiKeyRateLimiter"/>
+    /// (429 + Retry-After on breach).</summary>
+    public int? RateLimitPerMinute { get; set; }
+
     public DateTime  CreatedAt  { get; set; } = DateTime.UtcNow;
     public DateTime? LastUsedAt { get; set; }
     /// <summary>Optional expiry; null = never expires.</summary>

@@ -20,16 +20,27 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
 
   const [name, setName] = useState("")
   const [days, setDays] = useState("")
+  const [canRead, setCanRead] = useState(true)
+  const [canWrite, setCanWrite] = useState(true)
+  const [rateLimit, setRateLimit] = useState("")
   const [newSecret, setNewSecret] = useState<string | null>(null)
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["api-keys"] })
 
   const create = useMutation({
-    mutationFn: () => fetchApi<ApiKeyCreated>("/api/admin/api-keys", {
-      method: "POST",
-      body: JSON.stringify({ name: name.trim(), expiresInDays: days.trim() ? Number(days) : null }),
-    }),
-    onSuccess: (k) => { setNewSecret(k.secret); setName(""); setDays(""); refresh(); toast.success("API key created") },
+    mutationFn: () => {
+      const scopes = [canRead && "read", canWrite && "write"].filter(Boolean) as string[]
+      return fetchApi<ApiKeyCreated>("/api/admin/api-keys", {
+        method: "POST",
+        body: JSON.stringify({
+          name: name.trim(),
+          expiresInDays: days.trim() ? Number(days) : null,
+          scopes,
+          rateLimitPerMinute: rateLimit.trim() ? Number(rateLimit) : null,
+        }),
+      })
+    },
+    onSuccess: (k) => { setNewSecret(k.secret); setName(""); setDays(""); setRateLimit(""); setCanRead(true); setCanWrite(true); refresh(); toast.success("API key created") },
     onError: (e) => toast.error((e as Error).message),
   })
   const revoke = useMutation({
@@ -86,6 +97,14 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
                     <span className="rounded bg-amber-100 px-1.5 text-xs text-amber-700">expired</span>
                   )}
                 </div>
+                <div className="mt-1 flex flex-wrap items-center gap-1">
+                  {k.scopes.map((s) => (
+                    <span key={s} className="rounded bg-sky-100 px-1.5 text-xs font-medium text-sky-700">{s}</span>
+                  ))}
+                  <span className="rounded bg-slate-100 px-1.5 text-xs text-slate-600">
+                    {k.rateLimitPerMinute == null ? "unlimited" : `${k.usageThisMinute}/${k.rateLimitPerMinute} per min`}
+                  </span>
+                </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                   <span>created {fmt(k.createdAt)}</span>
                   <span>· last used {fmt(k.lastUsedAt)}</span>
@@ -104,12 +123,24 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       {/* Mint a new key. */}
-      <div className="flex flex-wrap items-end gap-2 border-t border-[var(--border)] pt-3">
-        <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="CI pipeline" className="w-48" /></Field>
-        <Field label="Expires in days (optional)"><Input type="number" min={1} value={days} onChange={(e) => setDays(e.target.value)} placeholder="never" className="w-40" /></Field>
-        <Button disabled={!name.trim() || create.isPending} onClick={() => create.mutate()}>
-          <Plus className="h-4 w-4" /> {create.isPending ? "Creating…" : "Create key"}
-        </Button>
+      <div className="space-y-3 border-t border-[var(--border)] pt-3">
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="CI pipeline" className="w-48" /></Field>
+          <Field label="Expires in days (optional)"><Input type="number" min={1} value={days} onChange={(e) => setDays(e.target.value)} placeholder="never" className="w-40" /></Field>
+          <Field label="Rate limit / min (optional)"><Input type="number" min={1} value={rateLimit} onChange={(e) => setRateLimit(e.target.value)} placeholder="unlimited" className="w-40" /></Field>
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="text-xs font-medium text-slate-500">Scopes:</span>
+          <label className="flex items-center gap-1.5 text-sm text-slate-700">
+            <input type="checkbox" checked={canRead} onChange={(e) => setCanRead(e.target.checked)} /> Read (GET)
+          </label>
+          <label className="flex items-center gap-1.5 text-sm text-slate-700">
+            <input type="checkbox" checked={canWrite} onChange={(e) => setCanWrite(e.target.checked)} /> Write (POST/PUT/DELETE)
+          </label>
+          <Button disabled={!name.trim() || (!canRead && !canWrite) || create.isPending} onClick={() => create.mutate()}>
+            <Plus className="h-4 w-4" /> {create.isPending ? "Creating…" : "Create key"}
+          </Button>
+        </div>
       </div>
     </Card>
   )

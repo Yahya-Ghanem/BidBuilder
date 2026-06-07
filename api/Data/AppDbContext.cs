@@ -396,6 +396,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.Property(k => k.Name).HasMaxLength(120).IsRequired();
             b.Property(k => k.Prefix).HasMaxLength(24).IsRequired();
             b.Property(k => k.KeyHash).HasMaxLength(64).IsRequired();
+            // 22.2 — scopes CSV ("read,write"); existing rows backfilled in the migration.
+            b.Property(k => k.Scopes).HasMaxLength(64).IsRequired();
             b.HasQueryFilter(k => k.TenantId == _tenant.TenantId);
         });
 

@@ -123,6 +123,26 @@ A key acts **as the admin who created it** (inherits that user's role + team
 permissions) and is disabled automatically if the key is revoked, its optional expiry
 passes, or the owning user is deactivated. Revoke a key any time from the same screen.
 
+### Scopes + rate limits (22.2)
+
+Each key carries **scopes** that gate what it may do, layered on top of the owner's RBAC:
+
+| Scope | Grants |
+| --- | --- |
+| `read` | Safe methods — `GET` / `HEAD` / `OPTIONS`. |
+| `write` | Mutations — `POST` / `PUT` / `PATCH` / `DELETE`. |
+
+A request whose method class isn't granted is rejected **403** with a scope-specific
+message (distinct from an RBAC 403). Scopes are chosen at creation (checkboxes in the UI,
+or a `scopes: ["read"]` array on `POST /api/admin/api-keys`); keys created before 22.2 are
+backfilled to `read,write` so they keep working unchanged.
+
+A key can also carry an optional **rate limit** (`rateLimitPerMinute`). When set, requests
+beyond the per-minute budget get **429** with a `Retry-After` header and
+`X-RateLimit-Limit` / `X-RateLimit-Remaining` headers; the management list shows live
+usage. The limit is enforced **in-process** (fixed one-minute window), so it is per-API-instance
+and resets on restart — a throughput guard, not a hard cross-cluster quota.
+
 ## Per-tenant custom domains (20.11)
 
 A workspace can be reached at its own host (e.g. `bids.acme.com`). A tenant admin
