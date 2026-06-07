@@ -8,8 +8,13 @@ using BidBuilder.Api.Services;
 namespace BidBuilder.Api.Endpoints;
 
 // ── DTOs ─────────────────────────────────────────────────────────────────────
-public record EstimateTemplateDto(int Id, string Name, string? Description, int SectionCount, int ItemCount, DateTime CreatedAt);
-public record SaveTemplateInput(string? Name, string? Description, int EstimateId);
+public record EstimateTemplateDto(int Id, string Name, string? Description, int SectionCount, int ItemCount,
+    DateTime CreatedAt, string? Category, string[] Tags, bool IsFeatured, string? CreatedByName);
+public record SaveTemplateInput(string? Name, string? Description, int EstimateId, string? Category, string[]? Tags);
+/// <summary>22.3 — edit a template's library metadata (not its captured structure).</summary>
+public record UpdateTemplateInput(string? Name, string? Description, string? Category, string[]? Tags);
+/// <summary>22.3 — pin/unpin a template for the org.</summary>
+public record FeatureTemplateInput(bool Featured);
 public record FromTemplateInput(int TemplateId, string? Title);
 
 /// <summary>
@@ -26,14 +31,52 @@ public static class EstimateTemplateEndpoints
     {
         var grp = app.MapGroup("/api/estimate-templates").RequireAuthorization();
 
-        // List the tenant's templates (anyone who can create estimates picks from here).
-        grp.MapGet("/", async (ClaimsPrincipal me, AppDbContext db, PermissionService perm) =>
+        // List the tenant's templates as a browsable library: optional ?search (name/
+        // description), ?category (exact), ?tag (exact membership) filters; featured pinned
+        // to the top, then newest first. Includes the author's name for the card.
+        grp.MapGet("/", async (ClaimsPrincipal me, AppDbContext db, PermissionService perm,
+            string? search, string? category, string? tag) =>
         {
             if (!await perm.CanAsync(me, Admin, ModuleAction.View)) return Forbid();
-            var rows = await db.EstimateTemplates.OrderByDescending(t => t.Id)
-                .Select(t => new EstimateTemplateDto(t.Id, t.Name, t.Description, t.SectionCount, t.ItemCount, t.CreatedAt))
-                .ToListAsync();
-            return Results.Ok(rows);
+
+            var q = db.EstimateTemplates.AsQueryable();
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var pat = $"%{search.Trim()}%";
+                q = q.Where(t => EF.Functions.ILike(t.Name, pat)
+                              || (t.Description != null && EF.Functions.ILike(t.Description, pat)));
+            }
+            if (!string.IsNullOrWhiteSpace(category))
+            {
+                var cat = category.Trim();
+                q = q.Where(t => t.Category != null && t.Category.ToLower() == cat.ToLower());
+            }
+
+            var raw = await (from t in q
+                             join u in db.Users on t.CreatedByUserId equals u.Id into uj
+                             from u in uj.DefaultIfEmpty()
+                             orderby t.IsFeatured descending, t.Id descending
+                             select new { t, CreatedByName = (string?)(u != null ? u.Name : null) })
+                            .ToListAsync();
+
+            // Tag membership is exact (not substring), so split the stored CSV in memory.
+            var rows = raw.Select(x => ToDto(x.t, x.CreatedByName));
+            if (!string.IsNullOrWhiteSpace(tag))
+            {
+                var want = tag.Trim();
+                rows = rows.Where(d => d.Tags.Any(g => string.Equals(g, want, StringComparison.OrdinalIgnoreCase)));
+            }
+            return Results.Ok(rows.ToList());
+        });
+
+        // Distinct categories in use (for the library filter dropdown).
+        grp.MapGet("/categories", async (ClaimsPrincipal me, AppDbContext db, PermissionService perm) =>
+        {
+            if (!await perm.CanAsync(me, Admin, ModuleAction.View)) return Forbid();
+            var cats = await db.EstimateTemplates
+                .Where(t => t.Category != null && t.Category != "")
+                .Select(t => t.Category!).Distinct().OrderBy(c => c).ToListAsync();
+            return Results.Ok(cats);
         });
 
         // Save an estimate's structure as a template.
@@ -55,6 +98,8 @@ public static class EstimateTemplateEndpoints
             if (!await access.CanAccessProjectAsync(me, est.ProjectId))
                 return Results.NotFound(new { error = "Estimate not found" });   // hide cross-project
 
+            if (i.Category is { } cat && cat.Trim().Length > 40) return Bad("Category is too long (max 40).");
+
             var payload = templates.Build(est);
             var (sections, items) = EstimateTemplateService.Counts(payload);
             var tpl = new EstimateTemplate
@@ -62,14 +107,46 @@ public static class EstimateTemplateEndpoints
                 Name = name, Description = i.Description?.Trim(),
                 PayloadJson = EstimateTemplateService.Serialize(payload),
                 SectionCount = sections, ItemCount = items,
+                Category = Clean(i.Category), Tags = NormalizeTags(i.Tags),
                 CreatedByUserId = me.Id(),
             };
             db.EstimateTemplates.Add(tpl);                 // TenantId auto-stamped
             await db.SaveChangesAsync();
             await audit.LogAsync(me, "estimate-template.create", "EstimateTemplate", tpl.Id.ToString(),
                 $"{name} ({sections} sections / {items} items) from estimate {est.Id}");
-            return Results.Created($"/api/estimate-templates/{tpl.Id}",
-                new EstimateTemplateDto(tpl.Id, tpl.Name, tpl.Description, tpl.SectionCount, tpl.ItemCount, tpl.CreatedAt));
+            return Results.Created($"/api/estimate-templates/{tpl.Id}", ToDto(tpl, me.Name()));
+        });
+
+        // Edit a template's library metadata (name / description / category / tags).
+        grp.MapPut("/{id:int}", async (int id, UpdateTemplateInput i, ClaimsPrincipal me, AppDbContext db, PermissionService perm, AuditService audit) =>
+        {
+            if (!await perm.CanAsync(me, Admin, ModuleAction.Edit)) return Forbid();
+            var name = i.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(name)) return Bad("Name is required.");
+            if (name!.Length > 160) return Bad("Name is too long (max 160).");
+            if (i.Category is { } cat && cat.Trim().Length > 40) return Bad("Category is too long (max 40).");
+
+            var tpl = await db.EstimateTemplates.FirstOrDefaultAsync(t => t.Id == id);
+            if (tpl is null) return Results.NotFound(new { error = "Template not found" });
+            tpl.Name = name; tpl.Description = Clean(i.Description);
+            tpl.Category = Clean(i.Category); tpl.Tags = NormalizeTags(i.Tags);
+            await db.SaveChangesAsync();
+            await audit.LogAsync(me, "estimate-template.update", "EstimateTemplate", id.ToString(), name);
+            return Results.Ok(ToDto(tpl, me.Name()));
+        });
+
+        // Pin / unpin a template for the org. Tenant admin only — "feature for your org".
+        grp.MapPut("/{id:int}/featured", async (int id, FeatureTemplateInput i, ClaimsPrincipal me, AppDbContext db, AuditService audit) =>
+        {
+            if (!me.IsAdmin())
+                return Results.Json(new { error = "Only a tenant admin can feature templates." }, statusCode: 403);
+            var tpl = await db.EstimateTemplates.FirstOrDefaultAsync(t => t.Id == id);
+            if (tpl is null) return Results.NotFound(new { error = "Template not found" });
+            tpl.IsFeatured = i.Featured;
+            await db.SaveChangesAsync();
+            await audit.LogAsync(me, i.Featured ? "estimate-template.featured" : "estimate-template.unfeatured",
+                "EstimateTemplate", id.ToString(), tpl.Name);
+            return Results.Ok(ToDto(tpl, me.Name()));
         });
 
         // Delete a template.
@@ -103,6 +180,29 @@ public static class EstimateTemplateEndpoints
             return Results.Created($"/api/estimates/{est.Id}",
                 new EstimateSummaryDto(est.Id, est.Revision, est.Title, est.Status.ToString(), est.Currency, est.BidPrice, est.UpdatedAt));
         }).RequireAuthorization();
+    }
+
+    // ── helpers ──────────────────────────────────────────────────────────────────
+    private static EstimateTemplateDto ToDto(EstimateTemplate t, string? createdByName) => new(
+        t.Id, t.Name, t.Description, t.SectionCount, t.ItemCount, t.CreatedAt,
+        t.Category, TagArray(t.Tags), t.IsFeatured, createdByName);
+
+    private static string[] TagArray(string? csv) =>
+        (csv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private static string? Clean(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+
+    /// <summary>Trim, drop blanks, dedupe (case-insensitive), cap to 12 tags of ≤30 chars,
+    /// store comma-separated. Null when empty.</summary>
+    private static string? NormalizeTags(string[]? tags)
+    {
+        if (tags is null) return null;
+        var clean = tags.Select(t => t.Trim())
+            .Where(t => t.Length is > 0 and <= 30)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(12)
+            .ToList();
+        return clean.Count == 0 ? null : string.Join(",", clean);
     }
 
     private static IResult Bad(string msg) => Results.BadRequest(new { error = msg });

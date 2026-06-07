@@ -2,20 +2,22 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { FileStack, Trash2 } from "lucide-react"
+import { FileStack, Trash2, Star } from "lucide-react"
 import { fetchApi } from "@/lib/api"
 import type { EstimateTemplate } from "@/lib/types"
 import { usePermissions } from "@/lib/permissions"
 import { Card, Button } from "@/components/ui"
+import { cn } from "@/lib/utils"
 
 /**
- * 21.3 — Manage saved estimate templates. Templates are created from an estimate
- * ("Save as template" on the project page); this card lists them and lets an
- * estimate-admin delete ones that are no longer needed.
+ * 21.3 → 22.3 — Manage saved estimate templates as a library. Templates are created from
+ * an estimate ("Save as template" on the project page); this card lists them with their
+ * category/tags, lets a tenant admin pin a template as "featured" for the org (sorts to the
+ * top of the picker), and lets an estimate-admin delete unwanted ones.
  */
 export function TemplatesCard() {
   const qc = useQueryClient()
-  const { can } = usePermissions()
+  const { can, isAdmin } = usePermissions()
   const canView = can("estimate-admin", "view")
   const canDelete = can("estimate-admin", "delete")
   const list = useQuery({ queryKey: ["estimate-templates"], queryFn: () => fetchApi<EstimateTemplate[]>("/api/estimate-templates"), enabled: canView })
@@ -23,6 +25,12 @@ export function TemplatesCard() {
   const del = useMutation({
     mutationFn: (id: number) => fetchApi(`/api/estimate-templates/${id}`, { method: "DELETE" }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["estimate-templates"] }); toast.success("Template deleted") },
+    onError: (e) => toast.error((e as Error).message),
+  })
+  const feature = useMutation({
+    mutationFn: ({ id, featured }: { id: number; featured: boolean }) =>
+      fetchApi(`/api/estimate-templates/${id}/featured`, { method: "PUT", body: JSON.stringify({ featured }) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["estimate-templates"] }),
     onError: (e) => toast.error((e as Error).message),
   })
 
@@ -49,17 +57,35 @@ export function TemplatesCard() {
           {list.data.map((t) => (
             <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--border)] px-3 py-2">
               <div className="min-w-0">
-                <div className="truncate text-sm text-slate-700">{t.name}</div>
+                <div className="flex items-center gap-2">
+                  {t.isFeatured && <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />}
+                  <span className="truncate text-sm text-slate-700">{t.name}</span>
+                  {t.category && <span className="rounded bg-sky-100 px-1.5 text-xs font-medium text-sky-700">{t.category}</span>}
+                </div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                  {t.tags.map((g) => <span key={g} className="rounded bg-slate-100 px-1.5 text-xs text-slate-500">{g}</span>)}
+                </div>
                 <div className="mt-0.5 text-xs text-slate-400">
-                  {t.sectionCount} sections · {t.itemCount} items{t.description ? ` · ${t.description}` : ""}
+                  {t.sectionCount} sections · {t.itemCount} items{t.createdByName ? ` · by ${t.createdByName}` : ""}{t.description ? ` · ${t.description}` : ""}
                 </div>
               </div>
-              {canDelete && (
-                <Button variant="outline" className="h-7 text-xs text-rose-600 hover:bg-rose-50" disabled={del.isPending}
-                  onClick={() => { if (confirm(`Delete template "${t.name}"?`)) del.mutate(t.id) }}>
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </Button>
-              )}
+              <div className="flex items-center gap-1">
+                {isAdmin && (
+                  <Button variant="outline" className={cn("h-7 text-xs", t.isFeatured ? "text-amber-600" : "text-slate-500")}
+                    disabled={feature.isPending}
+                    onClick={() => feature.mutate({ id: t.id, featured: !t.isFeatured })}
+                    title={t.isFeatured ? "Unfeature" : "Feature for your org"}>
+                    <Star className={cn("h-3.5 w-3.5", t.isFeatured && "fill-amber-400 text-amber-400")} />
+                    {t.isFeatured ? "Featured" : "Feature"}
+                  </Button>
+                )}
+                {canDelete && (
+                  <Button variant="outline" className="h-7 text-xs text-rose-600 hover:bg-rose-50" disabled={del.isPending}
+                    onClick={() => { if (confirm(`Delete template "${t.name}"?`)) del.mutate(t.id) }}>
+                    <Trash2 className="h-3.5 w-3.5" /> Delete
+                  </Button>
+                )}
+              </div>
             </li>
           ))}
         </ul>

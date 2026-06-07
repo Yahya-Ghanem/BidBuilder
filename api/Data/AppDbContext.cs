@@ -408,6 +408,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.Property(t => t.Name).HasMaxLength(160).IsRequired();
             b.Property(t => t.Description).HasMaxLength(1000);
             b.Property(t => t.PayloadJson).HasColumnType("jsonb").IsRequired();
+            // 22.3 library metadata
+            b.Property(t => t.Category).HasMaxLength(40);
+            b.Property(t => t.Tags).HasMaxLength(200);
+            b.HasIndex(t => new { t.TenantId, t.Category });
             b.HasQueryFilter(t => t.TenantId == _tenant.TenantId);
         });
 

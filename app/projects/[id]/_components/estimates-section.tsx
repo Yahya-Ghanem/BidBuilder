@@ -126,9 +126,15 @@ function SaveTemplateModal({ estimateId, onClose }: { estimateId: number; onClos
   const qc = useQueryClient()
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
+  const [category, setCategory] = useState("")
+  const [tags, setTags] = useState("")
   const save = useMutation({
     mutationFn: () => fetchApi<EstimateTemplate>("/api/estimate-templates", {
-      method: "POST", body: JSON.stringify({ name: name.trim(), description: description.trim() || null, estimateId }),
+      method: "POST", body: JSON.stringify({
+        name: name.trim(), description: description.trim() || null, estimateId,
+        category: category.trim() || null,
+        tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+      }),
     }),
     onSuccess: (t) => { qc.invalidateQueries({ queryKey: ["estimate-templates"] }); toast.success(`Template “${t.name}” saved`); onClose() },
     onError: (e) => toast.error((e as Error).message),
@@ -138,6 +144,10 @@ function SaveTemplateModal({ estimateId, onClose }: { estimateId: number; onClos
       <div className="space-y-3">
         <Field label="Template name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Warehouse shell — standard" /></Field>
         <Field label="Description (optional)"><Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="What this template is for" /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Category (optional)"><Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Warehouse" maxLength={40} /></Field>
+          <Field label="Tags (comma-separated)"><Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="concrete, framing" /></Field>
+        </div>
         <p className="text-xs text-slate-400">Captures the BOQ sections/items + cost build-ups, preliminaries, markups and risks. Area tags and the project are not included.</p>
       </div>
       <div className="mt-4 flex justify-end gap-2">
@@ -153,21 +163,33 @@ function FromTemplateModal({ pending, onClose, onPick }: { pending: boolean; onC
   const templates = useQuery({ queryKey: ["estimate-templates"], queryFn: () => fetchApi<EstimateTemplate[]>("/api/estimate-templates") })
   const [picked, setPicked] = useState("")
   const [title, setTitle] = useState("")
-  const list = templates.data ?? []
+  const [search, setSearch] = useState("")
+  const all = templates.data ?? []
+  // The API already returns featured-first, newest-next; filter client-side by name/category/tag.
+  const q = search.trim().toLowerCase()
+  const list = !q ? all : all.filter((t) =>
+    t.name.toLowerCase().includes(q)
+    || (t.category?.toLowerCase().includes(q) ?? false)
+    || t.tags.some((g) => g.toLowerCase().includes(q)))
   return (
     <Modal open onClose={onClose} title="New estimate from template">
       {templates.isLoading ? <p className="text-sm text-slate-400">Loading templates…</p>
-        : list.length === 0 ? <p className="text-sm text-slate-500">No templates yet. Save one from an existing estimate first.</p>
+        : all.length === 0 ? <p className="text-sm text-slate-500">No templates yet. Save one from an existing estimate first.</p>
         : (
           <div className="space-y-3">
+            <Field label="Find a template"><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, category or tag…" /></Field>
             <Field label="Template">
               <Select value={picked} onChange={(e) => setPicked(e.target.value)}>
                 <option value="">— choose a template —</option>
-                {list.map((t) => <option key={t.id} value={t.id}>{t.name} ({t.sectionCount} sec · {t.itemCount} items)</option>)}
+                {list.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.isFeatured ? "★ " : ""}{t.name}{t.category ? ` · ${t.category}` : ""} ({t.sectionCount} sec · {t.itemCount} items)
+                  </option>
+                ))}
               </Select>
             </Field>
             <Field label="Title (optional)"><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="defaults to the template name" /></Field>
-            <p className="text-xs text-slate-400">Creates a new Draft revision in this project from the template&apos;s structure.</p>
+            <p className="text-xs text-slate-400">Creates a new Draft revision in this project from the template&apos;s structure. ★ = featured for your org.</p>
           </div>
         )}
       <div className="mt-4 flex justify-end gap-2">

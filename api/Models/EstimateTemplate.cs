@@ -25,6 +25,18 @@ public class EstimateTemplate : IHasTenant
     public int SectionCount { get; set; }
     public int ItemCount    { get; set; }
 
+    // ── 22.3 Library metadata (browse/filter; never affects the applied estimate) ──
+    /// <summary>Optional grouping label, e.g. "Warehouse" / "Fit-out". Free text, one per template.</summary>
+    public string? Category { get; set; }
+
+    /// <summary>Optional free-form tags, stored comma-separated (e.g. "concrete,framing").
+    /// Matched by exact membership (not substring) on the library filter.</summary>
+    public string? Tags { get; set; }
+
+    /// <summary>22.3 — Pinned by a tenant admin so it sorts to the top of the picker as a
+    /// recommended/standard template for the org. Purely a sort + badge; no access change.</summary>
+    public bool IsFeatured { get; set; }
+
     public int      CreatedByUserId { get; set; }
     public DateTime CreatedAt       { get; set; } = DateTime.UtcNow;
 }

@@ -136,7 +136,8 @@ export interface ApiKeyCreated {
   secret: string
 }
 
-/** 21.3 — A reusable estimate template (structure snapshot; counts for the list). */
+/** 21.3 — A reusable estimate template (structure snapshot; counts for the list).
+ *  22.3 adds library metadata: category, tags, a featured pin, and the author. */
 export interface EstimateTemplate {
   id: number
   name: string
@@ -144,6 +145,14 @@ export interface EstimateTemplate {
   sectionCount: number
   itemCount: number
   createdAt: string
+  /** 22.3 — optional grouping label. */
+  category: string | null
+  /** 22.3 — free-form tags. */
+  tags: string[]
+  /** 22.3 — pinned to the top of the picker by a tenant admin. */
+  isFeatured: boolean
+  /** 22.3 — name of the user who created it. */
+  createdByName: string | null
 }
 
 /** 20.2 — One recorded sign-off on an estimate revision. */
