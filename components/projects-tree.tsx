@@ -66,13 +66,13 @@ function Row({
         : <span className="inline-block w-3.5 shrink-0" />}
       <span className="shrink-0 text-slate-400">{icon}</span>
       <span className="truncate font-medium">{label}</span>
-      {hint && <span className="truncate text-xs text-slate-400">{hint}</span>}
+      {hint && <span className="truncate text-xs text-slate-500">{hint}</span>}
     </div>
   )
 }
 
 function Message({ depth, children, tone }: { depth: number; children: ReactNode; tone?: "error" }) {
-  return <div className={`py-1 text-xs ${tone === "error" ? "text-rose-600" : "text-slate-400"}`} style={{ paddingLeft: depth * 14 + 22 }}>{children}</div>
+  return <div className={`py-1 text-xs ${tone === "error" ? "text-rose-600" : "text-slate-500"}`} style={{ paddingLeft: depth * 14 + 22 }}>{children}</div>
 }
 
 export function ProjectsSidebarTree() {
@@ -197,7 +197,7 @@ export function ProjectsDetailPane() {
 
 function EmptyState() {
   return (
-    <Card className="grid place-items-center p-16 text-center text-slate-400">
+    <Card className="grid place-items-center p-16 text-center text-slate-500">
       <div>
         <LayoutGrid className="mx-auto mb-3 h-10 w-10 opacity-40" />
         <p className="text-sm">Pick a project → estimate from the tree on the left.</p>
@@ -218,9 +218,9 @@ function SectionView({ sel }: { sel: TreeSelection }) {
   }
 }
 
-function Preparing() { return <Card className="p-8 text-sm text-slate-400">Preparing data…</Card> }
+function Preparing() { return <Card className="p-8 text-sm text-slate-500">Preparing data…</Card> }
 function ErrorCard({ e }: { e: unknown }) { return <Card className="p-8 text-sm text-rose-600">{(e as Error).message}</Card> }
-function EmptyCard({ children }: { children: ReactNode }) { return <Card className="p-8 text-sm text-slate-400">{children}</Card> }
+function EmptyCard({ children }: { children: ReactNode }) { return <Card className="p-8 text-sm text-slate-500">{children}</Card> }
 
 function useBreakdown(estimateId: number) {
   return useQuery({ queryKey: ["estimate", estimateId], queryFn: () => fetchApi<EstimateBreakdown>(`/api/estimates/${estimateId}`) })
@@ -242,9 +242,9 @@ function AreasView({ projectId }: { projectId: number }) {
         <div key={a.id}>
           <div className="flex items-center gap-2 border-t border-[var(--border)] py-1.5 text-sm" style={{ paddingLeft: depth * 20 + 8 }}>
             <Folder className="h-4 w-4 text-slate-400" />
-            {a.code && <span className="font-mono text-xs text-slate-400">{a.code}</span>}
+            {a.code && <span className="font-mono text-xs text-slate-500">{a.code}</span>}
             <span className="text-slate-800">{a.name}</span>
-            <span className="text-xs text-slate-400">{a.kind}</span>
+            <span className="text-xs text-slate-500">{a.kind}</span>
             <span className="ml-auto text-xs text-slate-500">{measure}</span>
           </div>
           {render(a.id, depth + 1)}
@@ -271,13 +271,13 @@ function BoqView({ estimateId }: { estimateId: number }) {
       {data.sections.map((s) => (
         <Card key={s.id} className="overflow-hidden">
           <div className="flex items-center justify-between border-b border-[var(--border)] bg-slate-50 px-4 py-2">
-            <h3 className="text-sm font-semibold text-slate-700">{s.code && <span className="mr-1 font-mono text-xs text-slate-400">{s.code}</span>}{s.title}</h3>
+            <h3 className="text-sm font-semibold text-slate-700">{s.code && <span className="mr-1 font-mono text-xs text-slate-500">{s.code}</span>}{s.title}</h3>
             <span className="text-sm text-slate-500">{s.items.length} item(s) · {money(s.sectionTotal, c)}</span>
           </div>
           {s.items.length ? (
             <div className="overflow-x-auto">
             <table className="w-full min-w-[32rem] text-sm">
-              <thead className="text-xs text-slate-400">
+              <thead className="text-xs text-slate-500">
                 <tr className="border-b border-[var(--border)]">
                   <th className="px-4 py-1.5 text-left font-medium">Item</th>
                   <th className="px-2 py-1.5 text-right font-medium">Qty</th>
@@ -289,7 +289,7 @@ function BoqView({ estimateId }: { estimateId: number }) {
               <tbody>
                 {s.items.map((it) => (
                   <tr key={it.id} className="border-b border-[var(--border)] last:border-0">
-                    <td className="px-4 py-1.5">{it.itemCode && <span className="mr-1 font-mono text-xs text-slate-400">{it.itemCode}</span>}{it.description}</td>
+                    <td className="px-4 py-1.5">{it.itemCode && <span className="mr-1 font-mono text-xs text-slate-500">{it.itemCode}</span>}{it.description}</td>
                     <td className="px-2 py-1.5 text-right">{it.quantity}</td>
                     <td className="px-2 py-1.5">{it.unit}</td>
                     <td className="px-2 py-1.5 text-right">{money(it.unitRate, c)}</td>
@@ -299,7 +299,7 @@ function BoqView({ estimateId }: { estimateId: number }) {
               </tbody>
             </table>
             </div>
-          ) : <p className="px-4 py-2 text-sm text-slate-400">No items.</p>}
+          ) : <p className="px-4 py-2 text-sm text-slate-500">No items.</p>}
         </Card>
       ))}
     </div>
@@ -326,7 +326,7 @@ function ActivitiesView({ estimateId, projectId }: { estimateId: number; project
           <div className="flex items-center gap-2 border-t border-[var(--border)] py-1.5 text-sm" style={{ paddingLeft: depth * 18 + 8 }}>
             <Folder className="h-4 w-4 text-slate-400" />
             <span className="text-slate-800">{a.name}</span>
-            <span className="text-xs text-slate-400">{a.kind}{acts.length ? ` · ${acts.length} activit${acts.length > 1 ? "ies" : "y"}` : ""}</span>
+            <span className="text-xs text-slate-500">{a.kind}{acts.length ? ` · ${acts.length} activit${acts.length > 1 ? "ies" : "y"}` : ""}</span>
           </div>
           {acts.map((it) => (
             <div key={it.id} className="grid grid-cols-[1fr_120px_120px_120px] items-center gap-2 py-1 text-sm" style={{ paddingLeft: depth * 18 + 30 }}>
@@ -343,7 +343,7 @@ function ActivitiesView({ estimateId, projectId }: { estimateId: number; project
   return (
     <Card className="p-4">
       <h3 className="mb-1 text-sm font-semibold text-slate-600">Activities by unit</h3>
-      <p className="mb-2 text-xs text-slate-400">M = material (qty × price), L = manpower (hours × rate); total includes any other components.</p>
+      <p className="mb-2 text-xs text-slate-500">M = material (qty × price), L = manpower (hours × rate); total includes any other components.</p>
       {render(null, 0)}
     </Card>
   )
@@ -375,7 +375,7 @@ function CostByAreaView({ estimateId }: { estimateId: number }) {
                 : <span className="inline-block w-3.5" />}
               <Folder className="h-4 w-4 text-slate-400" />
               <span className="text-slate-800">{a.name}</span>
-              <span className="text-xs text-slate-400">{a.kind}{!open && has ? ` · ${kids.length} sub-area(s)` : ""}</span>
+              <span className="text-xs text-slate-500">{a.kind}{!open && has ? ` · ${kids.length} sub-area(s)` : ""}</span>
             </span>
             <span className="text-right text-xs text-slate-500">{a.itemCount} item(s)</span>
             <span className="text-right font-medium">{money(a.rollupTotal, c)}</span>
@@ -400,7 +400,7 @@ function CostByAreaView({ estimateId }: { estimateId: number }) {
           <span className="text-xs text-slate-500">Assigned {money(data.assignedTotal, c)} · Unassigned {money(data.unassignedTotal, c)}</span>
         </div>
       </div>
-      <div className="grid grid-cols-[1fr_110px_130px_120px] gap-2 pb-1 text-xs text-slate-400" style={{ paddingLeft: 8 }}>
+      <div className="grid grid-cols-[1fr_110px_130px_120px] gap-2 pb-1 text-xs text-slate-500" style={{ paddingLeft: 8 }}>
         <span>Area</span><span className="text-right">Items</span><span className="text-right">Roll-up total</span><span className="text-right">Cost / unit</span>
       </div>
       {render(null, 0)}
@@ -419,7 +419,7 @@ function PreliminariesView({ estimateId }: { estimateId: number }) {
     <Card className="overflow-hidden">
       <h3 className="border-b border-[var(--border)] bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">Preliminaries</h3>
       <table className="w-full text-sm">
-        <thead className="text-xs text-slate-400"><tr className="border-b border-[var(--border)]"><th className="px-4 py-1.5 text-left font-medium">Description</th><th className="px-2 py-1.5 text-left font-medium">Kind</th><th className="px-4 py-1.5 text-right font-medium">Amount</th></tr></thead>
+        <thead className="text-xs text-slate-500"><tr className="border-b border-[var(--border)]"><th className="px-4 py-1.5 text-left font-medium">Description</th><th className="px-2 py-1.5 text-left font-medium">Kind</th><th className="px-4 py-1.5 text-right font-medium">Amount</th></tr></thead>
         <tbody>
           {data.preliminaries.map((p) => (
             <tr key={p.id} className="border-b border-[var(--border)] last:border-0">
@@ -445,7 +445,7 @@ function MarkupsView({ estimateId }: { estimateId: number }) {
     <Card className="overflow-hidden">
       <h3 className="border-b border-[var(--border)] bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">Markups</h3>
       <table className="w-full text-sm">
-        <thead className="text-xs text-slate-400"><tr className="border-b border-[var(--border)]"><th className="px-4 py-1.5 text-left font-medium">Markup</th><th className="px-2 py-1.5 text-right font-medium">%</th><th className="px-4 py-1.5 text-right font-medium">Amount</th></tr></thead>
+        <thead className="text-xs text-slate-500"><tr className="border-b border-[var(--border)]"><th className="px-4 py-1.5 text-left font-medium">Markup</th><th className="px-2 py-1.5 text-right font-medium">%</th><th className="px-4 py-1.5 text-right font-medium">Amount</th></tr></thead>
         <tbody>
           {data.markups.map((m) => (
             <tr key={m.id} className="border-b border-[var(--border)] last:border-0">

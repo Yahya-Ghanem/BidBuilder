@@ -65,7 +65,8 @@ export function TeamsPanel({ projectId }: { projectId: number }) {
             {isAdmin && (
               <button
                 onClick={() => { if (confirm(`Remove "${t.groupName}" from this project?`)) remove.mutate(t.groupId) }}
-                className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                aria-label={`Remove team ${t.groupName}`}
+                className="rounded p-1 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>

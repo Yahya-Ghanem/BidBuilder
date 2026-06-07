@@ -17,7 +17,10 @@ export function Providers({ children }: { children: ReactNode }) {
     <I18nProvider>
       <QueryClientProvider client={client}>
         <AuthProvider>{children}</AuthProvider>
-        <Toaster richColors position="top-right" />
+        {/* 24.4: dropped richColors — sonner's pale success bg (#ecfdf3) + brand green
+            text fails WCAG AA contrast (4.25:1 vs 4.5:1 required). The default neutral
+            scheme gives ~16:1 and is no less recognizable. */}
+        <Toaster position="top-right" />
       </QueryClientProvider>
     </I18nProvider>
   )

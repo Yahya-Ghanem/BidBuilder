@@ -84,12 +84,12 @@ export function SearchPalette() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-sm text-slate-400 hover:bg-slate-50"
+        className="flex items-center gap-2 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
         aria-label="Search"
       >
         <Search className="h-4 w-4" />
         <span className="hidden sm:inline">Search…</span>
-        <kbd className="ml-2 hidden rounded border border-[var(--border)] bg-slate-50 px-1.5 text-[10px] text-slate-400 sm:inline">⌘K</kbd>
+        <kbd className="ml-2 hidden rounded border border-[var(--border)] bg-slate-50 px-1.5 text-[10px] text-slate-600 sm:inline">⌘K</kbd>
       </button>
 
       {open && (

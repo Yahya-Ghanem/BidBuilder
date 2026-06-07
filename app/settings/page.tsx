@@ -245,15 +245,15 @@ function ProjectTypeRow({ type, isAdmin, busy, setBusy }: { type: ProjectType; i
   return (
     <tr className="border-t border-[var(--border)]">
       <td className="py-2">
-        {isAdmin && !type.builtin ? <Input value={name} onChange={(e) => setName(e.target.value)} className="w-48" /> : name}
+        {isAdmin && !type.builtin ? <Input value={name} onChange={(e) => setName(e.target.value)} aria-label={`Project type name (${type.name})`} className="w-48" /> : name}
         {type.builtin && <span className="ml-1 text-xs text-slate-400">built-in</span>}
       </td>
-      <td className="py-2"><input type="checkbox" checked={active} disabled={!isAdmin} onChange={(e) => setActive(e.target.checked)} /></td>
+      <td className="py-2"><input type="checkbox" checked={active} disabled={!isAdmin} onChange={(e) => setActive(e.target.checked)} aria-label={`${type.name} active`} /></td>
       <td className="py-2 text-right">
         {isAdmin && (
           <div className="flex justify-end gap-1">
-            <Button variant="outline" className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={save}><Check className="h-3.5 w-3.5" /></Button>
-            {!type.builtin && <Button variant="outline" className="h-7 px-2 text-xs text-rose-600" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
+            <Button variant="outline" aria-label={`Save ${type.name}`} className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={save}><Check className="h-3.5 w-3.5" /></Button>
+            {!type.builtin && <Button variant="outline" aria-label={`Remove ${type.name}`} className="h-7 px-2 text-xs text-rose-600" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
           </div>
         )}
       </td>
@@ -330,15 +330,15 @@ function ActivityRow({ activity, isAdmin, busy, setBusy }: { activity: ActivityT
   return (
     <tr className="border-t border-[var(--border)]">
       <td className="py-2">
-        {isAdmin && !activity.builtin ? <Input value={name} onChange={(e) => setName(e.target.value)} className="w-48" /> : name}
+        {isAdmin && !activity.builtin ? <Input value={name} onChange={(e) => setName(e.target.value)} aria-label={`Activity name (${activity.name})`} className="w-48" /> : name}
         {activity.builtin && <span className="ml-1 text-xs text-slate-400">built-in</span>}
       </td>
-      <td className="py-2"><input type="checkbox" checked={active} disabled={!isAdmin} onChange={(e) => setActive(e.target.checked)} /></td>
+      <td className="py-2"><input type="checkbox" checked={active} disabled={!isAdmin} onChange={(e) => setActive(e.target.checked)} aria-label={`${activity.name} active`} /></td>
       <td className="py-2 text-right">
         {isAdmin && (
           <div className="flex justify-end gap-1">
-            <Button variant="outline" className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={save}><Check className="h-3.5 w-3.5" /></Button>
-            {!activity.builtin && <Button variant="outline" className="h-7 px-2 text-xs text-rose-600" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
+            <Button variant="outline" aria-label={`Save ${activity.name}`} className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={save}><Check className="h-3.5 w-3.5" /></Button>
+            {!activity.builtin && <Button variant="outline" aria-label={`Remove ${activity.name}`} className="h-7 px-2 text-xs text-rose-600" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
           </div>
         )}
       </td>
@@ -434,23 +434,23 @@ function CostTypeRow({ type, isAdmin, busy, setBusy }: { type: CostComponentType
   return (
     <tr className="border-t border-[var(--border)]">
       <td className="py-2">
-        {isAdmin ? <Input value={name} onChange={(e) => setName(e.target.value)} className="w-40" /> : name}
+        {isAdmin ? <Input value={name} onChange={(e) => setName(e.target.value)} aria-label={`Cost type name (${type.code})`} className="w-40" /> : name}
         {type.builtin && <span className="ml-1 text-xs text-slate-400">built-in</span>}
       </td>
       <td className="py-2 font-mono text-xs">{type.code}</td>
       <td className="py-2">
         {isAdmin && !type.builtin
-          ? <select value={kind} onChange={(e) => setKind(e.target.value)} className="rounded-md border border-[var(--border)] bg-white px-2 py-1 text-xs"><option value="Amount">Amount</option><option value="Percent">Percent</option></select>
+          ? <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label={`Cost type kind (${type.code})`} className="rounded-md border border-[var(--border)] bg-white px-2 py-1 text-xs"><option value="Amount">Amount</option><option value="Percent">Percent</option></select>
           : <span className="text-xs text-slate-500">{kind}</span>}
       </td>
       <td className="py-2">
-        <input type="checkbox" checked={active} disabled={!isAdmin} onChange={(e) => setActive(e.target.checked)} />
+        <input type="checkbox" checked={active} disabled={!isAdmin} onChange={(e) => setActive(e.target.checked)} aria-label={`${type.code} active`} />
       </td>
       <td className="py-2 text-right">
         {isAdmin && (
           <div className="flex justify-end gap-1">
-            <Button variant="outline" className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={save}><Check className="h-3.5 w-3.5" /></Button>
-            {!type.builtin && <Button variant="outline" className="h-7 px-2 text-xs text-rose-600" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
+            <Button variant="outline" aria-label={`Save ${type.code}`} className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={save}><Check className="h-3.5 w-3.5" /></Button>
+            {!type.builtin && <Button variant="outline" aria-label={`Remove ${type.code}`} className="h-7 px-2 text-xs text-rose-600" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
           </div>
         )}
       </td>
@@ -540,15 +540,15 @@ function RateRow({ rate, base, isAdmin, busy, onSave, onRemove }: {
       <td className="py-2 font-mono text-xs">{rate.code}</td>
       <td className="py-2">
         {isAdmin
-          ? <Input type="number" step="0.000001" min={0} value={v} onChange={(e) => setV(e.target.value)} className="w-36" />
+          ? <Input type="number" step="0.000001" min={0} value={v} onChange={(e) => setV(e.target.value)} aria-label={`Rate for ${rate.code}`} className="w-36" />
           : <span>{rate.rateToBase} {base}</span>}
       </td>
       <td className="py-2 text-xs text-slate-400">{rate.updatedAt.replace("T", " ").slice(0, 16)}</td>
       <td className="py-2 text-right">
         {isAdmin && (
           <div className="flex justify-end gap-1">
-            <Button variant="outline" className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={() => onSave(Number(v))}><Check className="h-3.5 w-3.5" /></Button>
-            <Button variant="outline" className="h-7 px-2 text-xs text-rose-600" disabled={busy} onClick={onRemove}><Trash2 className="h-3.5 w-3.5" /></Button>
+            <Button variant="outline" aria-label={`Save ${rate.code} rate`} className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={() => onSave(Number(v))}><Check className="h-3.5 w-3.5" /></Button>
+            <Button variant="outline" aria-label={`Remove ${rate.code} rate`} className="h-7 px-2 text-xs text-rose-600" disabled={busy} onClick={onRemove}><Trash2 className="h-3.5 w-3.5" /></Button>
           </div>
         )}
       </td>
