@@ -228,7 +228,7 @@ function BrandingCard({ f, setF, ro }: { f: TenantSettings; setF: (s: TenantSett
       </div>
 
       <div>
-        <label htmlFor="brand-header" className="mb-1 block text-xs font-medium text-slate-600">
+        <label htmlFor="brand-header" className="mb-1 block text-sm font-medium text-slate-600">
           Header (above the body)
         </label>
         <textarea
@@ -240,7 +240,7 @@ function BrandingCard({ f, setF, ro }: { f: TenantSettings; setF: (s: TenantSett
       </div>
 
       <div>
-        <label htmlFor="brand-footer" className="mb-1 block text-xs font-medium text-slate-600">
+        <label htmlFor="brand-footer" className="mb-1 block text-sm font-medium text-slate-600">
           Footer (replaces page-count footer)
         </label>
         <textarea
@@ -252,7 +252,7 @@ function BrandingCard({ f, setF, ro }: { f: TenantSettings; setF: (s: TenantSett
       </div>
 
       <div>
-        <label htmlFor="brand-signature" className="mb-1 block text-xs font-medium text-slate-600">
+        <label htmlFor="brand-signature" className="mb-1 block text-sm font-medium text-slate-600">
           Signature block (overrides the bid-letter sign-off)
         </label>
         <textarea
@@ -308,7 +308,7 @@ function EmailCard({ f, setF, ro, isAdmin }: { f: TenantSettings; setF: (s: Tena
 
       {isAdmin && (
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="h-8 text-xs" disabled={testing || !f.emailConfigured} onClick={sendTest}>
+          <Button variant="outline" className="h-8 text-sm" disabled={testing || !f.emailConfigured} onClick={sendTest}>
             <Mail className="h-4 w-4" /> {testing ? t("adm.email.sending") : t("adm.email.test")}
           </Button>
           <span className="text-xs text-muted">{t("adm.email.toggleHint")}</span>
@@ -347,7 +347,7 @@ function ProjectTypesCard({ isAdmin }: { isAdmin: boolean }) {
 
       {data && (
         <table className="w-full text-sm">
-          <thead className="text-left text-xs text-slate-500"><tr><th className="py-1">Name</th><th className="py-1">Active</th><th /></tr></thead>
+          <thead className="text-left text-sm text-slate-500"><tr><th className="py-1">Name</th><th className="py-1">Active</th><th /></tr></thead>
           <tbody>{data.map((a) => <ProjectTypeRow key={a.id} type={a} isAdmin={isAdmin} busy={busy} setBusy={setBusy} />)}</tbody>
         </table>
       )}
@@ -394,8 +394,8 @@ function ProjectTypeRow({ type, isAdmin, busy, setBusy }: { type: ProjectType; i
       <td className="py-2 text-right">
         {isAdmin && (
           <div className="flex justify-end gap-1">
-            <Button variant="outline" aria-label={`Save ${type.name}`} className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={save}><Check className="h-3.5 w-3.5" /></Button>
-            {!type.builtin && <Button variant="outline" aria-label={`Remove ${type.name}`} className="h-7 px-2 text-xs text-danger" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
+            <Button variant="outline" aria-label={`Save ${type.name}`} className="h-7 px-2 text-sm" disabled={busy || !dirty} onClick={save}><Check className="h-3.5 w-3.5" /></Button>
+            {!type.builtin && <Button variant="outline" aria-label={`Remove ${type.name}`} className="h-7 px-2 text-sm text-danger" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
           </div>
         )}
       </td>
@@ -432,7 +432,7 @@ function ActivitiesCard({ isAdmin }: { isAdmin: boolean }) {
 
       {data && (
         <table className="w-full text-sm">
-          <thead className="text-left text-xs text-slate-500"><tr><th className="py-1">Name</th><th className="py-1">Active</th><th /></tr></thead>
+          <thead className="text-left text-sm text-slate-500"><tr><th className="py-1">Name</th><th className="py-1">Active</th><th /></tr></thead>
           <tbody>{data.map((a) => <ActivityRow key={a.id} activity={a} isAdmin={isAdmin} busy={busy} setBusy={setBusy} />)}</tbody>
         </table>
       )}
@@ -479,8 +479,8 @@ function ActivityRow({ activity, isAdmin, busy, setBusy }: { activity: ActivityT
       <td className="py-2 text-right">
         {isAdmin && (
           <div className="flex justify-end gap-1">
-            <Button variant="outline" aria-label={`Save ${activity.name}`} className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={save}><Check className="h-3.5 w-3.5" /></Button>
-            {!activity.builtin && <Button variant="outline" aria-label={`Remove ${activity.name}`} className="h-7 px-2 text-xs text-danger" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
+            <Button variant="outline" aria-label={`Save ${activity.name}`} className="h-7 px-2 text-sm" disabled={busy || !dirty} onClick={save}><Check className="h-3.5 w-3.5" /></Button>
+            {!activity.builtin && <Button variant="outline" aria-label={`Remove ${activity.name}`} className="h-7 px-2 text-sm text-danger" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
           </div>
         )}
       </td>
@@ -522,7 +522,7 @@ function CostTypesCard({ isAdmin }: { isAdmin: boolean }) {
 
       {data && (
         <table className="w-full text-sm">
-          <thead className="text-left text-xs text-slate-500">
+          <thead className="text-left text-sm text-slate-500">
             <tr><th className="py-1">Name</th><th className="py-1">Code</th><th className="py-1">Kind</th><th className="py-1">Active</th><th /></tr>
           </thead>
           <tbody>
@@ -579,7 +579,7 @@ function CostTypeRow({ type, isAdmin, busy, setBusy }: { type: CostComponentType
         {isAdmin ? <Input value={name} onChange={(e) => setName(e.target.value)} aria-label={`Cost type name (${type.code})`} className="w-40" /> : name}
         {type.builtin && <span className="ml-1 text-xs text-muted">built-in</span>}
       </td>
-      <td className="py-2 font-mono text-xs">{type.code}</td>
+      <td className="py-2 font-mono text-sm">{type.code}</td>
       <td className="py-2">
         {isAdmin && !type.builtin
           ? <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label={`Cost type kind (${type.code})`} className="rounded-md border border-[var(--border)] bg-white px-2 py-1 text-xs"><option value="Amount">Amount</option><option value="Percent">Percent</option></select>
@@ -591,8 +591,8 @@ function CostTypeRow({ type, isAdmin, busy, setBusy }: { type: CostComponentType
       <td className="py-2 text-right">
         {isAdmin && (
           <div className="flex justify-end gap-1">
-            <Button variant="outline" aria-label={`Save ${type.code}`} className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={save}><Check className="h-3.5 w-3.5" /></Button>
-            {!type.builtin && <Button variant="outline" aria-label={`Remove ${type.code}`} className="h-7 px-2 text-xs text-danger" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
+            <Button variant="outline" aria-label={`Save ${type.code}`} className="h-7 px-2 text-sm" disabled={busy || !dirty} onClick={save}><Check className="h-3.5 w-3.5" /></Button>
+            {!type.builtin && <Button variant="outline" aria-label={`Remove ${type.code}`} className="h-7 px-2 text-sm text-danger" disabled={busy} onClick={remove}><Trash2 className="h-3.5 w-3.5" /></Button>}
           </div>
         )}
       </td>
@@ -647,7 +647,7 @@ function CurrencyRatesCard({ isAdmin }: { isAdmin: boolean }) {
 
       {data && (
         <table className="w-full text-sm">
-          <thead className="text-left text-xs text-slate-500">
+          <thead className="text-left text-sm text-slate-500">
             <tr><th className="py-1">Currency</th><th className="py-1">Rate (1 unit in {base})</th><th className="py-1">Updated</th><th /></tr>
           </thead>
           <tbody>
@@ -679,7 +679,7 @@ function RateRow({ rate, base, isAdmin, busy, onSave, onRemove }: {
 
   return (
     <tr className="border-t border-[var(--border)]">
-      <td className="py-2 font-mono text-xs">{rate.code}</td>
+      <td className="py-2 font-mono text-sm">{rate.code}</td>
       <td className="py-2">
         {isAdmin
           ? <Input type="number" step="0.000001" min={0} value={v} onChange={(e) => setV(e.target.value)} aria-label={`Rate for ${rate.code}`} className="w-36" />
@@ -689,8 +689,8 @@ function RateRow({ rate, base, isAdmin, busy, onSave, onRemove }: {
       <td className="py-2 text-right">
         {isAdmin && (
           <div className="flex justify-end gap-1">
-            <Button variant="outline" aria-label={`Save ${rate.code} rate`} className="h-7 px-2 text-xs" disabled={busy || !dirty} onClick={() => onSave(Number(v))}><Check className="h-3.5 w-3.5" /></Button>
-            <Button variant="outline" aria-label={`Remove ${rate.code} rate`} className="h-7 px-2 text-xs text-danger" disabled={busy} onClick={onRemove}><Trash2 className="h-3.5 w-3.5" /></Button>
+            <Button variant="outline" aria-label={`Save ${rate.code} rate`} className="h-7 px-2 text-sm" disabled={busy || !dirty} onClick={() => onSave(Number(v))}><Check className="h-3.5 w-3.5" /></Button>
+            <Button variant="outline" aria-label={`Remove ${rate.code} rate`} className="h-7 px-2 text-sm text-danger" disabled={busy} onClick={onRemove}><Trash2 className="h-3.5 w-3.5" /></Button>
           </div>
         )}
       </td>
@@ -764,11 +764,11 @@ function LogoCard({ hasLogo, isAdmin }: { hasLogo: boolean; isAdmin: boolean }) 
         {isAdmin && (
           <div className="flex flex-col gap-2">
             <input ref={ref} type="file" accept="image/png,image/jpeg" className="hidden" onChange={onPick} />
-            <Button variant="outline" className="h-8 text-xs" disabled={busy} onClick={() => ref.current?.click()}>
+            <Button variant="outline" className="h-8 text-sm" disabled={busy} onClick={() => ref.current?.click()}>
               <Upload className="h-4 w-4" /> {hasLogo ? "Replace" : "Upload"}
             </Button>
             {hasLogo && (
-              <Button variant="outline" className="h-8 text-xs text-danger" disabled={busy} onClick={remove}>
+              <Button variant="outline" className="h-8 text-sm text-danger" disabled={busy} onClick={remove}>
                 <Trash2 className="h-4 w-4" /> Remove
               </Button>
             )}

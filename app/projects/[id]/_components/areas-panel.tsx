@@ -56,7 +56,7 @@ export function AreasPanel({ projectId }: { projectId: number }) {
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600"><FolderTree className="h-4 w-4" /> Areas</h3>
         <div className="flex items-center gap-2">
           {parentIds.size > 0 && <ExpandCollapseAll onExpand={expandAll} onCollapse={() => collapseAll(parentIds)} />}
-          {canAdd && <Button variant="outline" className="h-8 text-xs" onClick={() => setModal({ parentAreaId: null })}><Plus className="h-4 w-4" /> Area</Button>}
+          {canAdd && <Button variant="outline" className="h-8 text-sm" onClick={() => setModal({ parentAreaId: null })}><Plus className="h-4 w-4" /> Area</Button>}
         </div>
       </div>
       {(areas?.length ?? 0) === 0

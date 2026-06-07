@@ -73,7 +73,7 @@ function UsersCard() {
 
       <TableScroll>
       <table className="w-full min-w-[40rem] text-sm">
-        <thead className="text-left text-xs text-slate-500">
+        <thead className="text-left text-sm text-slate-500">
           <tr><th className="py-1">Name</th><th className="py-1">Email</th><th className="py-1">Role</th><th className="py-1">Teams</th><th className="py-1">Status</th><th /></tr>
         </thead>
         <tbody>
@@ -87,8 +87,8 @@ function UsersCard() {
               <td className="py-2">{u.isActive ? <Badge className="bg-emerald-100 text-emerald-700">Active</Badge> : <Badge className="bg-slate-100 text-slate-500">Inactive</Badge>}</td>
               <td className="py-2 text-right">
                 <div className="flex justify-end gap-1">
-                  <Button variant="outline" className="h-7 px-2 text-xs" onClick={() => setEditing(u)}><Pencil className="h-3.5 w-3.5" /></Button>
-                  <Button variant="outline" className="h-7 px-2 text-xs" onClick={() => setResetting(u)}><KeyRound className="h-3.5 w-3.5" /></Button>
+                  <Button variant="outline" className="h-7 px-2 text-sm" onClick={() => setEditing(u)}><Pencil className="h-3.5 w-3.5" /></Button>
+                  <Button variant="outline" className="h-7 px-2 text-sm" onClick={() => setResetting(u)}><KeyRound className="h-3.5 w-3.5" /></Button>
                   <Button variant="outline" className="h-7 px-2 text-xs text-rose-600" disabled={me?.id === u.id || del.isPending}
                     onClick={() => { if (confirm(`Delete user "${u.name}"? This cannot be undone.`)) del.mutate(u.id) }}>
                     <Trash2 className="h-3.5 w-3.5" />
@@ -170,7 +170,7 @@ function UserModal({ user, groups, onClose }: { user: AdminUser | null; groups: 
           )}
         </div>
         <div>
-          <span className="mb-1 block text-xs font-medium text-slate-600">Teams</span>
+          <span className="mb-1 block text-sm font-medium text-slate-600">Teams</span>
           {groups.length === 0 ? <p className="text-xs text-muted">No teams yet — create one below.</p> : (
             <div className="grid grid-cols-2 gap-1">
               {groups.map((g) => (
@@ -238,7 +238,7 @@ function GroupsCard() {
 
       <TableScroll>
       <table className="w-full min-w-[36rem] text-sm">
-        <thead className="text-left text-xs text-slate-500">
+        <thead className="text-left text-sm text-slate-500">
           <tr><th className="py-1">Name</th><th className="py-1">Code</th><th className="py-1">Members</th><th className="py-1">Modules</th><th /></tr>
         </thead>
         <tbody>
@@ -246,13 +246,13 @@ function GroupsCard() {
           {groups?.map((g) => (
             <tr key={g.id} className="border-t border-[var(--border)]">
               <td className="py-2 font-medium text-slate-800">{g.name}{g.isBuiltIn && <span className="ml-1 text-xs text-muted">built-in</span>}</td>
-              <td className="py-2 font-mono text-xs">{g.code}</td>
+              <td className="py-2 font-mono text-sm">{g.code}</td>
               <td className="py-2 text-slate-600">{g.memberCount}</td>
               <td className="py-2 text-xs text-slate-500">{g.permissions.length}</td>
               <td className="py-2 text-right">
                 <div className="flex justify-end gap-1">
-                  <Button variant="outline" className="h-7 px-2 text-xs" onClick={() => setPerms(g)}><ShieldCheck className="h-3.5 w-3.5" /> Permissions</Button>
-                  <Button variant="outline" className="h-7 px-2 text-xs" onClick={() => setEditing(g)}><Pencil className="h-3.5 w-3.5" /></Button>
+                  <Button variant="outline" className="h-7 px-2 text-sm" onClick={() => setPerms(g)}><ShieldCheck className="h-3.5 w-3.5" /> Permissions</Button>
+                  <Button variant="outline" className="h-7 px-2 text-sm" onClick={() => setEditing(g)}><Pencil className="h-3.5 w-3.5" /></Button>
                   <Button variant="outline" className="h-7 px-2 text-xs text-rose-600" disabled={g.isBuiltIn || del.isPending}
                     onClick={() => { if (confirm(`Delete team "${g.name}"?`)) del.mutate(g.id) }}>
                     <Trash2 className="h-3.5 w-3.5" />
@@ -343,7 +343,7 @@ function PermissionsModal({ group, modules, onClose }: { group: AdminGroup; modu
     <Modal open onClose={onClose} title={`Permissions — ${group.name}`}>
       <p className="mb-3 text-xs text-slate-500">Tick what members of <b>{group.code}</b> may do per module. Add/Edit/Delete require View.</p>
       <table className="w-full text-sm">
-        <thead className="text-left text-xs text-slate-500">
+        <thead className="text-left text-sm text-slate-500">
           <tr><th className="py-1">Module</th>{ACTIONS.map((a) => <th key={a.key} className="px-2 py-1 text-center">{a.label}</th>)}</tr>
         </thead>
         <tbody>

@@ -229,7 +229,7 @@ export function AddItemForm({ assemblies, costTypes, areas, onAdd }: { assemblie
         </Select>
       </Field>
       {useBuildup
-        ? <Field label="Build-up"><Button variant="outline" className="h-9 w-full text-xs" onClick={() => setModal(true)}><Layers className="h-3.5 w-3.5" /> {comps.length ? `${comps.length} parts` : "Define"}</Button></Field>
+        ? <Field label="Build-up"><Button variant="outline" className="h-9 w-full text-sm" onClick={() => setModal(true)}><Layers className="h-3.5 w-3.5" /> {comps.length ? `${comps.length} parts` : "Define"}</Button></Field>
         : <Field label="Rate"><Input type="number" step="0.0001" value={f.unitRate} onChange={set("unitRate")} disabled={useAsm} /></Field>}
       <Field label="Area">
         <Select value={f.areaId} onChange={set("areaId")}>
@@ -256,12 +256,12 @@ export function AddSection({ onAdd }: { onAdd: (v: { code: string; title: string
   const [open, setOpen] = useState(false)
   const [code, setCode] = useState("")
   const [title, setTitle] = useState("")
-  if (!open) return <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => setOpen(true)}><Plus className="h-3.5 w-3.5" /> Section</Button>
+  if (!open) return <Button variant="ghost" className="h-7 px-2 text-sm" onClick={() => setOpen(true)}><Plus className="h-3.5 w-3.5" /> Section</Button>
   return (
     <div className="flex items-center gap-2">
       <Input className="w-20 py-1" placeholder="Code" value={code} onChange={(e) => setCode(e.target.value)} />
       <Input className="w-48 py-1" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <Button className="h-8 px-3 text-xs" onClick={() => { if (title) { onAdd({ code, title }); setCode(""); setTitle(""); setOpen(false) } }}>Add</Button>
+      <Button className="h-8 px-3 text-sm" onClick={() => { if (title) { onAdd({ code, title }); setCode(""); setTitle(""); setOpen(false) } }}>Add</Button>
     </div>
   )
 }

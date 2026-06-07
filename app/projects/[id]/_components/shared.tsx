@@ -145,8 +145,8 @@ export function CollapseToggle({ open, hasChildren, onToggle }: { open: boolean;
 export function ExpandCollapseAll({ onExpand, onCollapse }: { onExpand: () => void; onCollapse: () => void }) {
   return (
     <div className="flex gap-1">
-      <Button variant="ghost" className="h-7 px-2 text-xs" onClick={onExpand}>Expand all</Button>
-      <Button variant="ghost" className="h-7 px-2 text-xs" onClick={onCollapse}>Collapse all</Button>
+      <Button variant="ghost" className="h-7 px-2 text-sm" onClick={onExpand}>Expand all</Button>
+      <Button variant="ghost" className="h-7 px-2 text-sm" onClick={onCollapse}>Collapse all</Button>
     </div>
   )
 }

@@ -53,11 +53,11 @@ function QuotesTable() {
       <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-2">
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold">{t("quotes.heading")}</span>
-          <Select value={filter} onChange={(e) => setFilter(e.target.value as TypeFilter)} className="h-7 text-xs">
+          <Select value={filter} onChange={(e) => setFilter(e.target.value as TypeFilter)} className="h-7 text-sm">
             {TYPES.map((ty) => <option key={ty} value={ty}>{ty === "" ? t("quotes.allTypes") : t(`restype.${ty}`)}</option>)}
           </Select>
         </div>
-        {canAdd && <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5" /> {t("quotes.add")}</Button>}
+        {canAdd && <Button variant="ghost" className="h-7 px-2 text-sm" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5" /> {t("quotes.add")}</Button>}
       </div>
 
       {isLoading ? <p className="p-4 text-sm text-muted">{t("common.loading")}</p>
@@ -66,7 +66,7 @@ function QuotesTable() {
         : (
           <TableScroll>
           <table className="w-full min-w-[52rem] text-sm">
-            <thead className="bg-slate-50 text-start text-xs text-slate-500">
+            <thead className="bg-slate-50 text-start text-sm text-slate-500">
               <tr>
                 <th className="px-4 py-2">{t("quotes.colSupplier")}</th>
                 <th className="px-4 py-2">{t("quotes.colType")}</th>

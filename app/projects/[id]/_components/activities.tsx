@@ -58,8 +58,8 @@ export function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd,
             {area.name}<span className="ml-2 text-xs text-muted">{area.kind}{!open && acts.length > 0 ? ` · ${acts.length} activit${acts.length > 1 ? "ies" : "y"}` : ""}</span>
           </span>
           <div className="flex items-center gap-1">
-            {canAdd && <Button variant="ghost" className="h-6 px-2 text-xs" onClick={() => setCloning(area)}><Copy className="h-3.5 w-3.5" /> Clone</Button>}
-            {canAdd && <Button variant="ghost" className="h-6 px-2 text-xs" onClick={() => setAdding(area)}><Plus className="h-3.5 w-3.5" /> Activity</Button>}
+            {canAdd && <Button variant="ghost" className="h-6 px-2 text-sm" onClick={() => setCloning(area)}><Copy className="h-3.5 w-3.5" /> Clone</Button>}
+            {canAdd && <Button variant="ghost" className="h-6 px-2 text-sm" onClick={() => setAdding(area)}><Plus className="h-3.5 w-3.5" /> Activity</Button>}
           </div>
         </div>
         {open && acts.map((it) => (
@@ -97,9 +97,9 @@ export function ActivitiesPanel({ breakdown, areas, costTypes, currency, canAdd,
                   </button>
                 ))}
               </div>
-              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("xlsx", level)}><FileSpreadsheet className="h-4 w-4" /> Excel</Button>
-              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("csv", level)}><Table className="h-4 w-4" /> CSV</Button>
-              <Button variant="outline" className="h-8 text-xs" onClick={() => onExport("pdf", level)}><FileText className="h-4 w-4" /> PDF</Button>
+              <Button variant="outline" className="h-8 text-sm" onClick={() => onExport("xlsx", level)}><FileSpreadsheet className="h-4 w-4" /> Excel</Button>
+              <Button variant="outline" className="h-8 text-sm" onClick={() => onExport("csv", level)}><Table className="h-4 w-4" /> CSV</Button>
+              <Button variant="outline" className="h-8 text-sm" onClick={() => onExport("pdf", level)}><FileText className="h-4 w-4" /> PDF</Button>
             </>
           )}
           {collapsibleIds.size > 0 && <ExpandCollapseAll onExpand={expandAll} onCollapse={() => collapseAll(collapsibleIds)} />}
@@ -194,14 +194,14 @@ function ActivityModal({ area, costTypes, currency, onClose, onSave }: {
     <Modal open onClose={onClose} title={`New activity — ${area.name}`}>
       <form id="activity-form" onSubmit={submit} className="space-y-3">
         <div>
-          <span className="mb-1 block text-xs font-medium text-slate-600">Activity</span>
+          <span className="mb-1 block text-sm font-medium text-slate-600">Activity</span>
           <div className="flex gap-2">
             <Select value={name} onChange={(e) => setName(e.target.value)} className="flex-1">
               <option value="">— choose activity —</option>
               {active.map((a) => <option key={a.id} value={a.name}>{a.name}</option>)}
             </Select>
             {canAddActivity && (
-              <Button type="button" variant="outline" className="h-9 whitespace-nowrap text-xs" onClick={() => setShowNew((s) => !s)}>
+              <Button type="button" variant="outline" className="h-9 whitespace-nowrap text-sm" onClick={() => setShowNew((s) => !s)}>
                 <Plus className="h-3.5 w-3.5" /> New
               </Button>
             )}
@@ -210,13 +210,13 @@ function ActivityModal({ area, costTypes, currency, onClose, onSave }: {
             <div className="mt-2 flex gap-2">
               <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New activity name" autoFocus
                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCatalogActivity() } }} />
-              <Button type="button" variant="outline" className="h-9 text-xs" disabled={adding} onClick={addCatalogActivity}>Add</Button>
+              <Button type="button" variant="outline" className="h-9 text-sm" disabled={adding} onClick={addCatalogActivity}>Add</Button>
             </div>
           )}
         </div>
         <Field label="Unit (optional)"><Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="m², no, ls" /></Field>
         <div>
-          <span className="mb-1 block text-xs font-medium text-slate-600">Material &amp; manpower</span>
+          <span className="mb-1 block text-sm font-medium text-slate-600">Material &amp; manpower</span>
           <Button type="button" variant="outline" className="w-full text-xs" onClick={() => setBuildup(true)}>
             <Layers className="h-3.5 w-3.5" /> {components.length ? `${components.length} cost line(s) — edit` : "Add material & manpower"}
           </Button>
