@@ -11,6 +11,7 @@ import { ProjectsTreeProvider, ProjectsSidebarTree } from "@/components/projects
 import { NotificationsBell } from "@/components/notifications-bell"
 import { SearchPalette } from "@/components/search-palette"
 import { LanguageSwitcher } from "@/components/language-switcher"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { useState, type ReactNode } from "react"
 
 const NAV = [
@@ -55,7 +56,12 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
       )}
       <aside
         className={cn(
-          "fixed inset-y-0 start-0 z-40 flex max-h-screen w-[280px] transform flex-col border-e border-[var(--border)] bg-white transition-transform",
+          // 28.1 — surface tokens (`bg-[var(--card)]`) instead of `bg-white` so
+          // the sidebar inverts under dark mode. Same for hover backgrounds:
+          // `hover:bg-slate-100` is light-only; the token-mix below picks the
+          // current --text colour at low opacity, which reads correctly on
+          // both white-on-light and slate-100-on-dark.
+          "fixed inset-y-0 start-0 z-40 flex max-h-screen w-[280px] transform flex-col border-e border-[var(--border)] bg-[var(--card)] transition-transform",
           "md:static md:z-auto md:w-auto md:translate-x-0",
           // In RTL the drawer lives on the right, so it hides by sliding the other way.
           navOpen ? "translate-x-0" : "-translate-x-full rtl:translate-x-full",
@@ -66,7 +72,7 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
             <LayoutGrid className="h-5 w-5 text-[var(--brand)]" />
             BidBuilder
           </span>
-          <button onClick={() => setNavOpen(false)} aria-label={t("shell.closeMenu")} className="rounded p-1 text-muted hover:bg-slate-100 md:hidden">
+          <button onClick={() => setNavOpen(false)} aria-label={t("shell.closeMenu")} className="rounded p-1 text-muted hover:bg-[color-mix(in_oklab,var(--text)_8%,transparent)] md:hidden">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -80,7 +86,7 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
                   onClick={() => setNavOpen(false)}
                   className={cn(
                     "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition",
-                    active ? "bg-[var(--brand)]/10 text-[var(--brand)]" : "text-slate-600 hover:bg-slate-100",
+                    active ? "bg-[var(--brand)]/10 text-[var(--brand)]" : "text-muted hover:bg-[color-mix(in_oklab,var(--text)_8%,transparent)]",
                   )}
                 >
                   <Icon className="h-4 w-4" />
@@ -93,22 +99,25 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
         </nav>
         <div className="border-t border-[var(--border)] p-3">
           <div className="px-2 pb-2 text-sm">
-            <div className="font-medium text-slate-800">{user?.name}</div>
-            <div className="text-xs text-slate-500">{user?.role}</div>
+            <div className="font-medium text-[var(--text)]">{user?.name}</div>
+            <div className="text-xs text-muted">{user?.role}</div>
           </div>
           <Link
             href="/account"
             onClick={() => setNavOpen(false)}
             className={cn(
               "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition",
-              pathname.startsWith("/account") ? "bg-[var(--brand)]/10 text-[var(--brand)]" : "text-slate-600 hover:bg-slate-100",
+              pathname.startsWith("/account") ? "bg-[var(--brand)]/10 text-[var(--brand)]" : "text-muted hover:bg-[color-mix(in_oklab,var(--text)_8%,transparent)]",
             )}
           >
             <ShieldCheck className="h-4 w-4" /> {t("shell.account")}
           </Link>
+          {/* 28.1 — dark/light theme toggle, sandwiched between Account and Sign out
+              so a user looking at "appearance / session" settings finds it. */}
+          <ThemeToggle />
           <button
             onClick={logout}
-            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-600 hover:bg-slate-100"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted hover:bg-[color-mix(in_oklab,var(--text)_8%,transparent)]"
           >
             <LogOut className="h-4 w-4" /> {t("shell.signOut")}
           </button>
@@ -116,8 +125,8 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
       </aside>
 
       <div className="flex min-w-0 flex-col">
-        <header className="flex h-14 items-center gap-3 border-b border-[var(--border)] bg-white px-4 md:px-6">
-          <button onClick={() => setNavOpen(true)} aria-label={t("shell.openMenu")} className="rounded p-1 text-slate-600 hover:bg-slate-100 md:hidden">
+        <header className="flex h-14 items-center gap-3 border-b border-[var(--border)] bg-[var(--card)] px-4 md:px-6">
+          <button onClick={() => setNavOpen(true)} aria-label={t("shell.openMenu")} className="rounded p-1 text-muted hover:bg-[color-mix(in_oklab,var(--text)_8%,transparent)] md:hidden">
             <Menu className="h-5 w-5" />
           </button>
           <h1 className="truncate text-lg font-semibold">{title}</h1>

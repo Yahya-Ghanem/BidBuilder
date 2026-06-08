@@ -47,10 +47,10 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
       <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId}
-           className="w-full max-w-lg rounded-lg bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+           className="w-full max-w-lg rounded-lg bg-[var(--card)] text-[var(--text)] shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
           <h3 id={titleId} className="font-semibold">{title}</h3>
-          <button onClick={onClose} aria-label="Close dialog" className="rounded p-1 text-muted hover:bg-slate-100"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label="Close dialog" className="rounded p-1 text-muted hover:bg-[color-mix(in_oklab,var(--text)_8%,transparent)]"><X className="h-4 w-4" /></button>
         </div>
         <div className="max-h-[70vh] overflow-auto px-5 py-4">{children}</div>
         {footer && <div className="flex justify-end gap-2 border-t border-[var(--border)] px-5 py-3">{footer}</div>}
@@ -62,7 +62,7 @@ export function Modal({
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-medium text-slate-600">{label}</span>
+      <span className="mb-1 block text-sm font-medium text-muted">{label}</span>
       {children}
     </label>
   )
@@ -72,7 +72,7 @@ export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectE
   return (
     <select
       className={cn(
-        "w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none",
+        "w-full rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--text)] px-3 py-2 text-sm outline-none",
         "focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/20",
         className,
       )}
@@ -85,7 +85,7 @@ export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
   return (
     <textarea
       className={cn(
-        "w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none",
+        "w-full rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--text)] px-3 py-2 text-sm outline-none",
         "focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/20",
         className,
       )}

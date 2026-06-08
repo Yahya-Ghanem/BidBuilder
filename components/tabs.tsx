@@ -113,10 +113,15 @@ export function Tabs({
               onKeyDown={onKeyDown}
               className={cn(
                 "-mb-px border-b-2 px-4 py-2 text-sm font-medium transition outline-none",
-                "focus-visible:bg-slate-50",
+                // 28.1 — surface-token wash for focus-visible (light grey on
+                // light, light wash on dark slate). Inactive tab is `text-muted`
+                // (slate-600 → slate-300 in dark) and brightens to `text-[var(--text)]`
+                // on hover — the previous `text-slate-900` was AAA on white
+                // but invisible on slate-900.
+                "focus-visible:bg-[color-mix(in_oklab,var(--text)_6%,transparent)]",
                 active
                   ? "border-[var(--brand)] text-[var(--brand)]"
-                  : "border-transparent text-slate-600 hover:text-slate-900",
+                  : "border-transparent text-muted hover:text-[var(--text)]",
               )}
             >
               {t.label}

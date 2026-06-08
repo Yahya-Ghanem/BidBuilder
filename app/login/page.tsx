@@ -80,18 +80,18 @@ export default function LoginPage() {
 
         {!mfa ? (
           <>
-            <p className="mb-4 text-sm text-slate-500">{t("login.subtitle")}</p>
+            <p className="mb-4 text-sm text-muted">{t("login.subtitle")}</p>
             <form onSubmit={onSubmit} className="space-y-3">
               <div>
-                <label htmlFor="login-tenant" className="mb-1 block text-xs font-medium text-slate-600">{t("login.tenant")}</label>
+                <label htmlFor="login-tenant" className="mb-1 block text-xs font-medium text-muted">{t("login.tenant")}</label>
                 <Input id="login-tenant" value={tenant} onChange={(e) => setTenant(e.target.value)} placeholder="default" />
               </div>
               <div>
-                <label htmlFor="login-email" className="mb-1 block text-xs font-medium text-slate-600">{t("login.email")}</label>
+                <label htmlFor="login-email" className="mb-1 block text-xs font-medium text-muted">{t("login.email")}</label>
                 <Input id="login-email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
               <div>
-                <label htmlFor="login-password" className="mb-1 block text-xs font-medium text-slate-600">{t("login.password")}</label>
+                <label htmlFor="login-password" className="mb-1 block text-xs font-medium text-muted">{t("login.password")}</label>
                 <Input id="login-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
               </div>
               <Button type="submit" className="w-full" disabled={busy}>
@@ -99,7 +99,7 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            <div className="my-4 flex items-center gap-3 text-xs text-slate-500">
+            <div className="my-4 flex items-center gap-3 text-xs text-muted">
               <span className="h-px flex-1 bg-[var(--border)]" /> {t("login.or")} <span className="h-px flex-1 bg-[var(--border)]" />
             </div>
             <Button type="button" variant="outline" className="w-full" onClick={signInWithSso}>
@@ -108,13 +108,13 @@ export default function LoginPage() {
           </>
         ) : (
           <>
-            <div className="mb-4 flex items-center gap-2 text-sm text-slate-600">
+            <div className="mb-4 flex items-center gap-2 text-sm text-muted">
               <ShieldCheck className="h-4 w-4 text-[var(--brand)]" />
               {useRecovery ? "Enter a recovery code" : "Two-factor authentication"}
             </div>
             <form onSubmit={onSubmit} className="space-y-3">
               <div>
-                <label htmlFor="login-mfa-code" className="mb-1 block text-xs font-medium text-slate-600">
+                <label htmlFor="login-mfa-code" className="mb-1 block text-xs font-medium text-muted">
                   {useRecovery ? "Recovery code" : "6-digit code"}
                 </label>
                 <Input
@@ -131,11 +131,11 @@ export default function LoginPage() {
                 {busy ? "Verifying…" : "Verify & sign in"}
               </Button>
               <div className="flex items-center justify-between text-xs">
-                <button type="button" className="text-slate-500 hover:text-[var(--brand)]"
+                <button type="button" className="text-muted hover:text-[var(--brand)]"
                   onClick={() => { setUseRecovery((v) => !v); setCode("") }}>
                   {useRecovery ? "Use authenticator code" : "Use a recovery code"}
                 </button>
-                <button type="button" className="text-muted hover:text-slate-600"
+                <button type="button" className="text-muted hover:text-muted"
                   onClick={() => { setMfa(false); setCode(""); setPassword("") }}>
                   Back
                 </button>
@@ -144,7 +144,7 @@ export default function LoginPage() {
           </>
         )}
 
-        <p className="mt-4 text-center text-xs text-slate-500">
+        <p className="mt-4 text-center text-xs text-muted">
           <a href="/platform" className="hover:text-[var(--brand)] hover:underline">{t("login.platformAdmin")}</a>
         </p>
       </Card>

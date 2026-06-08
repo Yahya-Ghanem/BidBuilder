@@ -70,7 +70,7 @@ export function TemplatesCard() {
     <Card className="space-y-4 p-5">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-muted">
             <FileStack className="h-4 w-4 text-[var(--brand)]" /> {t("adm.tpl.heading")}
           </h3>
           <p className="text-xs text-muted">
@@ -105,23 +105,23 @@ export function TemplatesCard() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   {t.isFeatured && <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />}
-                  <span className="truncate text-sm text-slate-700">{t.name}</span>
+                  <span className="truncate text-sm text-[var(--text)]">{t.name}</span>
                   {t.category && <span className="rounded bg-sky-100 px-1.5 text-xs font-medium text-sky-700">{t.category}</span>}
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                  {t.tags.map((g) => <span key={g} className="rounded bg-slate-100 px-1.5 text-xs text-muted">{g}</span>)}
+                  {t.tags.map((g) => <span key={g} className="rounded bg-[color-mix(in_oklab,var(--text)_6%,transparent)] px-1.5 text-xs text-muted">{g}</span>)}
                 </div>
                 <div className="mt-0.5 text-xs text-muted">
                   {t.sectionCount} sections · {t.itemCount} items{t.createdByName ? ` · by ${t.createdByName}` : ""}{t.description ? ` · ${t.description}` : ""}
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                <Button variant="outline" className="h-7 text-xs text-slate-600 hover:bg-slate-50"
+                <Button variant="outline" className="h-7 text-xs text-muted hover:bg-[color-mix(in_oklab,var(--text)_6%,transparent)]"
                   onClick={() => exportOne(t.id, t.name)} title="Export as JSON to share with another workspace">
                   <Download className="h-3.5 w-3.5" /> Export
                 </Button>
                 {isAdmin && (
-                  <Button variant="outline" className={cn("h-7 text-xs", t.isFeatured ? "text-amber-600" : "text-slate-500")}
+                  <Button variant="outline" className={cn("h-7 text-xs", t.isFeatured ? "text-amber-600" : "text-muted")}
                     disabled={feature.isPending}
                     onClick={() => feature.mutate({ id: t.id, featured: !t.isFeatured })}
                     title={t.isFeatured ? "Unfeature" : "Feature for your org"}>

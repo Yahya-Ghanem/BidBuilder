@@ -148,7 +148,7 @@ function CompanyProfileCard({ f, setF, ro }: { f: TenantSettings; setF: (s: Tena
   return (
     <Card className="space-y-4 p-5">
       <div>
-        <h3 className="text-sm font-semibold text-slate-600">Company profile</h3>
+        <h3 className="text-sm font-semibold text-muted">Company profile</h3>
         <p className="text-xs text-muted">Appears on the header of exported bid documents.</p>
       </div>
       <Field label="Company name"><Input value={f.companyName} disabled /></Field>
@@ -171,7 +171,7 @@ function EstimatingDefaultsCard({ f, setF, ro }: { f: TenantSettings; setF: (s: 
   const setNum = (k: keyof TenantSettings) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: Number(e.target.value || 0) })
   return (
     <Card className="space-y-4 p-5">
-      <h3 className="text-sm font-semibold text-slate-600">Estimating defaults</h3>
+      <h3 className="text-sm font-semibold text-muted">Estimating defaults</h3>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Base currency"><Input value={f.baseCurrency} onChange={set("baseCurrency")} disabled={ro} maxLength={3} /></Field>
         <Field label="Timezone"><Input value={f.timezone} onChange={set("timezone")} disabled={ro} /></Field>
@@ -193,7 +193,7 @@ function ApprovalWorkflowCard({ f, setF, ro }: { f: TenantSettings; setF: (s: Te
   return (
     <Card className="space-y-4 p-5">
       <div>
-        <h3 className="text-sm font-semibold text-slate-600">Approval workflow</h3>
+        <h3 className="text-sm font-semibold text-muted">Approval workflow</h3>
         <p className="text-xs text-muted">
           Number of TenantAdmin sign-offs required before an estimate can be Published.
           Zero disables the workflow. Any BOQ / preliminaries / markups / risks edit invalidates existing sign-offs.
@@ -216,19 +216,19 @@ function BrandingCard({ f, setF, ro }: { f: TenantSettings; setF: (s: TenantSett
   const counter = (s: string | null) => `${(s ?? "").length} / 2048`
   const update = (k: "brandHeaderText" | "brandFooterText" | "brandSignatureText") =>
     (e: React.ChangeEvent<HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value === "" ? null : e.target.value })
-  const ta = "min-h-[72px] w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/20 disabled:bg-slate-50"
+  const ta = "min-h-[72px] w-full rounded-md border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/20 disabled:bg-[color-mix(in_oklab,var(--text)_6%,transparent)]"
 
   return (
     <Card className="space-y-4 p-5">
       <div>
-        <h3 className="text-sm font-semibold text-slate-600">Document branding</h3>
-        <p className="text-xs text-slate-500">
+        <h3 className="text-sm font-semibold text-muted">Document branding</h3>
+        <p className="text-xs text-muted">
           Plain text rendered on the bid-letter PDF. Newlines preserved. 2 KB max per field.
         </p>
       </div>
 
       <div>
-        <label htmlFor="brand-header" className="mb-1 block text-sm font-medium text-slate-600">
+        <label htmlFor="brand-header" className="mb-1 block text-sm font-medium text-muted">
           Header (above the body)
         </label>
         <textarea
@@ -236,11 +236,11 @@ function BrandingCard({ f, setF, ro }: { f: TenantSettings; setF: (s: TenantSett
           placeholder="e.g. Licensed General Contractor — Lic. #AB-12345"
           value={f.brandHeaderText ?? ""} onChange={update("brandHeaderText")} maxLength={2048}
         />
-        <p className="mt-0.5 text-right text-xs text-slate-500">{counter(f.brandHeaderText)}</p>
+        <p className="mt-0.5 text-right text-xs text-muted">{counter(f.brandHeaderText)}</p>
       </div>
 
       <div>
-        <label htmlFor="brand-footer" className="mb-1 block text-sm font-medium text-slate-600">
+        <label htmlFor="brand-footer" className="mb-1 block text-sm font-medium text-muted">
           Footer (replaces page-count footer)
         </label>
         <textarea
@@ -248,11 +248,11 @@ function BrandingCard({ f, setF, ro }: { f: TenantSettings; setF: (s: TenantSett
           placeholder="e.g. © ACME Construction LLC · Confidential"
           value={f.brandFooterText ?? ""} onChange={update("brandFooterText")} maxLength={2048}
         />
-        <p className="mt-0.5 text-right text-xs text-slate-500">{counter(f.brandFooterText)}</p>
+        <p className="mt-0.5 text-right text-xs text-muted">{counter(f.brandFooterText)}</p>
       </div>
 
       <div>
-        <label htmlFor="brand-signature" className="mb-1 block text-sm font-medium text-slate-600">
+        <label htmlFor="brand-signature" className="mb-1 block text-sm font-medium text-muted">
           Signature block (overrides the bid-letter sign-off)
         </label>
         <textarea
@@ -260,7 +260,7 @@ function BrandingCard({ f, setF, ro }: { f: TenantSettings; setF: (s: TenantSett
           placeholder={"Yours faithfully,\nACME Construction LLC\nTender Office"}
           value={f.brandSignatureText ?? ""} onChange={update("brandSignatureText")} maxLength={2048}
         />
-        <p className="mt-0.5 text-right text-xs text-slate-500">{counter(f.brandSignatureText)}</p>
+        <p className="mt-0.5 text-right text-xs text-muted">{counter(f.brandSignatureText)}</p>
       </div>
     </Card>
   )
@@ -286,11 +286,11 @@ function EmailCard({ f, setF, ro, isAdmin }: { f: TenantSettings; setF: (s: Tena
   return (
     <Card className="space-y-4 p-5">
       <div>
-        <h3 className="text-sm font-semibold text-slate-600">{t("adm.email.heading")}</h3>
+        <h3 className="text-sm font-semibold text-muted">{t("adm.email.heading")}</h3>
         <p className="text-xs text-muted">{t("adm.email.sub")}</p>
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-slate-700">
+      <label className="flex items-center gap-2 text-sm text-[var(--text)]">
         <input
           type="checkbox"
           checked={f.notificationEmailsEnabled}
@@ -338,7 +338,7 @@ function ProjectTypesCard({ isAdmin }: { isAdmin: boolean }) {
   return (
     <Card className="space-y-4 p-5">
       <div>
-        <h3 className="text-sm font-semibold text-slate-600">Project types</h3>
+        <h3 className="text-sm font-semibold text-muted">Project types</h3>
         <p className="text-xs text-muted">
           The dropdown of project types (Civil, Mechanical, Electrical…) shown when creating or editing a
           project. Built-in types can be deactivated but not deleted; add your own below.
@@ -347,7 +347,7 @@ function ProjectTypesCard({ isAdmin }: { isAdmin: boolean }) {
 
       {data && (
         <table className="w-full text-sm">
-          <thead className="text-left text-sm text-slate-500"><tr><th className="py-1">Name</th><th className="py-1">Active</th><th /></tr></thead>
+          <thead className="text-left text-sm text-muted"><tr><th className="py-1">Name</th><th className="py-1">Active</th><th /></tr></thead>
           <tbody>{data.map((a) => <ProjectTypeRow key={a.id} type={a} isAdmin={isAdmin} busy={busy} setBusy={setBusy} />)}</tbody>
         </table>
       )}
@@ -423,7 +423,7 @@ function ActivitiesCard({ isAdmin }: { isAdmin: boolean }) {
   return (
     <Card className="space-y-4 p-5">
       <div>
-        <h3 className="text-sm font-semibold text-slate-600">Activities</h3>
+        <h3 className="text-sm font-semibold text-muted">Activities</h3>
         <p className="text-xs text-muted">
           The dropdown of construction activities shown when adding work under a unit. Built-in activities
           can be deactivated but not deleted; add your own below.
@@ -432,7 +432,7 @@ function ActivitiesCard({ isAdmin }: { isAdmin: boolean }) {
 
       {data && (
         <table className="w-full text-sm">
-          <thead className="text-left text-sm text-slate-500"><tr><th className="py-1">Name</th><th className="py-1">Active</th><th /></tr></thead>
+          <thead className="text-left text-sm text-muted"><tr><th className="py-1">Name</th><th className="py-1">Active</th><th /></tr></thead>
           <tbody>{data.map((a) => <ActivityRow key={a.id} activity={a} isAdmin={isAdmin} busy={busy} setBusy={setBusy} />)}</tbody>
         </table>
       )}
@@ -513,7 +513,7 @@ function CostTypesCard({ isAdmin }: { isAdmin: boolean }) {
   return (
     <Card className="space-y-4 p-5">
       <div>
-        <h3 className="text-sm font-semibold text-slate-600">Cost-component types</h3>
+        <h3 className="text-sm font-semibold text-muted">Cost-component types</h3>
         <p className="text-xs text-muted">
           Categories used to build up each BOQ item's unit rate. <b>Amount</b> types are money per unit;
           <b> Percent</b> types apply to the amount subtotal (e.g. Waste, Overheads). Built-in types can be deactivated but not deleted.
@@ -522,7 +522,7 @@ function CostTypesCard({ isAdmin }: { isAdmin: boolean }) {
 
       {data && (
         <table className="w-full text-sm">
-          <thead className="text-left text-sm text-slate-500">
+          <thead className="text-left text-sm text-muted">
             <tr><th className="py-1">Name</th><th className="py-1">Code</th><th className="py-1">Kind</th><th className="py-1">Active</th><th /></tr>
           </thead>
           <tbody>
@@ -536,7 +536,7 @@ function CostTypesCard({ isAdmin }: { isAdmin: boolean }) {
           <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Transport" className="w-36" /></Field>
           <Field label="Code"><Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="TRN" maxLength={16} className="w-24" /></Field>
           <Field label="Kind">
-            <select value={kind} onChange={(e) => setKind(e.target.value)} className="h-9 rounded-md border border-[var(--border)] bg-white px-2 text-sm">
+            <select value={kind} onChange={(e) => setKind(e.target.value)} className="h-9 rounded-md border border-[var(--border)] bg-[var(--card)] px-2 text-sm">
               <option value="Amount">Amount</option>
               <option value="Percent">Percent</option>
             </select>
@@ -582,8 +582,8 @@ function CostTypeRow({ type, isAdmin, busy, setBusy }: { type: CostComponentType
       <td className="py-2 font-mono text-sm">{type.code}</td>
       <td className="py-2">
         {isAdmin && !type.builtin
-          ? <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label={`Cost type kind (${type.code})`} className="rounded-md border border-[var(--border)] bg-white px-2 py-1 text-xs"><option value="Amount">Amount</option><option value="Percent">Percent</option></select>
-          : <span className="text-xs text-slate-500">{kind}</span>}
+          ? <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label={`Cost type kind (${type.code})`} className="rounded-md border border-[var(--border)] bg-[var(--card)] px-2 py-1 text-xs"><option value="Amount">Amount</option><option value="Percent">Percent</option></select>
+          : <span className="text-xs text-muted">{kind}</span>}
       </td>
       <td className="py-2">
         <input type="checkbox" checked={active} disabled={!isAdmin} onChange={(e) => setActive(e.target.checked)} aria-label={`${type.code} active`} />
@@ -638,7 +638,7 @@ function CurrencyRatesCard({ isAdmin }: { isAdmin: boolean }) {
   return (
     <Card className="space-y-4 p-5">
       <div>
-        <h3 className="text-sm font-semibold text-slate-600">Currency rates (FX)</h3>
+        <h3 className="text-sm font-semibold text-muted">Currency rates (FX)</h3>
         <p className="text-xs text-muted">
           Base currency is <b>{base}</b>. Enter the value of 1 unit of each currency in {base} (e.g. 1 USD = 3.6725 {base}).
           Estimates can show their bid converted into any listed currency.
@@ -647,7 +647,7 @@ function CurrencyRatesCard({ isAdmin }: { isAdmin: boolean }) {
 
       {data && (
         <table className="w-full text-sm">
-          <thead className="text-left text-sm text-slate-500">
+          <thead className="text-left text-sm text-muted">
             <tr><th className="py-1">Currency</th><th className="py-1">Rate (1 unit in {base})</th><th className="py-1">Updated</th><th /></tr>
           </thead>
           <tbody>
@@ -752,11 +752,11 @@ function LogoCard({ hasLogo, isAdmin }: { hasLogo: boolean; isAdmin: boolean }) 
   return (
     <Card className="space-y-4 p-5">
       <div>
-        <h3 className="text-sm font-semibold text-slate-600">Company logo</h3>
+        <h3 className="text-sm font-semibold text-muted">Company logo</h3>
         <p className="text-xs text-muted">PNG or JPEG, under 1 MB. Appears on exported Excel &amp; PDF bid documents.</p>
       </div>
       <div className="flex items-center gap-4">
-        <div className="grid h-20 w-40 place-items-center overflow-hidden rounded-md border border-dashed border-[var(--border)] bg-slate-50">
+        <div className="grid h-20 w-40 place-items-center overflow-hidden rounded-md border border-dashed border-[var(--border)] bg-[color-mix(in_oklab,var(--text)_6%,transparent)]">
           {url
             ? <img src={url} alt="Company logo" className="max-h-full max-w-full object-contain" />
             : <span className="flex items-center gap-1 text-xs text-muted"><ImageIcon className="h-4 w-4" /> No logo</span>}

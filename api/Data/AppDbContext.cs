@@ -402,6 +402,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.HasIndex(p => new { p.TenantId, p.UserId }).IsUnique();
             b.Property(p => p.PinnedProjectIds).HasMaxLength(4000).IsRequired();
             b.Property(p => p.RecentProjectIds).HasMaxLength(2000).IsRequired();
+            // 28.1 — preferred theme (system|light|dark). Default "system" so legacy
+            // rows added before this column existed (DB default in the migration)
+            // behave the same as a brand-new user.
+            b.Property(p => p.Theme).HasMaxLength(16).IsRequired().HasDefaultValue(BidBuilder.Api.Models.UserPreferences.ThemeSystem);
             b.HasQueryFilter(p => p.TenantId == _tenant.TenantId);
         });
 

@@ -20,5 +20,9 @@ export default [
       "react/no-unescaped-entities": "warn",
     },
   },
-  { ignores: [".next/**", "node_modules/**", "next-env.d.ts", "*.config.*"] },
+  // 28.1 — `playwright-report/` is generated output (the trace viewer's
+  // bundled minified JS triggers `no-this-alias` on every chunk). Same
+  // category as `.next/`: ignore it so lint stays focused on hand-written
+  // source. `test-results/` is the per-run artifact directory.
+  { ignores: [".next/**", "node_modules/**", "next-env.d.ts", "*.config.*", "playwright-report/**", "test-results/**"] },
 ]

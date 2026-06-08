@@ -140,9 +140,9 @@ export function NotificationsBell() {
       </button>
 
       {open && (
-        <div className="absolute end-0 z-50 mt-2 w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-[var(--border)] bg-white shadow-lg">
+        <div className="absolute end-0 z-50 mt-2 w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--card)] shadow-lg">
           <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-2.5">
-            <span className="text-sm font-semibold text-slate-700">{t("notif.title")}</span>
+            <span className="text-sm font-semibold text-[var(--text)]">{t("notif.title")}</span>
             {unread > 0 && (
               <button onClick={() => markAll.mutate()} disabled={markAll.isPending}
                 className="flex items-center gap-1 text-xs text-[var(--brand)] hover:underline">

@@ -64,25 +64,58 @@ function format(results: Awaited<ReturnType<AxeBuilder["analyze"]>>) {
     .join("\n\n")
 }
 
-test.describe("a11y — WCAG 2.1 A/AA, no critical violations", () => {
-  test("login page", async ({ page }) => {
-    await page.goto("/login")
-    await page.locator('input[type="email"]').waitFor()
-    const results = await axe(page).analyze()
-    expect(blocking(results), format(results)).toEqual([])
-  })
+/**
+ * 28.1 — Seed localStorage("bb.theme") on the origin BEFORE the first
+ * navigation so the boot script in app/layout.tsx picks up the dark
+ * preference and sets data-theme="dark" on first paint. Without this, the
+ * page would load light (boot script reads empty storage → falls back to
+ * prefers-color-scheme, which is "light" under default Playwright config),
+ * defeating the point of running the gate in dark.
+ *
+ * Why addInitScript and not setStorage: Playwright's storageState is set
+ * before any page load, but addInitScript runs in the page context BEFORE
+ * any script tag — including our inline boot script — so the value is
+ * already in place when boot reads it.
+ */
+async function seedTheme(page: import("@playwright/test").Page, theme: "light" | "dark") {
+  await page.addInitScript((t: string) => {
+    try { window.localStorage.setItem("bb.theme", t) } catch { /* private mode */ }
+  }, theme)
+}
 
-  test("settings (admin form surface)", async ({ page }) => {
-    // Sign in first — /settings is gated.
-    await page.goto("/login")
-    await page.locator('input[type="email"]').fill("admin@bidbuilder.local")
-    await page.locator('input[type="password"]').fill("Admin@12345")
-    await page.getByRole("button", { name: /sign in/i }).click()
-    await expect(page).toHaveURL(/\/projects/, { timeout: 15_000 })
+// 28.1 — Run every a11y surface in BOTH themes. Dark surfaces use different
+// tokens (slate-100 on slate-900, brightened brand teal, deep semantic soft
+// backgrounds); each could regress contrast independently of the light path.
+const THEMES = ["light", "dark"] as const
 
-    await page.goto("/settings")
-    await page.waitForLoadState("networkidle")
-    const results = await axe(page).analyze()
-    expect(blocking(results), `settings:\n${format(results)}`).toEqual([])
+for (const theme of THEMES) {
+  test.describe(`a11y [${theme}] — WCAG 2.1 A/AA, no critical violations`, () => {
+    test(`login page (${theme})`, async ({ page }) => {
+      await seedTheme(page, theme)
+      await page.goto("/login")
+      await page.locator('input[type="email"]').waitFor()
+      // Sanity: the boot script applied the expected theme attribute. If this
+      // fails the test is meaningless — we'd be silently re-running the light
+      // path under a "dark" label.
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme)
+      const results = await axe(page).analyze()
+      expect(blocking(results), format(results)).toEqual([])
+    })
+
+    test(`settings (admin form surface) (${theme})`, async ({ page }) => {
+      await seedTheme(page, theme)
+      // Sign in first — /settings is gated.
+      await page.goto("/login")
+      await page.locator('input[type="email"]').fill("admin@bidbuilder.local")
+      await page.locator('input[type="password"]').fill("Admin@12345")
+      await page.getByRole("button", { name: /sign in/i }).click()
+      await expect(page).toHaveURL(/\/projects/, { timeout: 15_000 })
+
+      await page.goto("/settings")
+      await page.waitForLoadState("networkidle")
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme)
+      const results = await axe(page).analyze()
+      expect(blocking(results), `settings [${theme}]:\n${format(results)}`).toEqual([])
+    })
   })
-})
+}

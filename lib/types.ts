@@ -45,10 +45,15 @@ export interface Project {
   projectTypeName: string | null
 }
 
-/** 27.5 — the signed-in user's sidebar personalisation (pinned + recent projects). */
+/** 28.1 — the user's preferred color theme. "system" defers to the OS
+ *  prefers-color-scheme media query at render time; "light"/"dark" override it. */
+export type ThemePreference = "system" | "light" | "dark"
+
+/** 27.5/28.1 — the signed-in user's sidebar personalisation + theme. */
 export interface UserPreferences {
   pinnedProjectIds: number[]
   recentProjectIds: number[]
+  theme: ThemePreference
 }
 
 export interface ModulePermission {
