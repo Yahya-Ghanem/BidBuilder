@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -238,6 +238,20 @@ export function ProjectsDetailPane() {
   const { selected } = useProjectsTree()
   const { isAdmin } = usePermissions()
   const [newOpen, setNewOpen] = useState(false)
+
+  // 28.5 — `/projects?new=1` opens the New Project modal on first render. The
+  // search palette's "> new project" action navigates here; we strip the query
+  // string after consuming it so a back/refresh doesn't re-open the modal.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const sp = new URLSearchParams(window.location.search)
+    if (sp.get("new") === "1" && isAdmin) {
+      setNewOpen(true)
+      sp.delete("new")
+      const q = sp.toString()
+      window.history.replaceState({}, "", window.location.pathname + (q ? `?${q}` : ""))
+    }
+  }, [isAdmin])
 
   return (
     <div className="space-y-4">

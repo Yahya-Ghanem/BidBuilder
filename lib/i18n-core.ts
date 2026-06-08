@@ -22,6 +22,22 @@ const en: Dict = {
   // 27.5 — sidebar favourites + project pin toggle
   "nav.pinned": "Pinned",
   "nav.recent": "Recent",
+  // 28.5 — Search palette upgrades (recent + entity filter + actions).
+  "palette.openLabel":      "Search",
+  "palette.placeholder":    "Search projects, estimates, resources, assemblies — or > for actions",
+  "palette.empty.hint":     "Type to search, prefix with @ to filter by type, or > for actions.",
+  "palette.recent":         "Recent",
+  "palette.recent.empty":   "No recent items yet — open something to see it here.",
+  "palette.actions":        "Actions",
+  "palette.actions.noMatch": "No actions match.",
+  "palette.noMatches":      "No matches for “{term}”.",
+  "palette.searching":      "Searching…",
+  // Action labels — keep them short so the palette row reads in one glance.
+  "palette.act.newProject": "New project…",
+  "palette.act.signOut":    "Sign out",
+  "palette.act.settings":   "Open settings",
+  "palette.act.projects":   "Go to projects",
+  "palette.act.resources":  "Go to resource library",
   "proj.pin": "Pin project",
   "proj.unpin": "Unpin project",
   // 27.4 — notifications bell grouping + unread separator
@@ -399,6 +415,20 @@ const ar: Dict = {
   // 27.5 — sidebar favourites + project pin toggle
   "nav.pinned": "المثبتة",
   "nav.recent": "الأخيرة",
+  "palette.openLabel":      "بحث",
+  "palette.placeholder":    "ابحث في المشاريع والتقديرات والموارد والتجميعات — أو > للإجراءات",
+  "palette.empty.hint":     "اكتب للبحث، @ لتصفية النوع، > للإجراءات.",
+  "palette.recent":         "الأخيرة",
+  "palette.recent.empty":   "لا توجد عناصر حديثة بعد — افتح عنصراً ليظهر هنا.",
+  "palette.actions":        "إجراءات",
+  "palette.actions.noMatch": "لا توجد إجراءات مطابقة.",
+  "palette.noMatches":      "لا توجد نتائج لـ «{term}».",
+  "palette.searching":      "جارٍ البحث…",
+  "palette.act.newProject": "مشروع جديد…",
+  "palette.act.signOut":    "تسجيل الخروج",
+  "palette.act.settings":   "فتح الإعدادات",
+  "palette.act.projects":   "اذهب إلى المشاريع",
+  "palette.act.resources":  "اذهب إلى مكتبة الموارد",
   "proj.pin": "تثبيت المشروع",
   "proj.unpin": "إلغاء تثبيت المشروع",
   // 27.4 — notifications bell grouping + unread separator
