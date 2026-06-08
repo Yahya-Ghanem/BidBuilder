@@ -284,6 +284,37 @@
         },
         "type": "object"
       },
+      "BulkBoqRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "nullable": true,
+            "type": "string"
+          },
+          "clearArea": {
+            "type": "boolean"
+          },
+          "itemIds": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "targetAreaId": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          },
+          "targetSectionId": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "BulkResourceRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3714,6 +3745,39 @@
               }
             }
           }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/estimates/{id}/items/bulk": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkBoqRequest"
+              }
+            }
+          },
+          "required": true
         },
         "responses": {
           "200": {

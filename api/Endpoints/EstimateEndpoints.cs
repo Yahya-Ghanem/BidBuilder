@@ -75,6 +75,18 @@ public record CommentCountDto(int ItemId, int OpenCount);
 public record PresenceUserDto(int Id, string Name, string Email, DateTime LastSeenAt);
 public record PresenceListDto(IReadOnlyList<PresenceUserDto> Users);
 
+// 28.2 — BOQ bulk actions. One request lists the BoqItem ids the caller intends
+// to act on (multi-select in the UI) plus one of four actions:
+//   • delete    — remove the lines (Delete perm)
+//   • duplicate — clone each in place (Add perm); new lines appear right after
+//     their source, sort order shuffled up to make room
+//   • move      — relocate every selected line into <TargetSectionId> (Edit perm)
+//   • tag       — set Area to <TargetAreaId> (or clear when ClearArea=true) (Edit perm)
+// The endpoint is fail-closed per-line: every supplied ItemId MUST belong to a
+// Section under this estimate. ONE foreign id rejects the WHOLE batch (per-line
+// authz, per ROADMAP). A single calc.RecomputeAsync at the end covers all writes.
+public record BulkBoqRequest(string Action, int[] ItemIds, int? TargetSectionId, int? TargetAreaId, bool ClearArea = false);
+
 /// <summary>
 /// Estimate editing: BOQ sections/items, preliminaries, markups, and the
 /// recompute → bid price roll-up. Every route requires access to the owning
@@ -690,6 +702,118 @@ public static class EstimateEndpoints
             var g = await Guard(me, id, Boq, ModuleAction.Delete, access, perm); if (g is not null) return g;
             var item = await db.BoqItems.Include(x => x.Section).FirstOrDefaultAsync(x => x.Id == iid && x.Section.EstimateId == id); if (item is null) return NotFound();
             db.BoqItems.Remove(item); await db.SaveChangesAsync();
+            return Results.Ok(await calc.RecomputeAsync(id));
+        });
+
+        // 28.2 — BOQ bulk actions. The acceptance bar: "selecting 10 lines and
+        // deleting them is one click instead of 10". One request → one Guard call
+        // (action-specific) → one per-line scope check → one set of writes → one
+        // recompute. The per-line check is the security crux: every supplied item
+        // id must already belong to a Section under this estimate. A single
+        // foreign id rejects the WHOLE batch — partial application would let a
+        // malicious caller probe id space by mixing legit + foreign ids and
+        // observing the success count. Returns 404 (mirror the existing single-line
+        // shape: a 404 hides existence of items the caller can't reach).
+        grp.MapPost("/{id:int}/items/bulk", async (int id, BulkBoqRequest req, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc) =>
+        {
+            var action = (req.Action ?? "").Trim().ToLowerInvariant();
+            var ids = (req.ItemIds ?? Array.Empty<int>()).Where(x => x > 0).Distinct().ToArray();
+            if (ids.Length == 0) return Bad("No item ids supplied.");
+
+            // Permission per action. We don't probe the data before this — a caller
+            // missing the right module permission must see 403, not "ok" because
+            // the ids happen to be foreign.
+            var needed = action switch
+            {
+                "delete"    => ModuleAction.Delete,
+                "duplicate" => ModuleAction.Add,
+                "move"      => ModuleAction.Edit,
+                "tag"       => ModuleAction.Edit,
+                _           => (ModuleAction?)null,
+            };
+            if (needed is null) return Bad("Unknown action. Use delete|duplicate|move|tag.");
+            var g = await Guard(me, id, Boq, needed.Value, access, perm); if (g is not null) return g;
+
+            // Per-line scope: every id MUST belong to a section under THIS estimate.
+            // Hits the index — one query, no N+1. If any id is missing → reject all.
+            var items = await db.BoqItems.Include(x => x.Section)
+                .Where(x => ids.Contains(x.Id) && x.Section.EstimateId == id)
+                .ToListAsync();
+            if (items.Count != ids.Length)
+                return Results.NotFound(new { error = "One or more items are not part of this estimate." });
+
+            switch (action)
+            {
+                case "delete":
+                {
+                    db.BoqItems.RemoveRange(items);
+                    break;
+                }
+                case "duplicate":
+                {
+                    // Eager-load cost components so the clones carry their build-up.
+                    var ids2 = items.Select(i => i.Id).ToArray();
+                    var comps = await db.ItemCostComponents.Where(c => ids2.Contains(c.BoqItemId)).ToListAsync();
+                    var bySource = comps.GroupBy(c => c.BoqItemId).ToDictionary(g2 => g2.Key, g2 => g2.ToList());
+                    // Shuffle later lines in each section up by +1 to make room right
+                    // after the source — keeps clones adjacent to their originals.
+                    foreach (var src in items)
+                    {
+                        var bumps = await db.BoqItems
+                            .Where(x => x.SectionId == src.SectionId && x.SortOrder > src.SortOrder)
+                            .ToListAsync();
+                        foreach (var b in bumps) b.SortOrder += 1;
+                        var clone = new BoqItem
+                        {
+                            SectionId = src.SectionId, ItemCode = src.ItemCode, Description = src.Description,
+                            Unit = src.Unit, Quantity = src.Quantity, AssemblyId = src.AssemblyId,
+                            AreaId = src.AreaId, Kind = src.Kind, UnitRate = src.UnitRate,
+                            SortOrder = src.SortOrder + 1,
+                        };
+                        if (bySource.TryGetValue(src.Id, out var srcComps))
+                            foreach (var c in srcComps)
+                                clone.CostComponents.Add(new ItemCostComponent
+                                {
+                                    CostComponentTypeId = c.CostComponentTypeId,
+                                    Value = c.Value, Quantity = c.Quantity, Rate = c.Rate,
+                                });
+                        db.BoqItems.Add(clone);
+                    }
+                    break;
+                }
+                case "move":
+                {
+                    if (req.TargetSectionId is null) return Bad("TargetSectionId is required for 'move'.");
+                    if (!await db.BoqSections.AnyAsync(s => s.Id == req.TargetSectionId.Value && s.EstimateId == id))
+                        return Bad("Target section is not part of this estimate.");
+                    // Append below the destination's existing items so we don't collide
+                    // with sort orders already in use there.
+                    var baseSort = (await db.BoqItems.Where(x => x.SectionId == req.TargetSectionId.Value)
+                        .MaxAsync(x => (int?)x.SortOrder)) ?? 0;
+                    foreach (var it in items.OrderBy(x => x.SortOrder))
+                    {
+                        it.SectionId = req.TargetSectionId.Value;
+                        it.SortOrder = ++baseSort;
+                    }
+                    break;
+                }
+                case "tag":
+                {
+                    int? newArea;
+                    if (req.ClearArea) newArea = null;
+                    else
+                    {
+                        if (req.TargetAreaId is null)
+                            return Bad("TargetAreaId is required for 'tag' (or set ClearArea=true).");
+                        var areaErr = await ValidateAreaAsync(db, id, req.TargetAreaId); if (areaErr is not null) return areaErr;
+                        newArea = req.TargetAreaId;
+                    }
+                    foreach (var it in items) it.AreaId = newArea;
+                    break;
+                }
+            }
+
+            await db.SaveChangesAsync();
             return Results.Ok(await calc.RecomputeAsync(id));
         });
 

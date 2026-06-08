@@ -100,6 +100,12 @@ export type DataTableProps<T> = {
   /** When provided, an additional leading checkbox column is rendered and
    *  the callback fires on every selection change. */
   onSelectionChange?: (selected: Set<string>) => void
+  /** 28.2 — Bumping this prop clears the internal selection state. Selection
+   *  lives inside the DataTable, but a consumer that just ran a bulk action
+   *  on the selected rows needs to drop them all. Pass any value that changes
+   *  (a number from `useState`/`useRef`, or a stable token like the breakdown's
+   *  `rowVersion`) and the next render clears `{}` into TanStack Table. */
+  selectionResetKey?: string | number
 
   /** Switch to virtualized rendering when `data.length >= threshold`.
    *  Default: 150 (matches the BOQ pre-26.4 custom virtualizer). */
@@ -126,7 +132,7 @@ export type DataTableProps<T> = {
 export function DataTable<T>({
   data, columns, getRowId,
   showHeader = true, stickyHeader = true, sortable = false,
-  onSelectionChange,
+  onSelectionChange, selectionResetKey,
   virtualizeThreshold = 150, rowEstimatedPx = 56, overscan = 12, maxHeight = "60vh",
   className, tableClassName, testId, banner, emptyState,
 }: DataTableProps<T>) {
@@ -139,6 +145,15 @@ export function DataTable<T>({
     if (!onSelectionChange) return
     onSelectionChange(new Set(Object.keys(rowSelection).filter((k) => rowSelection[k])))
   }, [rowSelection, onSelectionChange])
+
+  // 28.2 — External reset hook. A bulk action consumer bumps `selectionResetKey`
+  // after a successful round-trip; we drop every selected row in one shot.
+  // Skipping the initial mount keeps the empty-from-start path noise-free.
+  const firstResetRender = useRef(true)
+  useEffect(() => {
+    if (firstResetRender.current) { firstResetRender.current = false; return }
+    setRowSelection({})
+  }, [selectionResetKey])
 
   // Auto-insert the checkbox column when selection is enabled. We do this
   // here (not in the call site) so every selection-enabled DataTable has
