@@ -62,7 +62,12 @@ export function AppShell({ children, title }: { children: ReactNode; title: stri
           // current --text colour at low opacity, which reads correctly on
           // both white-on-light and slate-100-on-dark.
           "fixed inset-y-0 start-0 z-40 flex max-h-screen w-[280px] transform flex-col border-e border-[var(--border)] bg-[var(--card)] transition-transform",
-          "md:static md:z-auto md:w-auto md:translate-x-0",
+          // md:translate-x-0 pins the sidebar open on desktop. The compound
+          // md:rtl:translate-x-0 is REQUIRED: in RTL the closed state below uses
+          // `rtl:translate-x-full`, and a single-variant `rtl:` utility outranks the
+          // single-variant `md:` reset — so without this compound reset the sidebar
+          // stays translated 100% off-screen on desktop in Arabic and disappears.
+          "md:static md:z-auto md:w-auto md:translate-x-0 md:rtl:translate-x-0",
           // In RTL the drawer lives on the right, so it hides by sliding the other way.
           navOpen ? "translate-x-0" : "-translate-x-full rtl:translate-x-full",
         )}
