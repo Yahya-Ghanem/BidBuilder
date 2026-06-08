@@ -180,6 +180,13 @@ const en: Dict = {
   "ed.export.csv":       "CSV",
   "ed.export.pdf":       "PDF",
   "ed.export.bidLetter": "Bid Letter",
+  // 28.4 — Bid-letter style picker (Formal / Concise / International). Defaults
+  // to the tenant's DefaultBidLetterStyle setting; an estimator can override
+  // per-letter in the modal.
+  "bidLetter.style":                "Letter style",
+  "bidLetter.style.formal":         "Formal — government / large tender",
+  "bidLetter.style.concise":        "Concise — private / repeat client",
+  "bidLetter.style.international":  "International — English + Arabic",
   // 28.3 — pre-download preview modal. The acceptance bar is "user catches a wrong
   // figure before sending a broken document to the client" — so the dialog title
   // names the format and the body banner reminds the viewer that this is a
@@ -545,6 +552,10 @@ const ar: Dict = {
   "ed.export.csv":       "CSV",
   "ed.export.pdf":       "PDF",
   "ed.export.bidLetter": "خطاب العطاء",
+  "bidLetter.style":                "نمط الخطاب",
+  "bidLetter.style.formal":         "رسمي — عطاء حكومي / كبير",
+  "bidLetter.style.concise":        "مختصر — قطاع خاص / عميل متكرر",
+  "bidLetter.style.international":  "دولي — إنجليزي + عربي",
   "ed.preview.title":    "معاينة — {kind}",
   "ed.preview.loading":  "جارٍ تحميل المعاينة…",
   "ed.preview.failed":   "تعذّرت المعاينة: {error}",

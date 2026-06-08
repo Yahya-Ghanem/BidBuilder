@@ -1368,6 +1368,10 @@
             "nullable": true,
             "type": "string"
           },
+          "defaultBidLetterStyle": {
+            "nullable": true,
+            "type": "string"
+          },
           "defaultContingencyPct": {
             "format": "double",
             "type": "number"
@@ -3516,6 +3520,13 @@
           {
             "in": "query",
             "name": "reference",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "style",
             "schema": {
               "type": "string"
             }

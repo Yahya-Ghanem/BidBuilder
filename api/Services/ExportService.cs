@@ -18,11 +18,47 @@ public record ExportModel(
     /// signature block. Null when the tenant hasn't configured one.</summary>
     string? BrandHeaderText = null, string? BrandFooterText = null, string? BrandSignatureText = null);
 
-/// <summary>Editable fields for the bid submission letter; blanks fall back to sensible defaults.</summary>
+/// <summary>Editable fields for the bid submission letter; blanks fall back to sensible defaults.
+/// 28.4 — <c>Style</c> picks which layout the renderer uses; null lets the caller fall
+/// back to the tenant default (resolved by the endpoint), and an unknown value gets
+/// normalized to <c>Formal</c> at render time so a stray query string never produces a
+/// 500. The set of known styles lives on <see cref="BidLetterStyles"/>.</summary>
 public record BidLetterOptions(
     string? Recipient = null, string? RecipientTitle = null,
     string? Signatory = null, string? SignatoryTitle = null,
-    int? ValidityDays = null, string? Note = null, string? Reference = null);
+    int? ValidityDays = null, string? Note = null, string? Reference = null,
+    string? Style = null);
+
+/// <summary>
+/// 28.4 — Single source of truth for the bid-letter style set. The DB stores the
+/// tenant default as a plain string (rather than an enum) so future styles can ship
+/// without a schema migration; this helper enforces the closed set at the edge
+/// (settings PUT + bid-letter render) and normalizes case so the UI doesn't have to.
+/// </summary>
+public static class BidLetterStyles
+{
+    public const string Formal        = "Formal";
+    public const string Concise       = "Concise";
+    public const string International = "International";
+
+    /// <summary>The full set, ordered for stable display in the picker.</summary>
+    public static readonly string[] Known = { Formal, Concise, International };
+
+    public static bool IsKnown(string? s) =>
+        s is not null && Known.Any(k => k.Equals(s.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Returns the canonical style name (proper casing) for any known input,
+    /// or <see cref="Formal"/> for null/blank/unknown — the renderer should never throw
+    /// because of a bad style string, only because the underlying PDF engine fails.</summary>
+    public static string Normalize(string? s)
+    {
+        if (s is null) return Formal;
+        var t = s.Trim();
+        foreach (var k in Known)
+            if (k.Equals(t, StringComparison.OrdinalIgnoreCase)) return k;
+        return Formal;
+    }
+}
 
 /// <summary>
 /// Renders an estimate as a priced-BOQ + bid-summary in Excel (ClosedXML) and
@@ -816,12 +852,29 @@ public class ExportService
     /// <summary>Compact PDF document header (company + project + title).</summary>
     // ── Bid submission letter ───────────────────────────────────────────────
     /// <summary>
-    /// A formal tender cover letter on the company letterhead: addressed to the client,
-    /// stating the tender sum (figures + words) and validity, signed off. Editable fields
-    /// (recipient, signatory, validity, optional note) come from <paramref name="o"/>;
-    /// everything else is pulled from the project / estimate / company profile.
+    /// Tender cover letter — dispatches to one of three style renderers
+    /// (28.4). All three use the same resolved data set (recipient, signatory,
+    /// tender sum etc), the same letterhead branding (24.5), and the same
+    /// editable fields from <paramref name="o"/>; the difference is layout
+    /// only — wording, density, and column structure.
     /// </summary>
     public byte[] BuildBidLetterPdf(ExportModel m, BidLetterOptions o)
+    {
+        var ctx = BuildLetterContext(m, o);
+        return BidLetterStyles.Normalize(o.Style) switch
+        {
+            BidLetterStyles.Concise       => BuildLetterConcise(m, o, ctx),
+            BidLetterStyles.International => BuildLetterInternational(m, o, ctx),
+            _                              => BuildLetterFormal(m, o, ctx),
+        };
+    }
+
+    /// <summary>Resolved fields every bid-letter style needs. Computed once so all
+    /// three renderers agree on the recipient/validity/amount math.</summary>
+    private record LetterContext(string Recipient, int Validity, string Reference, string Signatory,
+                                  decimal TenderSum, string Amount, string AmountWords);
+
+    private static LetterContext BuildLetterContext(ExportModel m, BidLetterOptions o)
     {
         var e = m.Estimate;
         var recipient   = Clean(o.Recipient) ?? m.Client ?? "Sir/Madam";
@@ -835,33 +888,83 @@ public class ExportService
             ? $"{e.Currency} {tenderSum:#,##0.00} (incl. {e.TaxRatePct:#,##0.##}% VAT)"
             : $"{e.Currency} {tenderSum:#,##0.00}";
         var amountWords = MoneyInWords.Money(tenderSum, e.Currency);
+        return new LetterContext(recipient, validity, reference, signatory, tenderSum, amount, amountWords);
+    }
 
+    /// <summary>Render the letterhead block (company name + address + logo + branding tagline
+    /// + horizontal divider) used by every style. Shared so the three layouts brand
+    /// identically — the difference is only in the body wording / density / columns.</summary>
+    private static void LetterHeader(PageDescriptor page, ExportModel m)
+    {
+        page.Header().Column(h =>
+        {
+            h.Item().Row(top =>
+            {
+                top.RelativeItem().Column(left =>
+                {
+                    left.Item().Text(m.CompanyName).FontSize(16).Bold().FontColor(Colors.Teal.Darken2);
+                    if (!string.IsNullOrWhiteSpace(m.CompanyAddress)) left.Item().Text(m.CompanyAddress).FontSize(8).FontColor(Colors.Grey.Darken1);
+                    if (!string.IsNullOrWhiteSpace(m.CompanyContact)) left.Item().Text(m.CompanyContact).FontSize(8).FontColor(Colors.Grey.Darken1);
+                });
+                if (m.LogoBytes is { Length: > 0 })
+                    top.ConstantItem(130).MaxHeight(48).AlignRight().AlignTop().Image(m.LogoBytes).FitArea();
+            });
+            // 24.5 — optional branding tagline / accreditation line between the letterhead
+            // and the divider. Wrapped per line so newlines in the stored value survive.
+            if (!string.IsNullOrWhiteSpace(m.BrandHeaderText))
+                foreach (var line in m.BrandHeaderText!.Split('\n'))
+                    h.Item().PaddingTop(2).Text(line).FontSize(8).FontColor(Colors.Grey.Darken1);
+            h.Item().PaddingTop(6).LineHorizontal(1).LineColor(Colors.Grey.Lighten1);
+        });
+    }
+
+    /// <summary>Render the page footer — branded footer text on the left + page count on the
+    /// right when the tenant configured it, plain "BidBuilder · N/M" otherwise.</summary>
+    private static void LetterFooter(PageDescriptor page, ExportModel m)
+    {
+        if (!string.IsNullOrWhiteSpace(m.BrandFooterText))
+            page.Footer().Row(row =>
+            {
+                row.RelativeItem().Text(m.BrandFooterText!).FontSize(8).FontColor(Colors.Grey.Darken1);
+                row.AutoItem().AlignRight().Text(x =>
+                {
+                    x.Span(" "); x.CurrentPageNumber(); x.Span(" / "); x.TotalPages();
+                });
+            });
+        else
+            page.Footer().AlignCenter().Text(x => { x.Span("BidBuilder · "); x.CurrentPageNumber(); x.Span(" / "); x.TotalPages(); });
+    }
+
+    /// <summary>Sign-off block. Tenant signature override (24.5) when configured;
+    /// otherwise the boilerplate "Yours faithfully / CompanyName / signatory line".</summary>
+    private static void LetterSignOff(ColumnDescriptor col, ExportModel m, BidLetterOptions o, LetterContext ctx)
+    {
+        if (!string.IsNullOrWhiteSpace(m.BrandSignatureText))
+        {
+            col.Item().PaddingTop(18);
+            foreach (var line in m.BrandSignatureText!.Split('\n'))
+                col.Item().Text(line).LineHeight(1.3f);
+            col.Item().Text(ctx.Signatory);
+            if (!string.IsNullOrWhiteSpace(o.SignatoryTitle)) col.Item().Text(o.SignatoryTitle!.Trim()).FontSize(9).FontColor(Colors.Grey.Darken1);
+        }
+        else
+        {
+            col.Item().PaddingTop(18).Text("Yours faithfully,");
+            col.Item().PaddingTop(24).Text(m.CompanyName).Bold();
+            col.Item().Text(ctx.Signatory);
+            if (!string.IsNullOrWhiteSpace(o.SignatoryTitle)) col.Item().Text(o.SignatoryTitle!.Trim()).FontSize(9).FontColor(Colors.Grey.Darken1);
+        }
+    }
+
+    /// <summary>28.4 — Formal layout (the legacy style, unchanged). Government /
+    /// large-private tender cover letter: full preamble, figures-and-words tender sum,
+    /// validity period, courteous close. The default style for new tenants.</summary>
+    private byte[] BuildLetterFormal(ExportModel m, BidLetterOptions o, LetterContext ctx)
+    {
         var doc = Document.Create(container => container.Page(page =>
         {
             page.Margin(50); page.Size(PageSizes.A4); page.DefaultTextStyle(x => x.FontSize(10));
-
-            // Letterhead
-            page.Header().Column(h =>
-            {
-                h.Item().Row(top =>
-                {
-                    top.RelativeItem().Column(left =>
-                    {
-                        left.Item().Text(m.CompanyName).FontSize(16).Bold().FontColor(Colors.Teal.Darken2);
-                        if (!string.IsNullOrWhiteSpace(m.CompanyAddress)) left.Item().Text(m.CompanyAddress).FontSize(8).FontColor(Colors.Grey.Darken1);
-                        if (!string.IsNullOrWhiteSpace(m.CompanyContact)) left.Item().Text(m.CompanyContact).FontSize(8).FontColor(Colors.Grey.Darken1);
-                    });
-                    if (m.LogoBytes is { Length: > 0 })
-                        top.ConstantItem(130).MaxHeight(48).AlignRight().AlignTop().Image(m.LogoBytes).FitArea();
-                });
-                // 24.5 — optional branding tagline / accreditation line between the letterhead
-                // and the divider. Wrapped per line so newlines in the stored value survive.
-                if (!string.IsNullOrWhiteSpace(m.BrandHeaderText))
-                    foreach (var line in m.BrandHeaderText!.Split('\n'))
-                        h.Item().PaddingTop(2).Text(line).FontSize(8).FontColor(Colors.Grey.Darken1);
-                h.Item().PaddingTop(6).LineHorizontal(1).LineColor(Colors.Grey.Lighten1);
-            });
-
+            LetterHeader(page, m);
             page.Content().PaddingVertical(14).Column(col =>
             {
                 col.Spacing(10);
@@ -870,17 +973,17 @@ public class ExportService
                 col.Item().Column(to =>
                 {
                     to.Item().Text("To:").FontSize(9).FontColor(Colors.Grey.Darken1);
-                    to.Item().Text(recipient).Bold();
+                    to.Item().Text(ctx.Recipient).Bold();
                     if (!string.IsNullOrWhiteSpace(o.RecipientTitle)) to.Item().Text(o.RecipientTitle!.Trim()).FontSize(9);
-                    if (!string.IsNullOrWhiteSpace(m.Client) && !string.Equals(m.Client, recipient, StringComparison.OrdinalIgnoreCase))
+                    if (!string.IsNullOrWhiteSpace(m.Client) && !string.Equals(m.Client, ctx.Recipient, StringComparison.OrdinalIgnoreCase))
                         to.Item().Text(m.Client!).FontSize(9);
                     if (!string.IsNullOrWhiteSpace(m.Location)) to.Item().Text(m.Location!).FontSize(9).FontColor(Colors.Grey.Darken1);
                 });
 
-                col.Item().Text($"Ref: {reference}").FontSize(9).FontColor(Colors.Grey.Darken1);
+                col.Item().Text($"Ref: {ctx.Reference}").FontSize(9).FontColor(Colors.Grey.Darken1);
                 col.Item().Text($"Subject: Bid Submission — {m.ProjectName}").Bold().FontSize(11);
 
-                col.Item().Text($"Dear {recipient},");
+                col.Item().Text($"Dear {ctx.Recipient},");
 
                 col.Item().Text(
                     $"We are pleased to submit our bid for the above-referenced project, {m.ProjectName} ({m.ProjectCode})"
@@ -890,48 +993,139 @@ public class ExportService
                 col.Item().Text(t =>
                 {
                     t.Span("Having reviewed the tender documents, we hereby offer to execute the works described therein for the total tender sum of ");
-                    t.Span(amount).Bold();
-                    t.Span($" ({amountWords}).");
+                    t.Span(ctx.Amount).Bold();
+                    t.Span($" ({ctx.AmountWords}).");
                 });
 
                 if (!string.IsNullOrWhiteSpace(o.Note))
                     col.Item().Text(o.Note!.Trim()).LineHeight(1.4f);
 
-                col.Item().Text($"This offer shall remain valid for {validity} days from the date of this letter.").LineHeight(1.4f);
+                col.Item().Text($"This offer shall remain valid for {ctx.Validity} days from the date of this letter.").LineHeight(1.4f);
                 col.Item().Text("We trust our submission meets your requirements and look forward to your favourable consideration.").LineHeight(1.4f);
 
-                // 24.5 — tenant signature block overrides the boilerplate sign-off when configured;
-                // otherwise the legacy "Yours faithfully / CompanyName / signatory" stays.
-                if (!string.IsNullOrWhiteSpace(m.BrandSignatureText))
-                {
-                    col.Item().PaddingTop(18);
-                    foreach (var line in m.BrandSignatureText!.Split('\n'))
-                        col.Item().Text(line).LineHeight(1.3f);
-                    col.Item().Text(signatory);
-                    if (!string.IsNullOrWhiteSpace(o.SignatoryTitle)) col.Item().Text(o.SignatoryTitle!.Trim()).FontSize(9).FontColor(Colors.Grey.Darken1);
-                }
-                else
-                {
-                    col.Item().PaddingTop(18).Text("Yours faithfully,");
-                    col.Item().PaddingTop(24).Text(m.CompanyName).Bold();
-                    col.Item().Text(signatory);
-                    if (!string.IsNullOrWhiteSpace(o.SignatoryTitle)) col.Item().Text(o.SignatoryTitle!.Trim()).FontSize(9).FontColor(Colors.Grey.Darken1);
-                }
+                LetterSignOff(col, m, o, ctx);
             });
+            LetterFooter(page, m);
+        }));
+        return doc.GeneratePdf();
+    }
 
-            // 24.5 — tenant footer text replaces the boilerplate page-count footer when present.
-            // We keep the page number on the right so multi-page letters stay navigable.
-            if (!string.IsNullOrWhiteSpace(m.BrandFooterText))
-                page.Footer().Row(row =>
+    /// <summary>28.4 — Concise layout. Private-sector / repeat-client tone: drops the
+    /// preamble, leads with the bid figure in a callout, lists only the essentials
+    /// (project, validity, custom note). Designed to fit on a single page even when
+    /// the tenant has a long branding signature.</summary>
+    private byte[] BuildLetterConcise(ExportModel m, BidLetterOptions o, LetterContext ctx)
+    {
+        var doc = Document.Create(container => container.Page(page =>
+        {
+            page.Margin(50); page.Size(PageSizes.A4); page.DefaultTextStyle(x => x.FontSize(10));
+            LetterHeader(page, m);
+            page.Content().PaddingVertical(14).Column(col =>
+            {
+                col.Spacing(8);
+                col.Item().Row(r =>
                 {
-                    row.RelativeItem().Text(m.BrandFooterText!).FontSize(8).FontColor(Colors.Grey.Darken1);
-                    row.AutoItem().AlignRight().Text(x =>
+                    r.RelativeItem().Text($"To: {ctx.Recipient}").Bold();
+                    r.AutoItem().Text(m.GeneratedOn).FontSize(9).FontColor(Colors.Grey.Darken1);
+                });
+                if (!string.IsNullOrWhiteSpace(o.RecipientTitle))
+                    col.Item().Text(o.RecipientTitle!.Trim()).FontSize(9).FontColor(Colors.Grey.Darken1);
+                col.Item().Text($"Ref: {ctx.Reference} — {m.ProjectName}").FontSize(9).FontColor(Colors.Grey.Darken1);
+
+                // Headline figure — the whole point of a concise letter is that this
+                // is the first thing the reader's eye lands on.
+                col.Item().PaddingTop(8).Background(Colors.Teal.Lighten5).Padding(12).Column(box =>
+                {
+                    box.Item().Text("Tender sum").FontSize(9).FontColor(Colors.Grey.Darken2);
+                    box.Item().Text(ctx.Amount).FontSize(14).Bold().FontColor(Colors.Teal.Darken2);
+                    box.Item().Text(ctx.AmountWords).FontSize(9).FontColor(Colors.Grey.Darken1);
+                });
+
+                col.Item().PaddingTop(6).Text($"Dear {ctx.Recipient},").LineHeight(1.4f);
+                col.Item().Text(t =>
+                {
+                    t.Span("We are pleased to submit our bid for ");
+                    t.Span($"{m.ProjectName} ({m.ProjectCode})").Bold();
+                    t.Span(string.IsNullOrWhiteSpace(m.Location) ? "" : $", located at {m.Location}");
+                    t.Span($". This offer is valid for {ctx.Validity} days from today.");
+                });
+
+                if (!string.IsNullOrWhiteSpace(o.Note))
+                    col.Item().Text(o.Note!.Trim()).LineHeight(1.4f);
+
+                LetterSignOff(col, m, o, ctx);
+            });
+            LetterFooter(page, m);
+        }));
+        return doc.GeneratePdf();
+    }
+
+    /// <summary>28.4 — International layout. English on the left, Arabic on the right
+    /// (RTL column), same content side-by-side. Used for cross-border tenders where
+    /// the recipient expects both languages on the cover letter. The Arabic strings
+    /// here are literal translations — the tenant's BrandSignatureText (24.5) stays
+    /// in its configured language and only renders under the English column to avoid
+    /// guessing a translation; the Arabic column closes with the Arabic boilerplate.</summary>
+    private byte[] BuildLetterInternational(ExportModel m, BidLetterOptions o, LetterContext ctx)
+    {
+        var doc = Document.Create(container => container.Page(page =>
+        {
+            page.Margin(40); page.Size(PageSizes.A4); page.DefaultTextStyle(x => x.FontSize(10));
+            LetterHeader(page, m);
+            page.Content().PaddingVertical(12).Column(col =>
+            {
+                col.Spacing(8);
+                col.Item().AlignRight().Text(m.GeneratedOn).FontSize(9).FontColor(Colors.Grey.Darken1);
+                col.Item().Text($"Ref: {ctx.Reference} — {m.ProjectName}").FontSize(9).FontColor(Colors.Grey.Darken1);
+
+                col.Item().Row(r =>
+                {
+                    r.RelativeItem().PaddingRight(8).Column(en =>
                     {
-                        x.Span(" "); x.CurrentPageNumber(); x.Span(" / "); x.TotalPages();
+                        en.Item().Text($"To: {ctx.Recipient}").Bold();
+                        if (!string.IsNullOrWhiteSpace(o.RecipientTitle))
+                            en.Item().Text(o.RecipientTitle!.Trim()).FontSize(9);
+                        if (!string.IsNullOrWhiteSpace(m.Location))
+                            en.Item().Text(m.Location!).FontSize(9).FontColor(Colors.Grey.Darken1);
+                        en.Item().PaddingTop(6).Text($"Dear {ctx.Recipient},");
+                        en.Item().Text(t =>
+                        {
+                            t.Span("We are pleased to submit our bid for ");
+                            t.Span($"{m.ProjectName} ({m.ProjectCode})").Bold();
+                            t.Span($". The total tender sum is ");
+                            t.Span(ctx.Amount).Bold();
+                            t.Span($" ({ctx.AmountWords}). Offer valid {ctx.Validity} days.");
+                        });
+                        if (!string.IsNullOrWhiteSpace(o.Note))
+                            en.Item().Text(o.Note!.Trim()).LineHeight(1.4f);
+                    });
+                    r.ConstantItem(1).Background(Colors.Grey.Lighten2);
+                    r.RelativeItem().PaddingLeft(8).Column(ar =>
+                    {
+                        // ContentFromRightToLeft renders the Arabic column with proper
+                        // RTL flow (paragraph alignment + bidirectional text shaping).
+                        ar.Item().ContentFromRightToLeft().Text($"إلى: {ctx.Recipient}").Bold();
+                        if (!string.IsNullOrWhiteSpace(o.RecipientTitle))
+                            ar.Item().ContentFromRightToLeft().Text(o.RecipientTitle!.Trim()).FontSize(9);
+                        if (!string.IsNullOrWhiteSpace(m.Location))
+                            ar.Item().ContentFromRightToLeft().Text(m.Location!).FontSize(9).FontColor(Colors.Grey.Darken1);
+                        ar.Item().PaddingTop(6).ContentFromRightToLeft().Text($"السيد/ة {ctx.Recipient} المحترم/ة،");
+                        ar.Item().ContentFromRightToLeft().Text(
+                            $"يسرّنا تقديم عرضنا للمشروع {m.ProjectName} ({m.ProjectCode}). " +
+                            $"إجمالي قيمة العطاء {ctx.Amount}. هذا العرض ساري لمدة {ctx.Validity} يوماً.")
+                            .LineHeight(1.5f);
+                        if (!string.IsNullOrWhiteSpace(o.Note))
+                            ar.Item().ContentFromRightToLeft().Text(o.Note!.Trim()).LineHeight(1.5f);
+                        ar.Item().PaddingTop(18).ContentFromRightToLeft().Text("وتفضّلوا بقبول فائق الاحترام،");
+                        ar.Item().PaddingTop(24).ContentFromRightToLeft().Text(m.CompanyName).Bold();
                     });
                 });
-            else
-                page.Footer().AlignCenter().Text(x => { x.Span("BidBuilder · "); x.CurrentPageNumber(); x.Span(" / "); x.TotalPages(); });
+
+                // English sign-off lives below the two-column block so the tenant's
+                // branded signature (24.5) doesn't get squeezed into a half-width column.
+                LetterSignOff(col, m, o, ctx);
+            });
+            LetterFooter(page, m);
         }));
         return doc.GeneratePdf();
     }

@@ -35,6 +35,14 @@ public class TenantSettings : IHasTenant
     /// per-letter. Lines like "Yours faithfully, / Acme Construction LLC / Procurement".</summary>
     public string? BrandSignatureText { get; set; }
 
+    /// <summary>28.4 — Default bid-letter style for this tenant. The bid-letter modal
+    /// pre-selects this style; the user can override per-letter via the ?style= query.
+    /// One of "Formal" (current letterhead layout, default), "Concise" (one-page,
+    /// no preamble), "International" (English+Arabic side-by-side columns).
+    /// Stored as a plain string instead of an enum so future styles can ship without
+    /// a schema migration; the renderer rejects unknown values with a 400.</summary>
+    public string DefaultBidLetterStyle { get; set; } = "Formal";
+
     // ── Estimating defaults (seed new projects) ──────────────────────────────
     public string  BaseCurrency       { get; set; } = "AED"; // ISO-4217
     public decimal DefaultOverheadPct  { get; set; }          // e.g. 8.00

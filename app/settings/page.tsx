@@ -30,7 +30,7 @@ import type { TenantSettings, CurrencyRate, CurrencyRates, CostComponentType, Ac
 import { AppShell } from "@/components/app-shell"
 import { usePermissions } from "@/lib/permissions"
 import { Card, Button, Input } from "@/components/ui"
-import { Field } from "@/components/form"
+import { Field, Select } from "@/components/form"
 import { Tabs } from "@/components/tabs"
 import { useT } from "@/lib/i18n"
 import { WebhooksCard } from "./webhooks-card"
@@ -261,6 +261,24 @@ function BrandingCard({ f, setF, ro }: { f: TenantSettings; setF: (s: TenantSett
           value={f.brandSignatureText ?? ""} onChange={update("brandSignatureText")} maxLength={2048}
         />
         <p className="mt-0.5 text-right text-xs text-muted">{counter(f.brandSignatureText)}</p>
+      </div>
+
+      {/* 28.4 — Default bid-letter style. Pre-selects the picker in the bid-letter
+          modal so an estimator doesn't have to re-pick the tenant's preferred format
+          on every letter. Users can still override per-letter. */}
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Default bid-letter style">
+          <Select
+            value={f.defaultBidLetterStyle}
+            disabled={ro}
+            onChange={(e) => setF({ ...f, defaultBidLetterStyle: e.target.value })}
+            data-testid="settings-default-bid-letter-style"
+          >
+            <option value="Formal">Formal — government / large tender</option>
+            <option value="Concise">Concise — private / repeat client</option>
+            <option value="International">International — English + Arabic</option>
+          </Select>
+        </Field>
       </div>
     </Card>
   )
