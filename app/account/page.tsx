@@ -30,8 +30,8 @@ function ProfileCard() {
   const { user } = useAuth()
   return (
     <Card className="space-y-1 p-5">
-      <h3 className="text-sm font-semibold text-slate-600">Profile</h3>
-      <p className="text-sm text-slate-700">{user?.name}</p>
+      <h3 className="text-sm font-semibold text-muted">Profile</h3>
+      <p className="text-sm text-[var(--text)]">{user?.name}</p>
       <p className="text-xs text-muted">{user?.email} · {user?.role}</p>
     </Card>
   )
@@ -85,7 +85,7 @@ function TwoFactorCard() {
     <Card className="space-y-3 p-5">
       <div className="flex items-center gap-2">
         {enabled ? <ShieldCheck className="h-4 w-4 text-emerald-600" /> : <ShieldOff className="h-4 w-4 text-muted" />}
-        <h3 className="text-sm font-semibold text-slate-600">Two-factor authentication</h3>
+        <h3 className="text-sm font-semibold text-muted">Two-factor authentication</h3>
         {enabled && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-emerald-700">on</span>}
       </div>
       <p className="text-xs text-muted">
@@ -98,10 +98,10 @@ function TwoFactorCard() {
       {enabled ? (
         !recoveryCodes && (
           <div className="space-y-2">
-            <p className="text-xs text-slate-500">{status?.recoveryCodesRemaining ?? 0} recovery code(s) remaining.</p>
+            <p className="text-xs text-muted">{status?.recoveryCodesRemaining ?? 0} recovery code(s) remaining.</p>
             <div className="flex items-end gap-2">
               <div className="flex-1">
-                <label className="mb-1 block text-xs font-medium text-slate-600">Enter a code to turn off</label>
+                <label className="mb-1 block text-xs font-medium text-muted">Enter a code to turn off</label>
                 <Input value={disableCode} onChange={(e) => setDisableCode(e.target.value)} placeholder="123456 or recovery code" />
               </div>
               <Button variant="outline" className="text-rose-600 hover:bg-rose-50"
@@ -113,17 +113,17 @@ function TwoFactorCard() {
         )
       ) : setup ? (
         <div className="space-y-3">
-          <div className="rounded-md border border-[var(--border)] bg-slate-50 p-3">
-            <p className="mb-1 text-xs font-medium text-slate-600">1. Add this key to your authenticator app</p>
+          <div className="rounded-md border border-[var(--border)] bg-[color-mix(in_oklab,var(--text)_6%,transparent)] p-3">
+            <p className="mb-1 text-xs font-medium text-muted">1. Add this key to your authenticator app</p>
             <div className="flex items-center gap-2">
-              <code className="break-all rounded bg-white px-2 py-1 font-mono text-sm text-slate-700">{setup.secret}</code>
+              <code className="break-all rounded bg-[var(--card)] px-2 py-1 font-mono text-sm text-[var(--text)]">{setup.secret}</code>
               <button title="Copy" onClick={() => navigator.clipboard.writeText(setup.secret).then(() => toast.success("Key copied"))}
-                className="rounded p-1 text-muted hover:bg-slate-100 hover:text-[var(--brand)]"><Copy className="h-3.5 w-3.5" /></button>
+                className="rounded p-1 text-muted hover:bg-[color-mix(in_oklab,var(--text)_6%,transparent)] hover:text-[var(--brand)]"><Copy className="h-3.5 w-3.5" /></button>
             </div>
             <p className="mt-1 break-all text-[11px] text-muted">{setup.otpauthUri}</p>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">2. Enter the 6-digit code it shows</label>
+            <label className="mb-1 block text-xs font-medium text-muted">2. Enter the 6-digit code it shows</label>
             <div className="flex items-end gap-2">
               <Input value={enrollCode} onChange={(e) => setEnrollCode(e.target.value)} placeholder="123456" inputMode="numeric" className="flex-1" />
               <Button disabled={enrollCode.trim().length < 6 || enable.isPending} onClick={() => enable.mutate()}>
@@ -149,8 +149,8 @@ function RecoveryCodesPanel({ codes, onDone }: { codes: string[]; onDone: () => 
       <p className="text-[11px] text-warning">
         Each can be used once if you lose your device. They won&apos;t be shown again.
       </p>
-      <div className="grid grid-cols-2 gap-1 font-mono text-sm text-slate-700">
-        {codes.map((c) => <span key={c} className="rounded bg-white px-2 py-1">{c}</span>)}
+      <div className="grid grid-cols-2 gap-1 font-mono text-sm text-[var(--text)]">
+        {codes.map((c) => <span key={c} className="rounded bg-[var(--card)] px-2 py-1">{c}</span>)}
       </div>
       <div className="flex gap-2">
         <Button variant="outline" className="h-7 text-xs"

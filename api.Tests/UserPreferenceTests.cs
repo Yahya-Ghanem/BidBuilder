@@ -11,6 +11,7 @@ public class UserPreferenceTests(ApiFixture fx)
 {
     static int[] Pinned(JsonElement e) => e.GetProperty("pinnedProjectIds").EnumerateArray().Select(x => x.GetInt32()).ToArray();
     static int[] Recent(JsonElement e) => e.GetProperty("recentProjectIds").EnumerateArray().Select(x => x.GetInt32()).ToArray();
+    static string Theme(JsonElement e)  => e.GetProperty("theme").GetString()!;
 
     [Fact]
     public async Task Preferences_require_authentication()
@@ -25,6 +26,59 @@ public class UserPreferenceTests(ApiFixture fx)
         var pref = await (await c.GetAsync("/api/preferences")).Json();
         Assert.Empty(Pinned(pref));
         Assert.Empty(Recent(pref));
+        // 28.1 — every fresh user starts on "system" so the frontend can defer to
+        // the OS prefers-color-scheme media query until the user picks otherwise.
+        Assert.Equal("system", Theme(pref));
+    }
+
+    // 28.1 — round-trip the theme setter for each accepted value; PUT must return
+    // the updated DTO so the frontend can apply it without a follow-up GET.
+    [Theory]
+    [InlineData("system")]
+    [InlineData("light")]
+    [InlineData("dark")]
+    public async Task Theme_round_trips(string theme)
+    {
+        var c = await fx.AuthedClientAsync(await NewUserEmail(), "Pw@123456");
+        var put = await (await c.PutAsJsonAsync("/api/preferences/theme", new { theme })).Json();
+        Assert.Equal(theme, Theme(put));
+        var get = await (await c.GetAsync("/api/preferences")).Json();
+        Assert.Equal(theme, Theme(get));
+    }
+
+    [Fact]
+    public async Task Theme_setter_normalises_case()
+    {
+        var c = await fx.AuthedClientAsync(await NewUserEmail(), "Pw@123456");
+        var put = await (await c.PutAsJsonAsync("/api/preferences/theme", new { theme = "DARK" })).Json();
+        Assert.Equal("dark", Theme(put));
+    }
+
+    [Fact]
+    public async Task Theme_setter_rejects_unknown_value()
+    {
+        var c = await fx.AuthedClientAsync(await NewUserEmail(), "Pw@123456");
+        var r = await c.PutAsJsonAsync("/api/preferences/theme", new { theme = "neon" });
+        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+    }
+
+    [Fact]
+    public async Task Theme_setter_requires_auth()
+    {
+        var r = await fx.Client().PutAsJsonAsync("/api/preferences/theme", new { theme = "dark" });
+        Assert.Equal(HttpStatusCode.Unauthorized, r.StatusCode);
+    }
+
+    [Fact]
+    public async Task Theme_is_isolated_per_user()
+    {
+        var alice = await fx.AuthedClientAsync(await NewUserEmail(), "Pw@123456");
+        var bob   = await fx.AuthedClientAsync(await NewUserEmail(), "Pw@123456");
+        (await alice.PutAsJsonAsync("/api/preferences/theme", new { theme = "dark" })).EnsureSuccessStatusCode();
+
+        var bobPref = await (await bob.GetAsync("/api/preferences")).Json();
+        // Bob never set a theme — must still be "system", unaffected by Alice's pick.
+        Assert.Equal("system", Theme(bobPref));
     }
 
     [Fact]

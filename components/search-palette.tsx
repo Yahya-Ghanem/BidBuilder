@@ -84,18 +84,18 @@ export function SearchPalette() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+        className="flex items-center gap-2 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-sm text-muted hover:bg-[color-mix(in_oklab,var(--text)_6%,transparent)]"
         aria-label="Search"
       >
         <Search className="h-4 w-4" />
         <span className="hidden sm:inline">Search…</span>
-        <kbd className="ml-2 hidden rounded border border-[var(--border)] bg-slate-50 px-1.5 text-[10px] text-slate-600 sm:inline">⌘K</kbd>
+        <kbd className="ml-2 hidden rounded border border-[var(--border)] bg-[color-mix(in_oklab,var(--text)_6%,transparent)] px-1.5 text-[10px] text-muted sm:inline">⌘K</kbd>
       </button>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-[12vh]"
              onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false) }}>
-          <div ref={panelRef} className="w-full max-w-xl overflow-hidden rounded-xl border border-[var(--border)] bg-white shadow-2xl"
+          <div ref={panelRef} className="w-full max-w-xl overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] text-[var(--text)] shadow-2xl"
                onKeyDown={onKeyDown}>
             <div className="flex items-center gap-2 border-b border-[var(--border)] px-3">
               <Search className="h-4 w-4 shrink-0 text-muted" />

@@ -6,9 +6,10 @@ using BidBuilder.Api.Models;
 
 namespace BidBuilder.Api.Endpoints;
 
-/// <summary>The signed-in user's sidebar personalisation: pinned (favourited)
-/// projects and the most-recently-visited list (most-recent first).</summary>
-public record UserPreferencesDto(int[] PinnedProjectIds, int[] RecentProjectIds);
+/// <summary>The signed-in user's sidebar personalisation + theme: pinned (favourited)
+/// projects, the most-recently-visited list (most-recent first), and the preferred
+/// color theme ("system" | "light" | "dark").</summary>
+public record UserPreferencesDto(int[] PinnedProjectIds, int[] RecentProjectIds, string Theme);
 
 /// <summary>Pin or unpin a project for the caller.</summary>
 public record PinProjectInput(int ProjectId, bool Pinned);
@@ -16,6 +17,10 @@ public record PinProjectInput(int ProjectId, bool Pinned);
 /// <summary>Record that the caller just visited a project (moves it to the front
 /// of the recent list).</summary>
 public record RecordRecentInput(int ProjectId);
+
+/// <summary>28.1 — set the caller's preferred color theme. Value must be one of
+/// "system" | "light" | "dark"; the server normalises case before persisting.</summary>
+public record SetThemeInput(string Theme);
 
 /// <summary>
 /// 27.5 — Per-user project favourites + recents (<c>/api/preferences</c>). Personal
@@ -64,6 +69,22 @@ public static class UserPreferenceEndpoints
             return Results.Ok(ToDto(pref));
         });
 
+        // 28.1 — set the caller's preferred color theme. The endpoint normalises
+        // case (so "Dark" / "DARK" still persist as "dark"); unknown values 400.
+        // Personal preference — no tenant/project gate beyond authn.
+        grp.MapPut("/theme", async (SetThemeInput input, ClaimsPrincipal me, AppDbContext db) =>
+        {
+            var theme = (input.Theme ?? "").Trim().ToLowerInvariant();
+            if (!UserPreferences.IsValidTheme(theme))
+                return Results.BadRequest(new { error = "Theme must be one of: system, light, dark." });
+
+            var pref = await LoadOrCreate(db, me.Id());
+            pref.Theme = theme;
+            pref.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return Results.Ok(ToDto(pref));
+        });
+
         // Record a project visit (move it to the front of the recent list, capped).
         grp.MapPost("/recent", async (RecordRecentInput input, ClaimsPrincipal me, AppDbContext db, ProjectAccessService access) =>
         {
@@ -99,8 +120,13 @@ public static class UserPreferenceEndpoints
 
     private static UserPreferencesDto ToDto(UserPreferences? pref) =>
         pref is null
-            ? new UserPreferencesDto([], [])
-            : new UserPreferencesDto([.. Parse(pref.PinnedProjectIds)], [.. Parse(pref.RecentProjectIds)]);
+            ? new UserPreferencesDto([], [], UserPreferences.ThemeSystem)
+            : new UserPreferencesDto(
+                [.. Parse(pref.PinnedProjectIds)],
+                [.. Parse(pref.RecentProjectIds)],
+                // Legacy rows written before 28.1 might have an empty Theme string.
+                // Treat that as "system" so the frontend gets a defined value.
+                string.IsNullOrEmpty(pref.Theme) ? UserPreferences.ThemeSystem : pref.Theme);
 
     /// <summary>Parse a comma-separated id list, dropping blanks/dupes while preserving order.</summary>
     private static List<int> Parse(string csv)

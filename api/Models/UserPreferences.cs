@@ -29,6 +29,14 @@ public class UserPreferences : IHasTenant
     /// <see cref="RecentCap"/>. The sidebar shows the leading few.</summary>
     public string RecentProjectIds { get; set; } = "";
 
+    /// <summary>28.1 — the user's preferred color theme. One of
+    /// <see cref="ThemeSystem"/>, <see cref="ThemeLight"/>, <see cref="ThemeDark"/>.
+    /// "system" follows the OS preference via the prefers-color-scheme media query;
+    /// "light"/"dark" override that. Empty/null on legacy rows is treated as "system".
+    /// We do NOT persist the OS-resolved value here — only the user's intent — so
+    /// flipping the OS theme while signed in still flips the app for "system" users.</summary>
+    public string Theme { get; set; } = ThemeSystem;
+
     public DateTime  CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime  UpdatedAt { get; set; } = DateTime.UtcNow;
 
@@ -40,4 +48,13 @@ public class UserPreferences : IHasTenant
     /// comfortably above any realistic favourite list. The endpoint rejects with
     /// 400 instead of letting EF surface a truncation error as 500.</summary>
     public const int PinCap = 50;
+
+    // 28.1 — accepted theme values. Lowercase, stable on the wire so the frontend
+    // can compare strings directly. Anything else is rejected by the endpoint.
+    public const string ThemeSystem = "system";
+    public const string ThemeLight  = "light";
+    public const string ThemeDark   = "dark";
+
+    public static bool IsValidTheme(string? value) =>
+        value is ThemeSystem or ThemeLight or ThemeDark;
 }

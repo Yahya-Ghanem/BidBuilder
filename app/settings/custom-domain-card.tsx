@@ -34,11 +34,11 @@ export function CustomDomainCard({ isAdmin }: { isAdmin: boolean }) {
   return (
     <Card className="space-y-3 p-5">
       <div>
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-muted">
           <Globe className="h-4 w-4 text-[var(--brand)]" /> {t("adm.domain.heading")}
         </h3>
         <p className="text-xs text-muted">
-          Reach this workspace at your own host (e.g. <code className="rounded bg-slate-100 px-1">bids.acme.com</code>).
+          Reach this workspace at your own host (e.g. <code className="rounded bg-[color-mix(in_oklab,var(--text)_6%,transparent)] px-1">bids.acme.com</code>).
           Point a CNAME at BidBuilder and we&apos;ll resolve the workspace from the address — no tenant code needed.
         </p>
       </div>
@@ -46,7 +46,7 @@ export function CustomDomainCard({ isAdmin }: { isAdmin: boolean }) {
       {current ? (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
           <Check className="h-4 w-4 text-emerald-600" />
-          <span className="font-mono text-slate-700">{current}</span>
+          <span className="font-mono text-[var(--text)]">{current}</span>
           <span className="text-xs text-muted">— ensure DNS + TLS are configured for this host.</span>
           <Button variant="outline" className="ml-auto h-7 text-xs text-rose-600 hover:bg-rose-50"
             disabled={save.isPending} onClick={() => { if (confirm(`Remove ${current}?`)) save.mutate(null) }}>

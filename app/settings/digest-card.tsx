@@ -92,7 +92,7 @@ export function DigestCard({ isAdmin }: { isAdmin: boolean }) {
   return (
     <Card className="space-y-4 p-5">
       <div>
-        <h3 className="text-sm font-semibold text-slate-600">{t("adm.dig.heading")}</h3>
+        <h3 className="text-sm font-semibold text-muted">{t("adm.dig.heading")}</h3>
         <p className="text-xs text-muted">{t("adm.dig.sub")}</p>
       </div>
 
@@ -102,7 +102,7 @@ export function DigestCard({ isAdmin }: { isAdmin: boolean }) {
             value={freq}
             disabled={busy}
             onChange={(e) => persist({ frequency: e.target.value })}
-            className="h-9 rounded-md border border-[var(--border)] bg-white px-2 text-sm"
+            className="h-9 rounded-md border border-[var(--border)] bg-[var(--card)] px-2 text-sm"
           >
             <option value="Off">{t("adm.dig.off")}</option>
             <option value="Daily">{t("adm.dig.daily")}</option>
@@ -115,7 +115,7 @@ export function DigestCard({ isAdmin }: { isAdmin: boolean }) {
               value={day}
               disabled={busy}
               onChange={(e) => persist({ dayOfWeek: e.target.value })}
-              className="h-9 rounded-md border border-[var(--border)] bg-white px-2 text-sm"
+              className="h-9 rounded-md border border-[var(--border)] bg-[var(--card)] px-2 text-sm"
             >
               {DAYS.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
@@ -158,12 +158,12 @@ export function DigestCard({ isAdmin }: { isAdmin: boolean }) {
       {preview && (
         <Modal open={!!preview} onClose={() => setPreview(null)} title={t("adm.dig.previewTitle")}>
           <div className="space-y-3 text-sm">
-            <div className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-xs text-slate-500">
-              <span>{t("adm.dig.previewFreq")}</span><span className="text-slate-700">{preview.frequency}</span>
-              <span>{t("adm.dig.previewItems")}</span><span className="text-slate-700">{preview.itemCount}</span>
-              <span>{t("adm.dig.previewSubject")}</span><span className="text-slate-700">{preview.subject}</span>
+            <div className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-xs text-muted">
+              <span>{t("adm.dig.previewFreq")}</span><span className="text-[var(--text)]">{preview.frequency}</span>
+              <span>{t("adm.dig.previewItems")}</span><span className="text-[var(--text)]">{preview.itemCount}</span>
+              <span>{t("adm.dig.previewSubject")}</span><span className="text-[var(--text)]">{preview.subject}</span>
             </div>
-            <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded bg-slate-50 p-3 text-xs leading-relaxed text-slate-700">
+            <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded bg-[color-mix(in_oklab,var(--text)_6%,transparent)] p-3 text-xs leading-relaxed text-[var(--text)]">
               {preview.body}
             </pre>
           </div>

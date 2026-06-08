@@ -82,12 +82,12 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
   return (
     <Card className="space-y-4 p-5">
       <div>
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-muted">
           <KeyRound className="h-4 w-4 text-[var(--brand)]" /> {t("adm.apikeys.heading")}
         </h3>
         <p className="text-xs text-muted">
           Call the API from your own systems. Send the key in an
-          <code className="mx-1 rounded bg-slate-100 px-1">X-Api-Key</code> header. A key acts as you
+          <code className="mx-1 rounded bg-[color-mix(in_oklab,var(--text)_6%,transparent)] px-1">X-Api-Key</code> header. A key acts as you
           (inherits your permissions) and stops working if your account is deactivated.
         </p>
       </div>
@@ -97,7 +97,7 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
         <div className="rounded-md border border-amber-300 bg-warning-soft p-3 text-xs">
           <div className="mb-1 font-semibold text-amber-800">API key — copy it now, it won&apos;t be shown again.</div>
           <div className="flex items-center gap-2">
-            <code className="flex-1 truncate rounded bg-white px-2 py-1 text-slate-700">{newSecret}</code>
+            <code className="flex-1 truncate rounded bg-[var(--card)] px-2 py-1 text-[var(--text)]">{newSecret}</code>
             <button onClick={() => { navigator.clipboard?.writeText(newSecret); toast.success("Key copied") }}
               className="rounded p-1 text-muted hover:bg-amber-100"><Copy className="h-4 w-4" /></button>
             <button onClick={() => setNewSecret(null)} className="text-warning hover:underline">Dismiss</button>
@@ -116,8 +116,8 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
             <li key={k.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--border)] px-3 py-2">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="truncate text-sm text-slate-700">{k.name}</span>
-                  <code className="rounded bg-slate-100 px-1 text-xs text-muted">{k.prefix}…</code>
+                  <span className="truncate text-sm text-[var(--text)]">{k.name}</span>
+                  <code className="rounded bg-[color-mix(in_oklab,var(--text)_6%,transparent)] px-1 text-xs text-muted">{k.prefix}…</code>
                   {k.revoked && <span className="rounded bg-rose-100 px-1.5 text-xs text-rose-700">revoked</span>}
                   {!k.revoked && k.expiresAt && new Date(k.expiresAt) < new Date() && (
                     <span className="rounded bg-amber-100 px-1.5 text-xs text-amber-700">expired</span>
@@ -127,7 +127,7 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
                   {k.scopes.map((s) => (
                     <span key={s} className="rounded bg-sky-100 px-1.5 text-xs font-medium text-sky-700">{s}</span>
                   ))}
-                  <span className="rounded bg-slate-100 px-1.5 text-xs text-slate-600">
+                  <span className="rounded bg-[color-mix(in_oklab,var(--text)_6%,transparent)] px-1.5 text-xs text-muted">
                     {k.rateLimitPerMinute == null ? "unlimited" : `${k.usageThisMinute}/${k.rateLimitPerMinute} per min`}
                   </span>
                   {/* 23.2 — IP allowlist badge with inline edit. */}
@@ -136,7 +136,7 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
                       <Shield className="h-3 w-3" /> {k.ipAllowlist.length} IP{k.ipAllowlist.length === 1 ? "" : "s"}
                     </span>
                   ) : (
-                    <span className="rounded bg-slate-100 px-1.5 text-xs text-muted">any IP</span>
+                    <span className="rounded bg-[color-mix(in_oklab,var(--text)_6%,transparent)] px-1.5 text-xs text-muted">any IP</span>
                   )}
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted">
@@ -146,13 +146,13 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
                 </div>
                 {/* 23.2 — Inline allowlist editor, opened by the pencil. */}
                 {editingAllowFor === k.id && (
-                  <div className="mt-2 flex flex-col gap-2 rounded bg-slate-50 p-2">
+                  <div className="mt-2 flex flex-col gap-2 rounded bg-[color-mix(in_oklab,var(--text)_6%,transparent)] p-2">
                     <textarea
                       value={editAllowText}
                       onChange={(e) => setEditAllowText(e.target.value)}
                       placeholder="203.0.113.0/24, 198.51.100.7"
                       rows={2}
-                      className="rounded border border-[var(--border)] bg-white px-2 py-1 font-mono text-xs"
+                      className="rounded border border-[var(--border)] bg-[var(--card)] px-2 py-1 font-mono text-xs"
                     />
                     <div className="flex items-center gap-2 text-xs">
                       <Button className="h-7 text-xs" disabled={saveAllowlist.isPending}
@@ -160,7 +160,7 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
                         {saveAllowlist.isPending ? "Saving…" : "Save"}
                       </Button>
                       <Button variant="outline" className="h-7 text-xs" onClick={() => setEditingAllowFor(null)}>Cancel</Button>
-                      <span className="text-slate-500">Comma- or newline-separated CIDRs. Empty = any IP.</span>
+                      <span className="text-muted">Comma- or newline-separated CIDRs. Empty = any IP.</span>
                     </div>
                   </div>
                 )}
@@ -196,16 +196,16 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
             onChange={(e) => setIpAllow(e.target.value)}
             placeholder="203.0.113.0/24, 198.51.100.7"
             rows={2}
-            className="w-full max-w-xl rounded border border-[var(--border)] bg-white px-2 py-1 font-mono text-xs"
+            className="w-full max-w-xl rounded border border-[var(--border)] bg-[var(--card)] px-2 py-1 font-mono text-xs"
           />
         </Field>
         <p className="-mt-2 text-xs text-muted">Comma- or newline-separated. Leave blank to allow any IP. A bare IP is treated as /32 (or /128 for IPv6).</p>
         <div className="flex flex-wrap items-center gap-4">
-          <span className="text-xs font-medium text-slate-500">Scopes:</span>
-          <label className="flex items-center gap-1.5 text-sm text-slate-700">
+          <span className="text-xs font-medium text-muted">Scopes:</span>
+          <label className="flex items-center gap-1.5 text-sm text-[var(--text)]">
             <input type="checkbox" checked={canRead} onChange={(e) => setCanRead(e.target.checked)} /> Read (GET)
           </label>
-          <label className="flex items-center gap-1.5 text-sm text-slate-700">
+          <label className="flex items-center gap-1.5 text-sm text-[var(--text)]">
             <input type="checkbox" checked={canWrite} onChange={(e) => setCanWrite(e.target.checked)} /> Write (POST/PUT/DELETE)
           </label>
           <Button disabled={!name.trim() || (!canRead && !canWrite) || create.isPending} onClick={() => create.mutate()}>

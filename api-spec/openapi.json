@@ -1292,6 +1292,16 @@
         },
         "type": "object"
       },
+      "SetThemeInput": {
+        "additionalProperties": false,
+        "properties": {
+          "theme": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "SettingsInput": {
         "additionalProperties": false,
         "properties": {
@@ -4897,6 +4907,28 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RecordRecentInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/preferences/theme": {
+      "put": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetThemeInput"
               }
             }
           },

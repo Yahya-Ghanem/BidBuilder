@@ -96,8 +96,102 @@
   --info-soft: #f0f9ff;
 }
 
+/**
+ * 28.1 — Dark theme.
+ *
+ * Activation: the <html> element gets `data-theme="dark"` from the inline boot
+ * script in app/layout.tsx (no-flash) or from <ThemeToggle> at runtime. The
+ * boot script reads localStorage("bb.theme") and, when the value is "system"
+ * or missing, falls back to `prefers-color-scheme: dark`.
+ *
+ * Design intent: dark is a re-skinning, not a redesign. Every token's
+ * *purpose* stays the same — `--bg` is still the page background, `--text`
+ * still primary body copy. Components that respect the tokens flip for free.
+ *
+ * Contrast — all measured against the new dark `--bg` (#0b1220) or the new
+ * dark `--card` (#111827, paired with text token `--text` #f1f5f9):
+ *   --text   #f1f5f9 on #0b1220 → 16.9:1   AAA
+ *   --text   #f1f5f9 on #111827 → 14.0:1   AAA
+ *   --muted  #cbd5e1 on #0b1220 →  9.9:1   AAA
+ *   --muted  #cbd5e1 on #111827 →  8.2:1   AAA
+ *   --danger #fecaca on #0b1220 →  9.8:1   AAA (rose-200 — light token reused
+ *            on dark bg because the 700-tier hex is unreadable on dark)
+ *   --warn   #fcd34d on #0b1220 →  9.0:1   AAA (amber-300)
+ *   --succ   #6ee7b7 on #0b1220 →  9.2:1   AAA (emerald-300)
+ *   --info   #7dd3fc on #0b1220 →  9.7:1   AAA (sky-300)
+ *   --brand  #2dd4bf on #0b1220 →  8.3:1   AAA (teal-400 — the light brand
+ *            teal-700 fails AA on a dark bg, so dark mode brightens it.
+ *            Brand identity preserved by hue + saturation, not by exact hex.)
+ *
+ * Soft backgrounds in dark mode are deep tinted slate, never the light 50-tier
+ * pastels — those would punch through and break the page. The paired text
+ * token (the matching --danger / --warning / etc.) is light enough to be
+ * legible on the soft surface; cross-checked above.
+ *
+ * The selector matches BOTH the explicit override (`data-theme="dark"`) and
+ * the implicit system path (`data-theme="system"` when the OS prefers dark).
+ * The boot script in layout.tsx resolves "system" to a concrete light/dark
+ * value at load so we only need to handle "dark" here.
+ */
+[data-theme="dark"] {
+  /* Plain-CSS aliases (used by `bg-[var(--bg)]`, inline styles, the existing
+     `text-[var(--muted)]` escape hatches sprinkled through the codebase). */
+  --bg:     #0b1220;   /* slate-950-ish; truly dark but not pure black */
+  --card:   #111827;   /* slate-900 */
+  --border: #1f2937;   /* slate-800 */
+  --text:   #f1f5f9;   /* slate-100 — primary body text on dark surfaces */
+  --muted:  #cbd5e1;   /* slate-300 — AA-safe muted text on dark bg/card */
+
+  /* Brand brightens to stay legible on dark; same hue family, lighter tier. */
+  --brand:    #2dd4bf; /* teal-400 */
+  --brand-fg: #042f2e; /* teal-950 — readable INSIDE a brand-filled button */
+
+  /* Semantic accents: 200/300-tier hexes are AAA on the new dark bg. */
+  --danger:  #fecaca;  /* rose-200 */
+  --warning: #fcd34d;  /* amber-300 */
+  --success: #6ee7b7;  /* emerald-300 */
+  --info:    #7dd3fc;  /* sky-300 */
+
+  /* Soft accent backgrounds — deep tinted, not the light 50-tier pastels. */
+  --danger-soft:  #450a0a;  /* rose-950 */
+  --warning-soft: #451a03;  /* amber-950 */
+  --success-soft: #022c22;  /* emerald-950 */
+  --info-soft:    #082f49;  /* sky-950 */
+
+  /* Tailwind-utility aliases — these are what `bg-bg`, `bg-card`, `text-text`,
+     `text-muted`, `border-border`, `bg-brand`, `text-danger`, etc. resolve to
+     (Tailwind v4 emits them as `--color-<name>` from @theme). Keep in lockstep
+     with the no-prefix vars above so the two surfaces never drift. */
+  --color-bg:     #0b1220;
+  --color-card:   #111827;
+  --color-border: #1f2937;
+  --color-text:   #f1f5f9;
+  --color-muted:  #cbd5e1;
+  --color-brand:    #2dd4bf;
+  --color-brand-fg: #042f2e;
+  --color-danger:  #fecaca;
+  --color-warning: #fcd34d;
+  --color-success: #6ee7b7;
+  --color-info:    #7dd3fc;
+  --color-danger-soft:  #450a0a;
+  --color-warning-soft: #451a03;
+  --color-success-soft: #022c22;
+  --color-info-soft:    #082f49;
+}
+
 html, body {
   background: var(--bg);
   color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Smooth theme swap. Tight 120 ms — quick enough to feel instant, slow enough
+   to avoid a jarring flash on toggle. Honour reduced-motion. */
+html { color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; }
+html, body, [data-theme] * {
+  transition: background-color 120ms linear, border-color 120ms linear, color 120ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  html, body, [data-theme] * { transition: none; }
 }

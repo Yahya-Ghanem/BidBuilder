@@ -65,7 +65,7 @@ function UsersCard() {
     <Card className="space-y-4 p-5">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600"><UsersIcon className="h-4 w-4" /> Users</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-muted"><UsersIcon className="h-4 w-4" /> Users</h3>
           <p className="text-xs text-muted">Accounts that can sign in. Assign teams to control project access &amp; module permissions.</p>
         </div>
         <Button variant="outline" className="h-9" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New user</Button>
@@ -73,18 +73,18 @@ function UsersCard() {
 
       <TableScroll>
       <table className="w-full min-w-[40rem] text-sm">
-        <thead className="text-left text-sm text-slate-500">
+        <thead className="text-left text-sm text-muted">
           <tr><th className="py-1">Name</th><th className="py-1">Email</th><th className="py-1">Role</th><th className="py-1">Teams</th><th className="py-1">Status</th><th /></tr>
         </thead>
         <tbody>
           {!users && <tr><td colSpan={6} className="py-2 text-muted">Loading…</td></tr>}
           {users?.map((u) => (
             <tr key={u.id} className="border-t border-[var(--border)]">
-              <td className="py-2 font-medium text-slate-800">{u.name}{me?.id === u.id && <span className="ml-1 text-xs text-muted">(you)</span>}</td>
-              <td className="py-2 text-slate-600">{u.email}</td>
-              <td className="py-2">{u.role === "TenantAdmin" ? <Badge className="bg-indigo-100 text-indigo-700">Admin</Badge> : <span className="text-xs text-slate-500">User</span>}</td>
-              <td className="py-2 text-xs text-slate-500">{u.groups.length === 0 ? "—" : u.groups.map((g) => g.code).join(", ")}</td>
-              <td className="py-2">{u.isActive ? <Badge className="bg-emerald-100 text-emerald-700">Active</Badge> : <Badge className="bg-slate-100 text-slate-500">Inactive</Badge>}</td>
+              <td className="py-2 font-medium text-[var(--text)]">{u.name}{me?.id === u.id && <span className="ml-1 text-xs text-muted">(you)</span>}</td>
+              <td className="py-2 text-muted">{u.email}</td>
+              <td className="py-2">{u.role === "TenantAdmin" ? <Badge className="bg-indigo-100 text-indigo-700">Admin</Badge> : <span className="text-xs text-muted">User</span>}</td>
+              <td className="py-2 text-xs text-muted">{u.groups.length === 0 ? "—" : u.groups.map((g) => g.code).join(", ")}</td>
+              <td className="py-2">{u.isActive ? <Badge className="bg-emerald-100 text-emerald-700">Active</Badge> : <Badge className="bg-[color-mix(in_oklab,var(--text)_6%,transparent)] text-muted">Inactive</Badge>}</td>
               <td className="py-2 text-right">
                 <div className="flex justify-end gap-1">
                   <Button variant="outline" className="h-7 px-2 text-sm" onClick={() => setEditing(u)}><Pencil className="h-3.5 w-3.5" /></Button>
@@ -170,13 +170,13 @@ function UserModal({ user, groups, onClose }: { user: AdminUser | null; groups: 
           )}
         </div>
         <div>
-          <span className="mb-1 block text-sm font-medium text-slate-600">Teams</span>
+          <span className="mb-1 block text-sm font-medium text-muted">Teams</span>
           {groups.length === 0 ? <p className="text-xs text-muted">No teams yet — create one below.</p> : (
             <div className="grid grid-cols-2 gap-1">
               {groups.map((g) => (
-                <label key={g.id} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-50">
+                <label key={g.id} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-[color-mix(in_oklab,var(--text)_6%,transparent)]">
                   <input type="checkbox" checked={groupIds.includes(g.id)} onChange={() => toggleGroup(g.id)} />
-                  <span className="font-mono text-xs text-slate-500">{g.code}</span> {g.name}
+                  <span className="font-mono text-xs text-muted">{g.code}</span> {g.name}
                 </label>
               ))}
             </div>
@@ -203,7 +203,7 @@ function ResetPasswordModal({ user, onClose }: { user: AdminUser; onClose: () =>
   return (
     <Modal open onClose={onClose} title={`Reset password — ${user.name}`}>
       <form id="reset-form" onSubmit={submit} className="space-y-3">
-        <p className="text-xs text-slate-500">Set a new password for <b>{user.email}</b>. They can change it after signing in.</p>
+        <p className="text-xs text-muted">Set a new password for <b>{user.email}</b>. They can change it after signing in.</p>
         <Field label="New password (min 8 chars)"><Input type="text" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
       </form>
       <FormActions formId="reset-form" busy={reset.isPending} label="Reset password" onCancel={onClose} />
@@ -230,7 +230,7 @@ function GroupsCard() {
     <Card className="space-y-4 p-5">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600"><ShieldCheck className="h-4 w-4" /> Teams &amp; permissions</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-muted"><ShieldCheck className="h-4 w-4" /> Teams &amp; permissions</h3>
           <p className="text-xs text-muted">A team grants its members a set of module permissions and is assigned to projects.</p>
         </div>
         <Button variant="outline" className="h-9" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New team</Button>
@@ -238,17 +238,17 @@ function GroupsCard() {
 
       <TableScroll>
       <table className="w-full min-w-[36rem] text-sm">
-        <thead className="text-left text-sm text-slate-500">
+        <thead className="text-left text-sm text-muted">
           <tr><th className="py-1">Name</th><th className="py-1">Code</th><th className="py-1">Members</th><th className="py-1">Modules</th><th /></tr>
         </thead>
         <tbody>
           {!groups && <tr><td colSpan={5} className="py-2 text-muted">Loading…</td></tr>}
           {groups?.map((g) => (
             <tr key={g.id} className="border-t border-[var(--border)]">
-              <td className="py-2 font-medium text-slate-800">{g.name}{g.isBuiltIn && <span className="ml-1 text-xs text-muted">built-in</span>}</td>
+              <td className="py-2 font-medium text-[var(--text)]">{g.name}{g.isBuiltIn && <span className="ml-1 text-xs text-muted">built-in</span>}</td>
               <td className="py-2 font-mono text-sm">{g.code}</td>
-              <td className="py-2 text-slate-600">{g.memberCount}</td>
-              <td className="py-2 text-xs text-slate-500">{g.permissions.length}</td>
+              <td className="py-2 text-muted">{g.memberCount}</td>
+              <td className="py-2 text-xs text-muted">{g.permissions.length}</td>
               <td className="py-2 text-right">
                 <div className="flex justify-end gap-1">
                   <Button variant="outline" className="h-7 px-2 text-sm" onClick={() => setPerms(g)}><ShieldCheck className="h-3.5 w-3.5" /> Permissions</Button>
@@ -341,9 +341,9 @@ function PermissionsModal({ group, modules, onClose }: { group: AdminGroup; modu
 
   return (
     <Modal open onClose={onClose} title={`Permissions — ${group.name}`}>
-      <p className="mb-3 text-xs text-slate-500">Tick what members of <b>{group.code}</b> may do per module. Add/Edit/Delete require View.</p>
+      <p className="mb-3 text-xs text-muted">Tick what members of <b>{group.code}</b> may do per module. Add/Edit/Delete require View.</p>
       <table className="w-full text-sm">
-        <thead className="text-left text-sm text-slate-500">
+        <thead className="text-left text-sm text-muted">
           <tr><th className="py-1">Module</th>{ACTIONS.map((a) => <th key={a.key} className="px-2 py-1 text-center">{a.label}</th>)}</tr>
         </thead>
         <tbody>

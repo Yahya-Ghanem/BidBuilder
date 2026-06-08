@@ -53,12 +53,12 @@ export function WebhooksCard({ isAdmin }: { isAdmin: boolean }) {
   return (
     <Card className="space-y-4 p-5">
       <div>
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-muted">
           <Webhook className="h-4 w-4 text-[var(--brand)]" /> {t("adm.webhooks.heading")}
         </h3>
         <p className="text-xs text-muted">
           POST a signed JSON payload to your systems when bid events occur. Verify the
-          <code className="mx-1 rounded bg-slate-100 px-1">X-BidBuilder-Signature</code> header (HMAC-SHA256 of the body, keyed by your secret).
+          <code className="mx-1 rounded bg-[color-mix(in_oklab,var(--text)_6%,transparent)] px-1">X-BidBuilder-Signature</code> header (HMAC-SHA256 of the body, keyed by your secret).
         </p>
       </div>
 
@@ -67,7 +67,7 @@ export function WebhooksCard({ isAdmin }: { isAdmin: boolean }) {
         <div className="rounded-md border border-amber-300 bg-warning-soft p-3 text-xs">
           <div className="mb-1 font-semibold text-amber-800">Signing secret — copy it now, it won&apos;t be shown again.</div>
           <div className="flex items-center gap-2">
-            <code className="flex-1 truncate rounded bg-white px-2 py-1 text-slate-700">{newSecret}</code>
+            <code className="flex-1 truncate rounded bg-[var(--card)] px-2 py-1 text-[var(--text)]">{newSecret}</code>
             <button onClick={() => { navigator.clipboard?.writeText(newSecret); toast.success("Secret copied") }}
               className="rounded p-1 text-muted hover:bg-amber-100"><Copy className="h-4 w-4" /></button>
             <button onClick={() => setNewSecret(null)} className="text-warning hover:underline">Dismiss</button>
@@ -87,7 +87,7 @@ export function WebhooksCard({ isAdmin }: { isAdmin: boolean }) {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className={`h-1.5 w-1.5 rounded-full ${w.isActive ? "bg-emerald-500" : "bg-slate-300"}`} />
-                  <span className="truncate text-sm text-slate-700">{w.url}</span>
+                  <span className="truncate text-sm text-[var(--text)]">{w.url}</span>
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted">
                   <span>{w.events === "*" ? "all events" : w.events}</span>
@@ -115,14 +115,14 @@ export function WebhooksCard({ isAdmin }: { isAdmin: boolean }) {
           <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/bidbuilder-hook" />
         </Field>
         <div>
-          <span className="text-xs text-slate-500">Events <span className="text-muted">(none = all)</span></span>
+          <span className="text-xs text-muted">Events <span className="text-muted">(none = all)</span></span>
           <div className="mt-1 flex flex-wrap gap-2">
             {(events.data ?? []).map((ev) => {
               const on = picked.includes(ev)
               return (
                 <button key={ev} type="button"
                   onClick={() => setPicked((p) => on ? p.filter((x) => x !== ev) : [...p, ev])}
-                  className={`rounded-full border px-3 py-1 text-xs ${on ? "border-[var(--brand)] bg-[var(--brand)]/10 text-slate-800" : "border-[var(--border)] text-slate-600 hover:border-slate-400"}`}>
+                  className={`rounded-full border px-3 py-1 text-xs ${on ? "border-[var(--brand)] bg-[var(--brand)]/10 text-[var(--text)]" : "border-[var(--border)] text-muted hover:border-slate-400"}`}>
                   {ev}
                 </button>
               )

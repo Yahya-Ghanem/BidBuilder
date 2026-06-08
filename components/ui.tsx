@@ -7,10 +7,14 @@ import { useEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLA
 export function Button({
   className, variant = "primary", ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "ghost" | "outline" }) {
+  // 28.1 — primary button uses --brand-fg (white in light, teal-950 in dark) so
+  // the label stays legible inside the brightened dark teal. Ghost/outline use
+  // the surface tokens (--card / --text) so they invert under [data-theme=dark]
+  // instead of leaking white through.
   const styles = {
-    primary: "bg-[var(--brand)] text-white hover:opacity-90",
-    ghost: "bg-transparent hover:bg-slate-100 text-slate-700",
-    outline: "border border-[var(--border)] bg-white hover:bg-slate-50 text-slate-700",
+    primary: "bg-[var(--brand)] text-[var(--brand-fg)] hover:opacity-90",
+    ghost: "bg-transparent hover:bg-[color-mix(in_oklab,var(--text)_8%,transparent)] text-[var(--text)]",
+    outline: "border border-[var(--border)] bg-[var(--card)] hover:bg-[color-mix(in_oklab,var(--text)_5%,transparent)] text-[var(--text)]",
   }[variant]
   return (
     <button
@@ -27,7 +31,10 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
   return (
     <input
       className={cn(
-        "w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none",
+        // 28.1 — input surface follows --card so the dark theme paints inputs
+        // on slate-900 instead of pure white. text-[var(--text)] handles the
+        // caret + typed content color.
+        "w-full rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--text)] px-3 py-2 text-sm outline-none",
         "focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/20",
         className,
       )}
@@ -38,7 +45,7 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div className={cn("rounded-lg border border-[var(--border)] bg-white shadow-sm", className)}>
+    <div className={cn("rounded-lg border border-[var(--border)] bg-[var(--card)] shadow-sm", className)}>
       {children}
     </div>
   )
@@ -139,7 +146,7 @@ export function DropdownButton({
           role="menu"
           aria-label={ariaLabel}
           className={cn(
-            "absolute right-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-md border border-[var(--border)] bg-white py-1 shadow-md",
+            "absolute right-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-md border border-[var(--border)] bg-[var(--card)] py-1 shadow-md",
             menuClassName,
           )}
         >
@@ -152,8 +159,12 @@ export function DropdownButton({
               onClick={() => { if (!it.disabled) { setOpen(false); it.onSelect() } }}
               className={cn(
                 "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition",
-                "hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white",
-                it.danger ? "text-danger" : "text-slate-700",
+                // 28.1 — hover uses a token-mixed wash (light grey in light,
+                // light wash on dark slate in dark). The "disabled hover"
+                // reset goes back to transparent rather than bg-white so it
+                // doesn't punch a white hole through the dark dropdown.
+                "hover:bg-[color-mix(in_oklab,var(--text)_6%,transparent)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent",
+                it.danger ? "text-danger" : "text-[var(--text)]",
               )}
             >
               {it.label}
