@@ -127,6 +127,32 @@ public class PresenceTests(ApiFixture fx)
         Assert.Equal("admin@bidbuilder.local", users[0].GetProperty("email").GetString());
     }
 
+    // 27.x — deleting a revision evicts its presence bucket so the singleton
+    // doesn't leak entries until process restart (and a new estimate that re-uses
+    // the id can't inherit stale viewers).
+    [Fact]
+    public async Task Deleting_a_revision_clears_its_presence_bucket()
+    {
+        var admin = await fx.AdminClientAsync();
+        var pid = await Api.ProjectIdAsync(admin);
+        var eid = await Api.NewEstimateAsync(admin, pid, "presence-delete");
+
+        (await admin.PostAsync($"/api/estimates/{eid}/presence", content: null)).EnsureSuccessStatusCode();
+        using (var scope = await fx.CreateScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<PresenceStore>();
+            Assert.Single(store.List(eid, DateTime.UtcNow));
+        }
+
+        (await admin.DeleteAsync($"/api/projects/{pid}/estimates/{eid}")).EnsureSuccessStatusCode();
+
+        using (var scope = await fx.CreateScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<PresenceStore>();
+            Assert.Empty(store.List(eid, DateTime.UtcNow));
+        }
+    }
+
     [Fact]
     public async Task Store_prunes_stale_entries_past_ttl()
     {

@@ -57,6 +57,13 @@ public sealed class PresenceStore
         return PruneAndSnapshot(bucket, nowUtc);
     }
 
+    /// <summary>27.x — discard the bucket for a deleted revision. Without this the
+    /// bucket would leak until the process restarts: nothing else evicts a whole
+    /// bucket (the per-entry TTL prune empties it but the key itself stays). Called
+    /// from the DELETE estimate handler so a fresh estimate that re-uses the id
+    /// (theoretical at the DB level) can't inherit stale viewers.</summary>
+    public void Remove(int estimateId) => _buckets.TryRemove(estimateId, out _);
+
     private static IReadOnlyList<Entry> PruneAndSnapshot(ConcurrentDictionary<int, Entry> bucket, DateTime nowUtc)
     {
         var cutoff = nowUtc - Ttl;

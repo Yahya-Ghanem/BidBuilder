@@ -69,6 +69,12 @@ public record CommentDto(int Id, string Body, int AuthorUserId, string AuthorNam
 /// <summary>Open-comment count per BOQ item id, for the row-level icon badge.</summary>
 public record CommentCountDto(int ItemId, int OpenCount);
 
+// 27.2 — Live presence on a revision (heartbeat + snapshot). Declared as proper
+// DTOs so the swagger spec carries a real response shape and the generated TS
+// client gets typed instead of falling back to `any`.
+public record PresenceUserDto(int Id, string Name, string Email, DateTime LastSeenAt);
+public record PresenceListDto(IReadOnlyList<PresenceUserDto> Users);
+
 /// <summary>
 /// Estimate editing: BOQ sections/items, preliminaries, markups, and the
 /// recompute → bid price roll-up. Every route requires access to the owning
@@ -177,7 +183,7 @@ public static class EstimateEndpoints
         // DELETE a whole estimate revision (estimate-admin Delete). Removes its BOQ
         // tree, preliminaries and markups. Children are removed explicitly so the
         // self-referencing section parent FK can't trip a cascade-ordering error.
-        proj.MapDelete("/{projectId:int}/estimates/{id:int}", async (int projectId, int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, AuditService audit) =>
+        proj.MapDelete("/{projectId:int}/estimates/{id:int}", async (int projectId, int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, AuditService audit, PresenceStore presence) =>
         {
             if (!await access.CanAccessProjectAsync(me, projectId))
                 return Results.NotFound(new { error = "Project not found or not accessible" });
@@ -197,6 +203,9 @@ public static class EstimateEndpoints
             db.Markups.RemoveRange(e.Markups);
             db.Estimates.Remove(e);
             await db.SaveChangesAsync();
+            // 27.x — evict the in-process presence bucket so a deleted revision
+            // doesn't leak viewer entries in the singleton until restart.
+            presence.Remove(id);
             await audit.LogAsync(me, "estimate.delete", "Estimate", id.ToString(), $"rev {e.Revision} from project {projectId}");
             return Results.NoContent();
         });
@@ -1146,14 +1155,8 @@ public static class EstimateEndpoints
         {
             var g = await Guard(me, id, Boq, ModuleAction.View, access, perm); if (g is not null) return g;
             var users = store.Touch(id, me.Id(), me.Name(), me.Email(), DateTime.UtcNow);
-            return Results.Ok(new
-            {
-                users = users.Select(u => new
-                {
-                    id = u.UserId, name = u.Name, email = u.Email, lastSeenAt = u.LastSeenUtc,
-                }),
-            });
-        }).AllowWhenFinalised();
+            return Results.Ok(ToPresenceDto(users));
+        }).AllowWhenFinalised().Produces<PresenceListDto>();
 
         // GET — read-only snapshot of the bucket (still prunes stale entries on the way out
         // so a passive observer page that never heartbeats can't see a ghost from yesterday).
@@ -1162,15 +1165,12 @@ public static class EstimateEndpoints
         {
             var g = await Guard(me, id, Boq, ModuleAction.View, access, perm); if (g is not null) return g;
             var users = store.List(id, DateTime.UtcNow);
-            return Results.Ok(new
-            {
-                users = users.Select(u => new
-                {
-                    id = u.UserId, name = u.Name, email = u.Email, lastSeenAt = u.LastSeenUtc,
-                }),
-            });
-        });
+            return Results.Ok(ToPresenceDto(users));
+        }).Produces<PresenceListDto>();
     }
+
+    private static PresenceListDto ToPresenceDto(IReadOnlyList<PresenceStore.Entry> users) =>
+        new(users.Select(u => new PresenceUserDto(u.UserId, u.Name, u.Email, u.LastSeenUtc)).ToList());
 
     /// <summary>Project access (hides existence with 404) then module permission (403).</summary>
     private static async Task<IResult?> Guard(
