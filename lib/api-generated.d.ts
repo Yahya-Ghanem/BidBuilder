@@ -2315,6 +2315,7 @@ export interface paths {
                     validityDays?: number;
                     note?: string;
                     reference?: string;
+                    style?: string;
                 };
                 header?: never;
                 path: {
@@ -6714,6 +6715,7 @@ export interface components {
             city?: string | null;
             contactEmail?: string | null;
             country?: string | null;
+            defaultBidLetterStyle?: string | null;
             /** Format: double */
             defaultContingencyPct?: number;
             /** Format: double */

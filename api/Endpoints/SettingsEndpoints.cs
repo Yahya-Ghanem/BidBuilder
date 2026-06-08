@@ -25,7 +25,11 @@ public record SettingsDto(
     bool EmailConfigured,
     /// <summary>24.5 — Multi-paragraph branding strings rendered on bid letters.
     /// Newlines preserved; **bold** spans honoured by the PDF renderer.</summary>
-    string? BrandHeaderText, string? BrandFooterText, string? BrandSignatureText);
+    string? BrandHeaderText, string? BrandFooterText, string? BrandSignatureText,
+    /// <summary>28.4 — Tenant default bid-letter style (Formal | Concise | International).
+    /// Pre-selects the style picker in the bid-letter modal; a user can still override
+    /// per-letter via the ?style= query.</summary>
+    string DefaultBidLetterStyle);
 
 /// <summary>20.11 — set (non-empty) or clear (null/empty) the tenant's custom domain.</summary>
 public record CustomDomainInput(string? Domain);
@@ -39,7 +43,10 @@ public record SettingsInput(
     /// <summary>21.1 — null leaves the existing value alone (back-compat).</summary>
     bool? NotificationEmailsEnabled,
     /// <summary>24.5 — null leaves the existing value alone; empty string clears it.</summary>
-    string? BrandHeaderText = null, string? BrandFooterText = null, string? BrandSignatureText = null);
+    string? BrandHeaderText = null, string? BrandFooterText = null, string? BrandSignatureText = null,
+    /// <summary>28.4 — null leaves existing value alone. Must be one of the known styles
+    /// (Formal | Concise | International); the PUT handler returns 400 on anything else.</summary>
+    string? DefaultBidLetterStyle = null);
 
 public record CurrencyRateDto(string Code, decimal RateToBase, DateTime UpdatedAt);
 public record CurrencyRatesDto(string BaseCurrency, List<CurrencyRateDto> Rates);
@@ -116,6 +123,15 @@ public static class SettingsEndpoints
             {
                 if (i.BrandSignatureText.Length > 2048) return Bad("Branding signature must be 2 KB or shorter.");
                 s.BrandSignatureText = NormalizeBrand(i.BrandSignatureText);
+            }
+            // 28.4 — Validate against the known style set up front so a typo doesn't
+            // silently fall back to Formal at render time (we'd rather the admin see
+            // a clean 400 here than wonder why their default never sticks).
+            if (i.DefaultBidLetterStyle is not null)
+            {
+                if (!BidLetterStyles.IsKnown(i.DefaultBidLetterStyle))
+                    return Bad($"Unknown bid-letter style '{i.DefaultBidLetterStyle}'. Allowed: {string.Join(", ", BidLetterStyles.Known)}.");
+                s.DefaultBidLetterStyle = BidLetterStyles.Normalize(i.DefaultBidLetterStyle);
             }
             s.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
@@ -321,7 +337,10 @@ public static class SettingsEndpoints
         customDomain,
         s?.NotificationEmailsEnabled ?? true,
         emailConfigured,
-        s?.BrandHeaderText, s?.BrandFooterText, s?.BrandSignatureText);
+        s?.BrandHeaderText, s?.BrandFooterText, s?.BrandSignatureText,
+        // 28.4 — fall back to Formal when the row is missing OR the stored value
+        // is blank/unknown, so the picker always lands on a renderable style.
+        BidLetterStyles.Normalize(s?.DefaultBidLetterStyle));
 
     /// <summary>24.5 — Trim trailing whitespace, normalize CR/LF, and return null when blank
     /// so a cleared field round-trips as JSON null rather than an empty string.</summary>

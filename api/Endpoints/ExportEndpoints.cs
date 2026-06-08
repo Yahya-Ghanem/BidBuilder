@@ -70,17 +70,37 @@ public static class ExportEndpoints
                 Results.File(export.BuildActivitiesPdf(m, level ?? "detail"), "application/pdf", ActivitiesFile(level, "pdf"))));
 
         // ── Bid submission letter ───────────────────────────────────────────
-        grp.MapGet("/{id:int}/bid-letter.pdf", (int id, string? to, string? toTitle, string? from, string? fromTitle, int? validityDays, string? note, string? reference,
+        // 28.4 — `?style=` selects one of {Formal, Concise, International}; an
+        // unknown value gets normalized to Formal at render time, and a missing
+        // value falls back to the tenant default (TenantSettings.DefaultBidLetterStyle).
+        grp.MapGet("/{id:int}/bid-letter.pdf", async (int id, string? to, string? toTitle, string? from, string? fromTitle, int? validityDays, string? note, string? reference, string? style,
             ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
-            Export(id, me, access, perm, db, calc, rollup, tc, async m =>
+        {
+            // Reject a typo'd style explicitly so the user gets a clean 400
+            // instead of silently downloading the Formal layout when they asked
+            // for "International". A blank/missing style is fine — we fall back.
+            if (!string.IsNullOrWhiteSpace(style) && !BidLetterStyles.IsKnown(style))
+                return Results.Json(new { error = $"Unknown bid-letter style '{style}'. Allowed: {string.Join(", ", BidLetterStyles.Known)}." }, statusCode: 400);
+
+            // Tenant default lookup happens BEFORE the per-request Export() pipeline
+            // so we can pass the resolved style into BidLetterOptions. The settings
+            // row is one-per-tenant (auto-stamped by the query filter), so this is
+            // a single index seek.
+            var resolvedStyle = BidLetterStyles.Normalize(string.IsNullOrWhiteSpace(style)
+                ? (await db.TenantSettings.Select(s => s.DefaultBidLetterStyle).FirstOrDefaultAsync())
+                : style);
+
+            return await Export(id, me, access, perm, db, calc, rollup, tc, async m =>
             {
                 var opts = new BidLetterOptions(
                     Recipient: to, RecipientTitle: toTitle,
                     // Default the signatory to the signed-in user's name.
                     Signatory: string.IsNullOrWhiteSpace(from) ? me.Name() : from,
-                    SignatoryTitle: fromTitle, ValidityDays: validityDays, Note: note, Reference: reference);
+                    SignatoryTitle: fromTitle, ValidityDays: validityDays, Note: note, Reference: reference,
+                    Style: resolvedStyle);
                 return Results.File(export.BuildBidLetterPdf(m, opts), "application/pdf", $"{m.ProjectCode}-BidLetter.pdf");
-            }));
+            });
+        });
 
         // ── Cost by area (level = detail|area|subarea|unit) ─────────────────
         grp.MapGet("/{id:int}/cost-by-area.xlsx", (int id, string? level, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>

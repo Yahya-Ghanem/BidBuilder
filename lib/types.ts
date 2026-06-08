@@ -117,6 +117,9 @@ export interface TenantSettings {
   brandHeaderText: string | null
   brandFooterText: string | null
   brandSignatureText: string | null
+  /** 28.4 — tenant default for the bid-letter style picker.
+   *  One of "Formal" | "Concise" | "International". */
+  defaultBidLetterStyle: string
 }
 
 /** 22.1 — A user's email-digest opt-in. Frequency is "Off" | "Daily" | "Weekly".
