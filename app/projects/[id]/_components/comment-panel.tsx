@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Check, X, Trash2, MessageSquare, RotateCcw } from "lucide-react"
@@ -49,6 +49,20 @@ export function CommentPanel({
   const { user } = useAuth()
   const isAdmin = user?.role === "TenantAdmin" || user?.role === "SuperAdmin"
   const [body, setBody] = useState("")
+
+  // 27.x — focus management for a screen-reader-usable dialog. On open we move
+  // focus into the drawer (close button — least destructive landing spot); on
+  // unmount we restore focus to the element that opened the drawer (the BOQ row
+  // comment icon). Escape closes the drawer. aria-modal advertises the trap.
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null)
+  const composerId = useId()
+  useEffect(() => {
+    const opener = (typeof document !== "undefined" ? document.activeElement : null) as HTMLElement | null
+    closeBtnRef.current?.focus()
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") { ev.stopPropagation(); onClose() } }
+    window.addEventListener("keydown", onKey)
+    return () => { window.removeEventListener("keydown", onKey); opener?.focus?.() }
+  }, [onClose])
 
   const threadKey = ["estimate", estimateId, "comments", itemId]
   const countsKey = ["estimate", estimateId, "comment-counts"]
@@ -99,6 +113,7 @@ export function CommentPanel({
       {/* Drawer — logical `end-0` so it docks on the right in LTR and left in RTL. */}
       <aside
         role="dialog"
+        aria-modal="true"
         aria-label={t("ed.comments.panelLabel")}
         className="fixed inset-y-0 end-0 z-50 flex w-[28rem] max-w-[calc(100vw-1rem)] flex-col border-s border-[var(--border)] bg-white shadow-xl"
       >
@@ -110,7 +125,7 @@ export function CommentPanel({
             </h2>
             <p className="truncate text-xs text-muted" title={itemDescription}>{itemDescription}</p>
           </div>
-          <button onClick={onClose} aria-label={t("common.close")} className="rounded p-1 text-muted hover:bg-slate-100">
+          <button ref={closeBtnRef} onClick={onClose} aria-label={t("common.close")} className="rounded p-1 text-muted hover:bg-slate-100">
             <X className="h-4 w-4" />
           </button>
         </header>
@@ -168,8 +183,9 @@ export function CommentPanel({
         </div>
 
         <footer className="border-t border-[var(--border)] px-4 py-3">
-          <label className="block text-xs font-medium text-slate-600">{t("ed.comments.composerLabel")}</label>
+          <label htmlFor={composerId} className="block text-xs font-medium text-slate-600">{t("ed.comments.composerLabel")}</label>
           <textarea
+            id={composerId}
             value={body}
             onChange={(ev) => setBody(ev.target.value)}
             rows={3}

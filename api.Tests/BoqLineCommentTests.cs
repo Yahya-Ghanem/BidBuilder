@@ -213,16 +213,20 @@ public class BoqLineCommentTests(ApiFixture fx)
         await (await admin.PostAsJsonAsync($"/api/estimates/{eid}/items/{iid}/comments",
             new { body = "@helper please check this rate", mentionedUserIds = new[] { mentionedUid } })).Json();
 
-        // Mentioned user has a comment.mention notification on this estimate.
+        // 27.x — Mentioned user has a comment.mention notification scoped to the BOQ ITEM
+        // (entityType="BoqItem", entityKey=iid). The earlier estimate-scoped key would
+        // collapse mentions on different BOQ lines into a single 27.4 group, hiding the
+        // per-line context.
         var inbox = await mentioned.GetFromJsonAsync<JsonElement>("/api/notifications?take=20");
         var ours = inbox.GetProperty("items").EnumerateArray()
             .FirstOrDefault(x => x.GetProperty("type").GetString() == "comment.mention"
-                              && x.GetProperty("entityKey").GetString() == eid.ToString());
+                              && x.GetProperty("entityType").GetString() == "BoqItem"
+                              && x.GetProperty("entityKey").GetString() == iid.ToString());
         Assert.NotEqual(JsonValueKind.Undefined, ours.ValueKind);
         // The actor (admin) was NOT notified about their own action.
         var actorInbox = await admin.GetFromJsonAsync<JsonElement>("/api/notifications?take=20");
         Assert.DoesNotContain(actorInbox.GetProperty("items").EnumerateArray(),
             x => x.GetProperty("type").GetString() == "comment.mention"
-              && x.GetProperty("entityKey").GetString() == eid.ToString());
+              && x.GetProperty("entityKey").GetString() == iid.ToString());
     }
 }

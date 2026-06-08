@@ -34,4 +34,10 @@ public class UserPreferences : IHasTenant
 
     /// <summary>How many recent ids we retain (the UI shows the first 5).</summary>
     public const int RecentCap = 12;
+
+    /// <summary>How many projects a user may pin. The CSV column is varchar(4000),
+    /// which would overflow around ~600 8-digit ids — 50 is well below that and
+    /// comfortably above any realistic favourite list. The endpoint rejects with
+    /// 400 instead of letting EF surface a truncation error as 500.</summary>
+    public const int PinCap = 50;
 }

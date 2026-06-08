@@ -37,6 +37,9 @@ public static class UserPreferenceEndpoints
         });
 
         // Pin / unpin a project. 404 if the caller can't access it (hides existence).
+        // 27.x — cap the pin list at PinCap (50). The CSV column is `varchar(4000)`;
+        // ~75 9-digit ids would already overflow it. Returning 400 with a clean
+        // message is friendlier than a generic 500 from EF's truncation error.
         grp.MapPut("/pinned", async (PinProjectInput input, ClaimsPrincipal me, AppDbContext db, ProjectAccessService access) =>
         {
             if (input.Pinned && !await access.CanAccessProjectAsync(me, input.ProjectId))
@@ -44,7 +47,15 @@ public static class UserPreferenceEndpoints
 
             var pref = await LoadOrCreate(db, me.Id());
             var ids = Parse(pref.PinnedProjectIds);
-            if (input.Pinned) { if (!ids.Contains(input.ProjectId)) ids.Add(input.ProjectId); }
+            if (input.Pinned)
+            {
+                if (!ids.Contains(input.ProjectId))
+                {
+                    if (ids.Count >= UserPreferences.PinCap)
+                        return Results.BadRequest(new { error = $"Pin limit reached ({UserPreferences.PinCap}). Unpin a project first." });
+                    ids.Add(input.ProjectId);
+                }
+            }
             else ids.Remove(input.ProjectId);
 
             pref.PinnedProjectIds = Serialize(ids);

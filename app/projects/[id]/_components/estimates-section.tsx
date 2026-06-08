@@ -204,9 +204,14 @@ function PresenceCluster({ users, label }: { users: PresenceUser[]; label: strin
   // "Also viewing: Alice, Bob and 2 more" in a single utterance.
   const names = users.map((u) => u.name?.trim() || u.email).join(", ")
   return (
-    <div className="flex items-center gap-1" aria-label={`${label}: ${names}`}>
-      <span className="hidden text-xs text-muted sm:inline">{label}</span>
-      <div className="flex -space-x-2">
+    // role="group" + the aria-label is what assistive tech announces — the
+    // individual avatar circles are decorative (their initials are just a
+    // visual identity cue; the full name list is in the group label), so they
+    // carry aria-hidden to avoid SR double-reading "AB AB AB +2 more" before
+    // the real names. title= stays for sighted hover.
+    <div role="group" className="flex items-center gap-1" aria-label={`${label}: ${names}`}>
+      <span className="hidden text-xs text-muted sm:inline" aria-hidden>{label}</span>
+      <div className="flex -space-x-2" aria-hidden>
         {shown.map((u) => (
           <span
             key={u.id}

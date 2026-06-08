@@ -94,9 +94,9 @@ function Detail({ projectId }: { projectId: number }) {
               type="button"
               onClick={() => pinMut.mutate()}
               disabled={pinMut.isPending}
-              aria-label={isPinned ? t("project.unpin") : t("project.pin")}
+              aria-label={isPinned ? t("proj.unpin") : t("proj.pin")}
               aria-pressed={isPinned}
-              title={isPinned ? t("project.unpin") : t("project.pin")}
+              title={isPinned ? t("proj.unpin") : t("proj.pin")}
               className="rounded p-1.5 text-muted hover:bg-slate-100 disabled:opacity-50"
             >
               <Star className={`h-4 w-4 ${isPinned ? "fill-amber-400 text-amber-400" : ""}`} />
