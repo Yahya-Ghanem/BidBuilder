@@ -60,6 +60,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     // Approval workflow (20.2) — sign-offs accumulated against an estimate;
     // gate the Draft/UnderReview → Published transition.
     public DbSet<EstimateApproval> EstimateApprovals => Set<EstimateApproval>();
+    // BOQ line comments (27.1) — discussion threads per BOQ item; @mentions notify.
+    public DbSet<BoqLineComment> BoqLineComments => Set<BoqLineComment>();
 
     // ── Resource library + assemblies ─────────────────────────────────────────
     public DbSet<LaborResource>     LaborResources     => Set<LaborResource>();
@@ -353,6 +355,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             // Cascade with the estimate (same lifetime as risks / preliminaries).
             b.HasOne(a => a.Estimate).WithMany(e => e.Approvals).HasForeignKey(a => a.EstimateId).OnDelete(DeleteBehavior.Cascade);
             b.HasQueryFilter(a => a.TenantId == _tenant.TenantId);
+        });
+
+        // ── BoqLineComment (27.1 per-line discussion) ────────────────────────
+        mb.Entity<BoqLineComment>(b =>
+        {
+            // Listing a thread filters by item; the open-comments count groups by item.
+            b.HasIndex(c => c.BoqItemId);
+            b.HasIndex(c => c.TenantId);
+            b.Property(c => c.Body).HasMaxLength(4000).IsRequired();
+            b.Property(c => c.AuthorEmail).HasMaxLength(254).IsRequired();
+            b.Property(c => c.AuthorName).HasMaxLength(120).IsRequired();
+            // Comments cascade-delete with their BOQ line (deleting a line drops its thread).
+            b.HasOne(c => c.BoqItem).WithMany().HasForeignKey(c => c.BoqItemId).OnDelete(DeleteBehavior.Cascade);
+            b.HasQueryFilter(c => c.TenantId == _tenant.TenantId);
         });
 
         // ── Notification (20.3 in-app inbox) ─────────────────────────────────

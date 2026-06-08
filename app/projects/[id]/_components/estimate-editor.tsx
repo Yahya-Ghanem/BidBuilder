@@ -1,10 +1,10 @@
 "use client"
-import { useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { FileDown, FileSpreadsheet, FileText, Table, Upload } from "lucide-react"
 import { ApiError, downloadFile, fetchApi, uploadFile } from "@/lib/api"
-import type { Area, AssemblyRow, CostComponentType, CurrencyRates, EstimateBreakdown, EstimateSummary, ImportResult } from "@/lib/types"
+import type { Area, AssemblyRow, BoqCommentCount, CostComponentType, CurrencyRates, EstimateBreakdown, EstimateSummary, ImportResult, ItemBreakdown } from "@/lib/types"
 import { usePermissions } from "@/lib/permissions"
 import { Badge, Button, DropdownButton, statusColor, type DropdownItem } from "@/components/ui"
 import { Select } from "@/components/form"
@@ -27,6 +27,7 @@ import { BidLetterModal } from "./bid-letter-modal"
 import { TeamsPanel } from "./teams-panel"
 import { AreasPanel } from "./areas-panel"
 import { CompareRevisions } from "./compare"
+import { CommentPanel } from "./comment-panel"
 
 // Re-import suppression — boq.tsx re-exports AddItemForm via SectionBlock; ESLint
 // would flag an unused import otherwise. The "_Unused" alias is a no-op.
@@ -70,6 +71,17 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
   const areas = useQuery({ queryKey: ["areas", data?.projectId], queryFn: () => fetchApi<Area[]>(`/api/projects/${data!.projectId}/areas`), enabled: data?.projectId != null })
   const boqCollapse = useCollapse(data?.sections.map((s) => s.id) ?? [], true)
   const [bidLetter, setBidLetter] = useState(false)
+  // 27.1 — Comment panel state + open-counts. One small query per estimate
+  // for the row badges (don't fetch per row — defeats virtualization at scale).
+  const [commentItem, setCommentItem] = useState<ItemBreakdown | null>(null)
+  const commentCountsQuery = useQuery({
+    queryKey: ["estimate", estimateId, "comment-counts"],
+    queryFn: () => fetchApi<BoqCommentCount[]>(`/api/estimates/${estimateId}/comment-counts`),
+  })
+  const commentCounts = useMemo(
+    () => new Map((commentCountsQuery.data ?? []).map((c) => [c.itemId, c.openCount])),
+    [commentCountsQuery.data],
+  )
 
   // Every estimate mutation returns the recomputed breakdown — push it into cache.
   const apply = (d: EstimateBreakdown) => qc.setQueryData(key, d)
@@ -274,6 +286,19 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
           tab) so its open state survives a tab switch. */}
       {bidLetter && <BidLetterModal estimateId={estimateId} bidPrice={e.bidPriceInclTax} currency={c} onClose={() => setBidLetter(false)} />}
 
+      {/* 27.1 — Comment panel: a single side drawer reused for whichever BOQ
+          line the user clicked. Rendered at the editor level so it overlays
+          the whole project page (not just the Estimate tab). */}
+      {commentItem && (
+        <CommentPanel
+          estimateId={estimateId}
+          itemId={commentItem.id}
+          itemDescription={commentItem.description}
+          locked={locked}
+          onClose={() => setCommentItem(null)}
+        />
+      )}
+
       {/* 25.3 — Five tabs grouping the existing panels with no behaviour change.
           Inactive panels stay mounted (display:none) so per-tab state like a
           half-typed BOQ row or a what-if % isn't lost when the user flips
@@ -322,6 +347,7 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
                     <SectionBlock key={s.id} section={s} currency={c} assemblies={assemblies.data ?? []} costTypes={costTypes.data ?? []} areas={areas.data ?? []}
                       open={boqCollapse.isOpen(s.id)} onToggle={() => boqCollapse.toggle(s.id)}
                       canAdd={editAdd} canEdit={editEdit} canDelete={editDelete}
+                      commentCounts={commentCounts} onOpenComments={setCommentItem}
                       onAddItem={(v) => addItem.mutate({ ...(v as Record<string, unknown>), sectionId: s.id } as { sectionId: number } & Record<string, unknown>)}
                       onUpdItem={(v) => updItem.mutate(v as { id: number } & Record<string, unknown>)}
                       onDelItem={(iid) => delItem.mutate(iid)}
