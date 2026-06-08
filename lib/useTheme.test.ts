@@ -46,7 +46,11 @@ function emitOsThemeChange(toDark: boolean) {
 }
 
 // Silence the best-effort PUT — we don't care about its outcome.
-const fetchStub = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) }) as Response)
+// Explicit signature so `mock.calls[N]` keeps its `[RequestInfo, RequestInit?]`
+// tuple shape instead of degenerating to `[]` under the inferred type.
+const fetchImpl: (input: RequestInfo, init?: RequestInit) => Promise<Response> =
+  async () => ({ ok: true, status: 200, json: async () => ({}) }) as Response
+const fetchStub = vi.fn(fetchImpl)
 
 describe("useTheme", () => {
   beforeEach(() => {
