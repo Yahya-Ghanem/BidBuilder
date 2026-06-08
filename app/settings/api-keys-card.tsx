@@ -94,13 +94,13 @@ export function ApiKeysCard({ isAdmin }: { isAdmin: boolean }) {
 
       {/* One-time secret reveal after create. */}
       {newSecret && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs">
+        <div className="rounded-md border border-amber-300 bg-warning-soft p-3 text-xs">
           <div className="mb-1 font-semibold text-amber-800">API key — copy it now, it won&apos;t be shown again.</div>
           <div className="flex items-center gap-2">
             <code className="flex-1 truncate rounded bg-white px-2 py-1 text-slate-700">{newSecret}</code>
             <button onClick={() => { navigator.clipboard?.writeText(newSecret); toast.success("Key copied") }}
               className="rounded p-1 text-muted hover:bg-amber-100"><Copy className="h-4 w-4" /></button>
-            <button onClick={() => setNewSecret(null)} className="text-amber-700 hover:underline">Dismiss</button>
+            <button onClick={() => setNewSecret(null)} className="text-warning hover:underline">Dismiss</button>
           </div>
         </div>
       )}
