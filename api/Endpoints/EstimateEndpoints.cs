@@ -62,6 +62,13 @@ public record CompareSectionRow(string Key, string Code, string Title, decimal?[
 /// not money-comparable and the UI should warn instead of subtracting.</summary>
 public record CompareView(bool MixedCurrency, IReadOnlyList<CompareColumn> Columns, IReadOnlyList<CompareSectionRow> Sections);
 
+// 27.1 — BOQ line comments + @mentions.
+public record CommentInput(string Body, int? ParentCommentId, IReadOnlyList<int>? MentionedUserIds);
+public record CommentDto(int Id, string Body, int AuthorUserId, string AuthorName, string AuthorEmail,
+    int? ParentCommentId, DateTime CreatedAt, DateTime? ResolvedAt);
+/// <summary>Open-comment count per BOQ item id, for the row-level icon badge.</summary>
+public record CommentCountDto(int ItemId, int OpenCount);
+
 /// <summary>
 /// Estimate editing: BOQ sections/items, preliminaries, markups, and the
 /// recompute → bid price roll-up. Every route requires access to the owning
@@ -985,6 +992,140 @@ public static class EstimateEndpoints
             db.Markups.Remove(m); await db.SaveChangesAsync();
             return Results.Ok(await calc.RecomputeAsync(id));
         });
+
+        // ── 27.1 BOQ line comments + @mentions ────────────────────────────────
+        //
+        // Routes live on `grp` (/api/estimates) so they inherit the auth + If-Match
+        // filters. Comments are NOT bid content (adding/resolving one never
+        // invalidates approvals and must work on a finalised revision), so every
+        // write is tagged .AllowWhenFinalised() to opt out of the fail-closed
+        // status lock. The estimate→item link is verified via Section.EstimateId
+        // (BoqItem has no direct EstimateId).
+        //
+        // Permissions follow the spec: anyone with Boq+View can post; only the
+        // author OR a tenant admin can delete. Resolve is treated as a workflow
+        // signal and gated on Boq+Edit (you're stating "this has been addressed").
+
+        // GET — list a line's thread (oldest first; resolved threads still load).
+        grp.MapGet("/{id:int}/items/{iid:int}/comments", async (int id, int iid,
+            ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db) =>
+        {
+            var g = await Guard(me, id, Boq, ModuleAction.View, access, perm); if (g is not null) return g;
+            if (!await db.BoqItems.Include(x => x.Section).AnyAsync(x => x.Id == iid && x.Section.EstimateId == id))
+                return NotFound();
+            var items = await db.BoqLineComments
+                .Where(c => c.BoqItemId == iid)
+                .OrderBy(c => c.Id)
+                .Select(c => new CommentDto(c.Id, c.Body, c.AuthorUserId, c.AuthorName, c.AuthorEmail,
+                    c.ParentCommentId, c.CreatedAt, c.ResolvedAt))
+                .ToListAsync();
+            return Results.Ok(items);
+        });
+
+        // GET — open-comment counts per BOQ item for the row-level icon badges.
+        // One small payload per estimate render, so the BOQ table doesn't fetch
+        // per row (would defeat virtualization at 1000-row scale).
+        grp.MapGet("/{id:int}/comment-counts", async (int id,
+            ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db) =>
+        {
+            var g = await Guard(me, id, Boq, ModuleAction.View, access, perm); if (g is not null) return g;
+            var counts = await db.BoqLineComments
+                .Where(c => c.ResolvedAt == null && c.BoqItem.Section.EstimateId == id)
+                .GroupBy(c => c.BoqItemId)
+                .Select(g => new CommentCountDto(g.Key, g.Count()))
+                .ToListAsync();
+            return Results.Ok(counts);
+        });
+
+        // POST — add a comment + notify mentioned users (best-effort, after save).
+        grp.MapPost("/{id:int}/items/{iid:int}/comments", async (int id, int iid, CommentInput input,
+            ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db,
+            NotificationService notify, AuditService audit) =>
+        {
+            var g = await Guard(me, id, Boq, ModuleAction.View, access, perm); if (g is not null) return g;
+            var item = await db.BoqItems.Include(x => x.Section).FirstOrDefaultAsync(x => x.Id == iid && x.Section.EstimateId == id);
+            if (item is null) return NotFound();
+            var body = (input.Body ?? "").Trim();
+            if (body.Length == 0) return Bad("Comment cannot be empty.");
+            if (body.Length > 4000) return Bad("Comment is too long (max 4000 chars).");
+            // Reply target must belong to the same line (so a reply can't be re-parented
+            // onto a thread on another row by guessing an id).
+            if (input.ParentCommentId is int pid
+                && !await db.BoqLineComments.AnyAsync(c => c.Id == pid && c.BoqItemId == iid))
+                return Bad("Parent comment not found on this line.");
+
+            var c = new BoqLineComment
+            {
+                BoqItemId = iid,
+                AuthorUserId = me.Id(),
+                AuthorEmail = me.Email(),
+                AuthorName = me.Name(),
+                Body = body,
+                ParentCommentId = input.ParentCommentId,
+            };
+            db.BoqLineComments.Add(c);
+            await db.SaveChangesAsync();
+            await audit.LogAsync(me, "estimate.comment.create", "Estimate", id.ToString(), $"item {iid}");
+
+            // @mention fan-out: bound to the project audience so a comment can't
+            // notify a user outside the team (and silently exclude the author).
+            var mentioned = input.MentionedUserIds?.Where(uid => uid > 0).Distinct().ToList() ?? [];
+            if (mentioned.Count > 0)
+            {
+                var projectId = await db.Estimates.Where(e => e.Id == id).Select(e => e.ProjectId).FirstAsync();
+                var audience = await notify.ProjectAudienceIdsAsync(projectId, exclude: me.Id());
+                var recipients = mentioned.Intersect(audience).ToList();
+                if (recipients.Count > 0)
+                {
+                    var snippet = body.Length > 140 ? body[..140] + "…" : body;
+                    await notify.NotifyAsync(recipients,
+                        type: "comment.mention",
+                        title: $"{me.Name()} mentioned you in a BOQ comment",
+                        body: snippet,
+                        link: $"/projects/{projectId}",
+                        entityType: "Estimate", entityKey: id.ToString());
+                }
+            }
+
+            return Results.Ok(new CommentDto(c.Id, c.Body, c.AuthorUserId, c.AuthorName, c.AuthorEmail,
+                c.ParentCommentId, c.CreatedAt, c.ResolvedAt));
+        }).AllowWhenFinalised();
+
+        // POST — toggle resolved (drops the comment out of the open count; the row
+        // stays in the thread). Boq+Edit because you're acknowledging the line is OK.
+        grp.MapPost("/{id:int}/items/{iid:int}/comments/{cid:int}/resolve", async (int id, int iid, int cid, bool? resolved,
+            ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, AuditService audit) =>
+        {
+            var g = await Guard(me, id, Boq, ModuleAction.Edit, access, perm); if (g is not null) return g;
+            var c = await db.BoqLineComments
+                .Where(x => x.Id == cid && x.BoqItemId == iid && x.BoqItem.Section.EstimateId == id)
+                .FirstOrDefaultAsync();
+            if (c is null) return NotFound();
+            var becomeResolved = resolved ?? true;
+            c.ResolvedAt = becomeResolved ? DateTime.UtcNow : null;
+            await db.SaveChangesAsync();
+            await audit.LogAsync(me, becomeResolved ? "estimate.comment.resolve" : "estimate.comment.reopen",
+                "Estimate", id.ToString(), $"item {iid} comment {cid}");
+            return Results.Ok(new CommentDto(c.Id, c.Body, c.AuthorUserId, c.AuthorName, c.AuthorEmail,
+                c.ParentCommentId, c.CreatedAt, c.ResolvedAt));
+        }).AllowWhenFinalised();
+
+        // DELETE — author OR admin only. 404 (not 403) on a non-author non-admin
+        // attempt so we don't leak that the comment exists outside the author's audience.
+        grp.MapDelete("/{id:int}/items/{iid:int}/comments/{cid:int}", async (int id, int iid, int cid,
+            ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, AuditService audit) =>
+        {
+            var g = await Guard(me, id, Boq, ModuleAction.View, access, perm); if (g is not null) return g;
+            var c = await db.BoqLineComments
+                .Where(x => x.Id == cid && x.BoqItemId == iid && x.BoqItem.Section.EstimateId == id)
+                .FirstOrDefaultAsync();
+            if (c is null) return NotFound();
+            if (c.AuthorUserId != me.Id() && !me.IsAdmin()) return NotFound();
+            db.BoqLineComments.Remove(c);
+            await db.SaveChangesAsync();
+            await audit.LogAsync(me, "estimate.comment.delete", "Estimate", id.ToString(), $"item {iid} comment {cid}");
+            return Results.NoContent();
+        }).AllowWhenFinalised();
     }
 
     /// <summary>Project access (hides existence with 404) then module permission (403).</summary>
