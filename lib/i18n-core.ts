@@ -180,6 +180,16 @@ const en: Dict = {
   "ed.export.csv":       "CSV",
   "ed.export.pdf":       "PDF",
   "ed.export.bidLetter": "Bid Letter",
+  // 28.3 — pre-download preview modal. The acceptance bar is "user catches a wrong
+  // figure before sending a broken document to the client" — so the dialog title
+  // names the format and the body banner reminds the viewer that this is a
+  // preview, not the deliverable.
+  "ed.preview.title":    "Preview — {kind}",
+  "ed.preview.loading":  "Loading preview…",
+  "ed.preview.failed":   "Preview failed: {error}",
+  "ed.preview.download": "Download",
+  "ed.preview.close":    "Close",
+  "ed.preview.frameLabel": "Export preview",
   "ed.lockedBanner":     "This revision is {status} and locked. Set its status to Draft to edit the BOQ, preliminaries or markups.",
   "ed.stat.directCost":  "Direct cost",
   "ed.stat.indirect":    "Indirect (prelims)",
@@ -535,6 +545,12 @@ const ar: Dict = {
   "ed.export.csv":       "CSV",
   "ed.export.pdf":       "PDF",
   "ed.export.bidLetter": "خطاب العطاء",
+  "ed.preview.title":    "معاينة — {kind}",
+  "ed.preview.loading":  "جارٍ تحميل المعاينة…",
+  "ed.preview.failed":   "تعذّرت المعاينة: {error}",
+  "ed.preview.download": "تنزيل",
+  "ed.preview.close":    "إغلاق",
+  "ed.preview.frameLabel": "معاينة التصدير",
   "ed.lockedBanner":     "هذه المراجعة {status} ومقفلة. غيّر حالتها إلى «مسودّة» لتعديل قائمة الكميات أو التحضيرات أو الهوامش.",
   "ed.stat.directCost":  "التكلفة المباشرة",
   "ed.stat.indirect":    "غير المباشرة (تحضيرات)",
