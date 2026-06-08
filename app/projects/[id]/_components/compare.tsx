@@ -133,7 +133,7 @@ function CompareTable({ view }: { view: CompareView }) {
       </table>
 
       {mixedCurrency && (
-        <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
+        <p className="mt-3 rounded-md bg-warning-soft px-3 py-2 text-xs text-warning">
           These revisions use different currencies — figures are shown in each revision&apos;s own currency and deltas are hidden (they aren&apos;t directly comparable).
         </p>
       )}

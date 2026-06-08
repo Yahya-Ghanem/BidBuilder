@@ -144,9 +144,9 @@ function TwoFactorCard() {
 
 function RecoveryCodesPanel({ codes, onDone }: { codes: string[]; onDone: () => void }) {
   return (
-    <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3">
+    <div className="space-y-2 rounded-md border border-amber-200 bg-warning-soft p-3">
       <p className="text-xs font-semibold text-amber-800">Save your recovery codes</p>
-      <p className="text-[11px] text-amber-700">
+      <p className="text-[11px] text-warning">
         Each can be used once if you lose your device. They won&apos;t be shown again.
       </p>
       <div className="grid grid-cols-2 gap-1 font-mono text-sm text-slate-700">

@@ -87,9 +87,9 @@ function Summary({ trend }: { trend: RateTrendDto }) {
   const v = trend.volatilityIndex ?? 0
   const label = v < 0.05 ? "low" : v < 0.2 ? "medium" : "high"
   const tone =
-    label === "low"    ? "bg-emerald-100 text-emerald-700"
-    : label === "medium" ? "bg-amber-100 text-amber-700"
-    : "bg-rose-100 text-rose-700"
+    label === "low"    ? "bg-emerald-100 text-success"
+    : label === "medium" ? "bg-amber-100 text-warning"
+    : "bg-rose-100 text-danger"
 
   // Compact numeric formatter (no currency on a per-row sparkline; the row already
   // shows the formatted live rate beside it).
