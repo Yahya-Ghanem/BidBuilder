@@ -468,6 +468,7 @@ app.MapSettingsEndpoints();
 app.MapAuditEndpoints();
 app.MapNotificationEndpoints();
 app.MapDigestEndpoints();
+app.MapUserPreferenceEndpoints();
 app.MapSearchEndpoints();
 app.MapWebhookEndpoints();
 app.MapApiKeyEndpoints();

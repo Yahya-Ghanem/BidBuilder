@@ -19,6 +19,11 @@ const en: Dict = {
   "nav.users": "Users & Teams",
   "nav.audit": "Audit log",
   "nav.settings": "Settings",
+  // 27.5 — sidebar favourites + project pin toggle
+  "nav.pinned": "Pinned",
+  "nav.recent": "Recent",
+  "proj.pin": "Pin project",
+  "proj.unpin": "Unpin project",
   "shell.account": "Account & security",
   "shell.signOut": "Sign out",
   "shell.loading": "Loading…",
@@ -325,6 +330,11 @@ const ar: Dict = {
   "nav.users": "المستخدمون والفِرق",
   "nav.audit": "سجل التدقيق",
   "nav.settings": "الإعدادات",
+  // 27.5 — sidebar favourites + project pin toggle
+  "nav.pinned": "المثبتة",
+  "nav.recent": "الأخيرة",
+  "proj.pin": "تثبيت المشروع",
+  "proj.unpin": "إلغاء تثبيت المشروع",
   "shell.account": "الحساب والأمان",
   "shell.signOut": "تسجيل الخروج",
   "shell.loading": "جارٍ التحميل…",
