@@ -2496,7 +2496,9 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    preview?: string;
+                };
                 header?: never;
                 path: {
                     id: number;
@@ -2531,7 +2533,9 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    preview?: string;
+                };
                 header?: never;
                 path: {
                     id: number;
@@ -2566,7 +2570,9 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    preview?: string;
+                };
                 header?: never;
                 path: {
                     id: number;

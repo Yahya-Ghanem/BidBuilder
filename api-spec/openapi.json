@@ -3655,6 +3655,13 @@
               "format": "int32",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "preview",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3678,6 +3685,13 @@
               "format": "int32",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "preview",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3700,6 +3714,13 @@
             "schema": {
               "format": "int32",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "preview",
+            "schema": {
+              "type": "string"
             }
           }
         ],

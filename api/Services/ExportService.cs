@@ -1039,4 +1039,114 @@ public class ExportService
         Walk(null, 0);
         return result;
     }
+
+    // ── HTML preview ───────────────────────────────────────────────────────
+    /// <summary>
+    /// 28.3 — Pre-download preview renderer. Returns a self-contained HTML page
+    /// (no external CSS/JS) showing the same project header, summary figures and
+    /// priced BOQ that the xlsx/csv exports carry. The acceptance bar is "user
+    /// can spot wrong data before sending it" — so the page mirrors the data the
+    /// client will see, in a layout that scans fast in an iframe. Used for the
+    /// xlsx and csv preview lanes (PDFs preview natively in the browser viewer).
+    /// </summary>
+    public byte[] BuildHtml(ExportModel m)
+    {
+        var e = m.Estimate;
+        var ci = CultureInfo.InvariantCulture;
+        string Money(decimal v) => $"{e.Currency} {v.ToString("#,##0.00", ci)}";
+        var sb = new StringBuilder();
+        sb.Append("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">");
+        sb.Append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
+        sb.Append("<title>").Append(HtmlEsc(m.ProjectCode)).Append(" — estimate preview</title>");
+        sb.Append("<style>");
+        sb.Append("body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:24px;color:#0f172a;background:#fff;font-size:13px}");
+        sb.Append(".brand{color:#0f766e;font-size:18px;font-weight:700;margin:0 0 4px}");
+        sb.Append(".muted{color:#64748b;font-size:12px}");
+        sb.Append("h2{font-size:14px;color:#134e4a;margin:24px 0 6px;border-bottom:1px solid #cbd5e1;padding-bottom:4px}");
+        sb.Append("table{width:100%;border-collapse:collapse;margin:0 0 8px}");
+        sb.Append("th,td{padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:top}");
+        sb.Append("th{background:#0f766e;color:#fff;font-weight:600;font-size:12px}");
+        sb.Append("tr.section td{background:#ccfbf1;font-weight:600}");
+        sb.Append("td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}");
+        sb.Append("tr.total td{background:#134e4a;color:#fff;font-weight:700}");
+        sb.Append(".summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin:8px 0 16px}");
+        sb.Append(".summary>div{border:1px solid #e2e8f0;padding:8px 10px;border-radius:6px;background:#f8fafc}");
+        sb.Append(".summary .k{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.04em}");
+        sb.Append(".summary .v{font-size:14px;font-weight:600;color:#0f172a;margin-top:2px}");
+        sb.Append(".banner{background:#fef3c7;border:1px solid #f59e0b;color:#78350f;padding:6px 10px;border-radius:6px;font-size:12px;margin:0 0 16px}");
+        sb.Append("</style></head><body>");
+
+        // Header banner — the modal will not show a download until the user clicks
+        // the "Download" button, but a screenshot of just the body might be taken
+        // and forwarded; mark it unambiguously as a preview so nobody mistakes the
+        // HTML for the deliverable.
+        sb.Append("<div class=\"banner\">Preview — this HTML view is for verification only. Click Download in the modal to save the deliverable file.</div>");
+
+        sb.Append("<p class=\"brand\">").Append(HtmlEsc(m.CompanyName)).Append("</p>");
+        if (!string.IsNullOrWhiteSpace(m.CompanyAddress))
+            sb.Append("<p class=\"muted\">").Append(HtmlEsc(m.CompanyAddress!)).Append("</p>");
+        if (!string.IsNullOrWhiteSpace(m.CompanyContact))
+            sb.Append("<p class=\"muted\">").Append(HtmlEsc(m.CompanyContact!)).Append("</p>");
+
+        sb.Append("<h2>").Append(HtmlEsc(m.ProjectCode)).Append(" — ").Append(HtmlEsc(m.ProjectName)).Append("</h2>");
+        sb.Append("<p class=\"muted\">");
+        sb.Append("Client: ").Append(HtmlEsc(m.Client ?? "—"));
+        sb.Append("  ·  Location: ").Append(HtmlEsc(m.Location ?? "—"));
+        sb.Append("  ·  Generated: ").Append(HtmlEsc(m.GeneratedOn));
+        sb.Append("  ·  Currency: ").Append(HtmlEsc(e.Currency));
+        sb.Append("</p>");
+
+        // ── Summary cards (the figures that go on the deliverable) ──────────
+        sb.Append("<div class=\"summary\">");
+        sb.Append("<div><div class=\"k\">Direct cost</div><div class=\"v\">").Append(Money(e.DirectCost)).Append("</div></div>");
+        sb.Append("<div><div class=\"k\">Indirect cost</div><div class=\"v\">").Append(Money(e.IndirectCost)).Append("</div></div>");
+        sb.Append("<div><div class=\"k\">Markup</div><div class=\"v\">").Append(Money(e.MarkupCost)).Append("</div></div>");
+        if (e.CommercialAdjustment != 0)
+            sb.Append("<div><div class=\"k\">Commercial adj.</div><div class=\"v\">").Append(Money(e.CommercialAdjustment)).Append("</div></div>");
+        if (e.TaxAmount != 0)
+            sb.Append("<div><div class=\"k\">Tax</div><div class=\"v\">").Append(Money(e.TaxAmount)).Append("</div></div>");
+        sb.Append("<div><div class=\"k\">Bid price</div><div class=\"v\">").Append(Money(e.BidPrice)).Append("</div></div>");
+        if (e.TaxAmount != 0)
+            sb.Append("<div><div class=\"k\">Bid incl. tax</div><div class=\"v\">").Append(Money(e.BidPriceInclTax)).Append("</div></div>");
+        sb.Append("</div>");
+
+        // ── BOQ table — one section header row, then its items ──────────────
+        sb.Append("<h2>Priced BOQ</h2>");
+        sb.Append("<table><thead><tr>");
+        sb.Append("<th style=\"width:90px\">Code</th>");
+        sb.Append("<th>Description</th>");
+        sb.Append("<th style=\"width:60px\">Unit</th>");
+        sb.Append("<th style=\"width:80px\" class=\"num\">Qty</th>");
+        sb.Append("<th style=\"width:100px\" class=\"num\">Rate</th>");
+        sb.Append("<th style=\"width:120px\" class=\"num\">Total</th>");
+        sb.Append("</tr></thead><tbody>");
+        foreach (var s in e.Sections)
+        {
+            sb.Append("<tr class=\"section\"><td>").Append(HtmlEsc(s.Code))
+              .Append("</td><td colspan=\"4\">").Append(HtmlEsc(s.Title))
+              .Append("</td><td class=\"num\">").Append(Money(s.SectionTotal)).Append("</td></tr>");
+            foreach (var i in s.Items)
+            {
+                sb.Append("<tr>");
+                sb.Append("<td>").Append(HtmlEsc(i.ItemCode)).Append("</td>");
+                sb.Append("<td>").Append(HtmlEsc(WithKind(i.Description, i.Kind))).Append("</td>");
+                sb.Append("<td>").Append(HtmlEsc(i.Unit)).Append("</td>");
+                sb.Append("<td class=\"num\">").Append(i.Quantity.ToString("0.####", ci)).Append("</td>");
+                sb.Append("<td class=\"num\">").Append(i.UnitRate.ToString("0.00", ci)).Append("</td>");
+                sb.Append("<td class=\"num\">").Append(Money(i.LineTotal)).Append("</td>");
+                sb.Append("</tr>");
+            }
+        }
+        sb.Append("<tr class=\"total\"><td colspan=\"5\">Bid price</td><td class=\"num\">")
+          .Append(Money(e.BidPrice)).Append("</td></tr>");
+        sb.Append("</tbody></table>");
+
+        sb.Append("</body></html>");
+        return Encoding.UTF8.GetBytes(sb.ToString());
+    }
+
+    /// <summary>HTML-attribute-safe escape (covers &lt;, &gt;, &amp;, ", ').</summary>
+    private static string HtmlEsc(string s) =>
+        s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;")
+         .Replace("\"", "&quot;").Replace("'", "&#39;");
 }

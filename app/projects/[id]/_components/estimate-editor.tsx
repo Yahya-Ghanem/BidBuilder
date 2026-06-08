@@ -26,6 +26,7 @@ import { AreaRollupPanel } from "./area-rollup"
 import { AnomalyPanel } from "./anomaly-panel"
 import { ActivitiesPanel } from "./activities"
 import { BidLetterModal } from "./bid-letter-modal"
+import { ExportPreviewModal, type ExportPreviewKind } from "@/components/export-preview-modal"
 import { TeamsPanel } from "./teams-panel"
 import { AreasPanel } from "./areas-panel"
 import { CompareRevisions } from "./compare"
@@ -79,6 +80,10 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
   const areas = useQuery({ queryKey: ["areas", data?.projectId], queryFn: () => fetchApi<Area[]>(`/api/projects/${data!.projectId}/areas`), enabled: data?.projectId != null })
   const boqCollapse = useCollapse(data?.sections.map((s) => s.id) ?? [], true)
   const [bidLetter, setBidLetter] = useState(false)
+  // 28.3 — Pre-download preview lane. The Export ▾ entries open this modal
+  // first (the user sees the figures, can close without writing anything to
+  // disk, and only the modal's Download button triggers the actual download).
+  const [preview, setPreview] = useState<{ kind: ExportPreviewKind; label: string } | null>(null)
   // 27.1 — Comment panel state + open-counts. One small query per estimate
   // for the row badges (don't fetch per row — defeats virtualization at scale).
   const [commentItem, setCommentItem] = useState<ItemBreakdown | null>(null)
@@ -218,13 +223,11 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
   const editAdd = boqAdd && editable, editEdit = boqEdit && editable, editDelete = boqDelete && editable
   const editPlmAdd = plmAdd && editable, editPlmEdit = plmEdit && editable, editPlmDelete = plmDelete && editable
 
-  async function dl(kind: "xlsx" | "pdf" | "csv") {
-    try {
-      await downloadFile(`/api/estimates/${estimateId}/export.${kind}`, `estimate.${kind}`)
-    } catch (err) {
-      toast.error((err as Error).message)
-    }
-  }
+  // 28.3 — The headline xlsx/pdf/csv downloads now go through ExportPreviewModal
+  // (see the Export ▾ dropdown below); only the secondary download lanes
+  // (activities, cost-by-area) still call downloadFile directly. The handlers
+  // for those stay on this component because they need the level= query
+  // parameter glue that the modal doesn't know about.
   async function dlActivities(kind: "xlsx" | "pdf" | "csv", level: "detail" | "area" | "subarea" | "unit" = "detail") {
     const q = level === "detail" ? "" : `?level=${level}`
     const suffix = level === "area" ? "ByArea" : level === "subarea" ? "BySubArea" : level === "unit" ? "ByUnitSummary" : "ByUnit"
@@ -316,9 +319,14 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
             className="h-8 text-sm"
             label={<><FileDown className="h-4 w-4" /> {t("ed.export")}</>}
             items={[
-              { key: "xlsx", label: <><FileSpreadsheet className="h-4 w-4" /> {t("ed.export.excel")}</>, onSelect: () => dl("xlsx") },
-              { key: "csv", label: <><Table className="h-4 w-4" /> {t("ed.export.csv")}</>, onSelect: () => dl("csv") },
-              { key: "pdf", label: <><FileText className="h-4 w-4" /> {t("ed.export.pdf")}</>, onSelect: () => dl("pdf") },
+              // 28.3 — Each format opens a preview modal first; the user clicks
+              // Download inside the modal to save the file (or Close to walk
+              // away with nothing on disk). The Bid Letter entry still routes
+              // to its dedicated modal — that flow already has a preview step
+              // (the letter editor) so a second one would be redundant.
+              { key: "xlsx", label: <><FileSpreadsheet className="h-4 w-4" /> {t("ed.export.excel")}</>, onSelect: () => setPreview({ kind: "xlsx", label: t("ed.export.excel") }) },
+              { key: "csv", label: <><Table className="h-4 w-4" /> {t("ed.export.csv")}</>, onSelect: () => setPreview({ kind: "csv", label: t("ed.export.csv") }) },
+              { key: "pdf", label: <><FileText className="h-4 w-4" /> {t("ed.export.pdf")}</>, onSelect: () => setPreview({ kind: "pdf", label: t("ed.export.pdf") }) },
               { key: "bidLetter", label: <><FileText className="h-4 w-4" /> {t("ed.export.bidLetter")}</>, onSelect: () => setBidLetter(true) },
             ] satisfies DropdownItem[]}
           />
@@ -364,6 +372,21 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
       {/* 25.3 — Bid letter modal is rendered at the editor level (not inside any
           tab) so its open state survives a tab switch. */}
       {bidLetter && <BidLetterModal estimateId={estimateId} bidPrice={e.bidPriceInclTax} currency={c} onClose={() => setBidLetter(false)} />}
+
+      {/* 28.3 — Export preview modal. Shown when the user picks Excel/CSV/PDF
+          from the Export ▾ dropdown; the actual download only happens when
+          the user clicks Download inside the modal (or closes without any
+          file landing in their downloads folder). The project code is built
+          into the filename so a downloaded estimate is identifiable by name
+          alone — even if a user has previewed several revisions in a row. */}
+      <ExportPreviewModal
+        open={preview != null}
+        kind={preview?.kind ?? "pdf"}
+        kindLabel={preview?.label ?? ""}
+        basePath={`/api/estimates/${estimateId}/export.${preview?.kind ?? "pdf"}`}
+        downloadName={`estimate.${preview?.kind ?? "pdf"}`}
+        onClose={() => setPreview(null)}
+      />
 
       {/* 27.1 — Comment panel: a single side drawer reused for whichever BOQ
           line the user clicked. Rendered at the editor level so it overlays

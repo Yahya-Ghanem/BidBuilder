@@ -19,23 +19,39 @@ public static class ExportEndpoints
     {
         var grp = app.MapGroup("/api/estimates").RequireAuthorization();
 
-        grp.MapGet("/{id:int}/export.xlsx", (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
+        // 28.3 — `?preview=1` switches the response to a preview-friendly form so
+        // the user can verify the figures in an in-app modal before clicking
+        // Download. For PDFs the bytes are identical but the filename is dropped
+        // so the browser shows it inline in an iframe (Content-Disposition
+        // defaults to inline when no name is given). For xlsx/csv the response
+        // becomes a self-contained HTML rendering of the same ExportModel (the
+        // browser cannot natively render xlsx) — the actual deliverable file is
+        // still produced by the same endpoint without the flag. Per-line
+        // authorization is unchanged; the preview path goes through Export()
+        // exactly like the download path so a user who can't access the
+        // estimate can't read its data via ?preview=1 either.
+        grp.MapGet("/{id:int}/export.xlsx", (int id, string? preview, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
             Export(id, me, access, perm, db, calc, rollup, tc, async m =>
             {
+                if (IsPreview(preview)) return Results.File(export.BuildHtml(m), "text/html; charset=utf-8");
                 var bytes = export.BuildExcel(m);
                 return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{m.ProjectCode}-estimate.xlsx");
             }));
 
-        grp.MapGet("/{id:int}/export.pdf", (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
+        grp.MapGet("/{id:int}/export.pdf", (int id, string? preview, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
             Export(id, me, access, perm, db, calc, rollup, tc, async m =>
             {
                 var bytes = export.BuildPdf(m);
-                return Results.File(bytes, "application/pdf", $"{m.ProjectCode}-estimate.pdf");
+                // Preview omits the filename → browser renders inline.
+                return IsPreview(preview)
+                    ? Results.File(bytes, "application/pdf")
+                    : Results.File(bytes, "application/pdf", $"{m.ProjectCode}-estimate.pdf");
             }));
 
-        grp.MapGet("/{id:int}/export.csv", (int id, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
+        grp.MapGet("/{id:int}/export.csv", (int id, string? preview, ClaimsPrincipal me, ProjectAccessService access, PermissionService perm, AppDbContext db, EstimateCalculator calc, AreaRollupService rollup, ExportService export, ITenantContext tc) =>
             Export(id, me, access, perm, db, calc, rollup, tc, async m =>
             {
+                if (IsPreview(preview)) return Results.File(export.BuildHtml(m), "text/html; charset=utf-8");
                 var bytes = export.BuildCsv(m);
                 return Results.File(bytes, "text/csv", $"{m.ProjectCode}-boq.csv");
             }));
@@ -81,6 +97,15 @@ public static class ExportEndpoints
     }
 
     private const string Xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    /// <summary>
+    /// 28.3 — Accept both <c>?preview=1</c> (per the roadmap) and <c>?preview=true</c>
+    /// (per ASP.NET Core's default bool binding). String binding is used instead of
+    /// <c>bool?</c> because the latter rejects "1" with a 400, which would break the
+    /// documented contract.
+    /// </summary>
+    private static bool IsPreview(string? preview) =>
+        preview is not null && (preview == "1" || preview.Equals("true", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Download filename for the activities export, reflecting the grouping level.</summary>
     private static string ActivitiesFile(string? level, string ext) =>
