@@ -251,6 +251,8 @@ export interface CompareView { mixedCurrency: boolean; columns: CompareColumn[];
 export interface NotificationItem {
   id: number; type: string; title: string; body: string | null; link: string | null
   entityType: string | null; entityKey: string | null; isRead: boolean; createdAt: string
+  // 27.4 — set when the recipient marked it read (null while unread).
+  readAt: string | null
 }
 /** 20.3 — the signed-in user's inbox page + unread total. */
 export interface NotificationList { unreadCount: number; items: NotificationItem[] }
