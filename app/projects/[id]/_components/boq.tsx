@@ -1,5 +1,5 @@
 "use client"
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { Layers, MessageSquare, Plus, Trash2 } from "lucide-react"
 import type { Area, AssemblyRow, CostComponentType, ItemBreakdown, SectionBreakdown } from "@/lib/types"
 import { Button, Input } from "@/components/ui"
@@ -44,7 +44,7 @@ type CellDeps = {
 /** One BOQ section: collapsible header + DataTable of items + add-item form.
  *  Long sections (> VIRTUALIZE_THRESHOLD rows) automatically virtualize via
  *  the DataTable wrapper. */
-export function SectionBlock({ section, currency, assemblies, costTypes, areas, open, onToggle, canAdd, canEdit, canDelete, commentCounts, onOpenComments, onAddItem, onUpdItem, onDelItem, onDelSection }: {
+export function SectionBlock({ section, currency, assemblies, costTypes, areas, open, onToggle, canAdd, canEdit, canDelete, commentCounts, onOpenComments, onAddItem, onUpdItem, onDelItem, onDelSection, onSelectionChange, selectionResetKey }: {
   section: SectionBreakdown; currency: string; assemblies: AssemblyRow[]; costTypes: CostComponentType[]; areas: Area[]
   open: boolean; onToggle: () => void
   canAdd: boolean; canEdit: boolean; canDelete: boolean
@@ -53,9 +53,34 @@ export function SectionBlock({ section, currency, assemblies, costTypes, areas, 
   /** 27.1 — open the comment thread for a BOQ line. */
   onOpenComments: (item: ItemBreakdown) => void
   onAddItem: (v: unknown) => void; onUpdItem: (v: unknown) => void; onDelItem: (iid: number) => void; onDelSection: () => void
+  /** 28.2 — Multi-select: caller receives THIS section's id + its selected
+   *  item ids on every change. Omitted → no checkbox column rendered (read-
+   *  only viewers). Item ids are integers (DataTable's stringified row ids
+   *  are unwrapped here so the parent doesn't have to round-trip Number()).
+   *  Carries `sectionId` so the parent can pass ONE stable handler instead
+   *  of N section-specific arrows — important: a new arrow per render would
+   *  re-run the DataTable's effect and refire the callback every paint. */
+  onSelectionChange?: (sectionId: number, selectedItemIds: number[]) => void
+  /** 28.2 — Bump after a successful bulk action to clear the checkboxes. */
+  selectionResetKey?: string | number
 }) {
   const t = useT()
   const commentsLabel = t("ed.comments.openAria")
+  // 28.2 — Stable handler so the DataTable's effect deps don't change every
+  // paint. `onSelectionChange` is the parent's stable callback; `section.id`
+  // is stable per section. Together they yield a per-section function whose
+  // identity changes only when the parent swaps the callback or the section
+  // identity changes — neither of which happens during interaction. We always
+  // build the inner fn through useCallback (TS infers a clean signature) and
+  // only expose it to DataTable when the parent supplied a handler.
+  const sectionId = section.id
+  const stableHandler = useCallback((sel: Set<string>) => {
+    if (!onSelectionChange) return
+    const ids: number[] = []
+    for (const s of sel) { const n = Number(s); if (Number.isFinite(n)) ids.push(n) }
+    onSelectionChange(sectionId, ids)
+  }, [onSelectionChange, sectionId])
+  const selectionHandler = onSelectionChange ? stableHandler : undefined
   // Memoize the column defs so the table doesn't rebuild on every parent
   // render — TanStack Table internals compare column identity to decide
   // whether to recompute the model.
@@ -99,6 +124,14 @@ export function SectionBlock({ section, currency, assemblies, costTypes, areas, 
             testId="boq-virtual-scroll"
             banner={virtBanner}
             tableClassName="text-sm"
+            // 28.2 — Translate the DataTable's Set<string> back to numeric ids
+            // (its public contract is stringified row ids). Pass-through to
+            // the parent so it can union sections' selections behind one bar.
+            // The inner arrow is memoized so its identity is stable across
+            // renders — otherwise the DataTable's effect (which lists
+            // onSelectionChange in its deps) would refire every paint.
+            onSelectionChange={selectionHandler}
+            selectionResetKey={selectionResetKey}
           />
           {canAdd && <AddItemForm assemblies={assemblies} costTypes={costTypes} areas={areas} onAdd={onAddItem} />}
         </>

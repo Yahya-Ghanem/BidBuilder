@@ -2634,6 +2634,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/estimates/{id}/items/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BulkBoqRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/estimates/{id}/items/{iid}": {
         parameters: {
             query?: never;
@@ -6322,6 +6361,15 @@ export interface components {
             /** Format: date-time */
             tenderDueAt?: string | null;
             winLossNote?: string | null;
+        };
+        BulkBoqRequest: {
+            action?: string | null;
+            clearArea?: boolean;
+            itemIds?: number[] | null;
+            /** Format: int32 */
+            targetAreaId?: number | null;
+            /** Format: int32 */
+            targetSectionId?: number | null;
         };
         BulkResourceRequest: {
             action?: string | null;

@@ -1,5 +1,5 @@
 "use client"
-import { useMemo, useRef, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { FileDown, FileSpreadsheet, FileText, Table, Upload } from "lucide-react"
@@ -16,6 +16,7 @@ import { Tabs } from "@/components/tabs"
 import { ExpandCollapseAll, Row, useCollapse, type CompInput } from "./shared"
 import { StatCards } from "./stat-cards"
 import { AddItemForm as _UnusedAddItemForm, AddSection, SectionBlock } from "./boq"
+import { BulkBoqBar, type BulkBoqAction } from "./boq-bulk-bar"
 import { WhatIfPanel } from "./what-if"
 import { TargetPanel } from "./target"
 import { ApprovalPanel } from "./approval-panel"
@@ -131,6 +132,62 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
     onError: (e) => { if (e instanceof ApiError && e.status === 409) { toast.error("This estimate was changed or is locked — reloading."); qc.invalidateQueries({ queryKey: key }) } else toast.error((e as Error).message) },
   })
   const { data: fxRates } = useQuery({ queryKey: ["currencies"], queryFn: () => fetchApi<CurrencyRates>("/api/settings/currencies") })
+
+  // 28.2 — BOQ multi-select state. Each SectionBlock owns its own DataTable
+  // selection; here we union per-section sets into a single Map<sectionId,
+  // Set<itemId>> so the sticky bar can act on every selection at once. The
+  // reset key is bumped after a successful bulk round-trip — the SectionBlock
+  // passes it through to its DataTable, which drops every checkbox in one shot.
+  const [selectedBySection, setSelectedBySection] = useState<Map<number, Set<number>>>(new Map())
+  const [selectionResetKey, setSelectionResetKey] = useState(0)
+  const allSelectedIds = useMemo(() => {
+    const out: number[] = []
+    for (const ids of selectedBySection.values()) for (const id of ids) out.push(id)
+    return out
+  }, [selectedBySection])
+  // Idempotent + memoized: bail with the SAME Map reference when the
+  // section's selection hasn't actually changed. The DataTable's useEffect
+  // fires this callback on every render (consumer contract: it always pushes
+  // the current selection), so without this guard each push creates a new Map
+  // → React re-renders → DataTable mounts a fresh checkbox column → callback
+  // fires again → infinite loop and selection never settles.
+  const setSectionSelection = useCallback((sectionId: number, ids: number[]) => {
+    setSelectedBySection((m) => {
+      const cur = m.get(sectionId)
+      if (ids.length === 0) {
+        if (!cur) return m
+        const next = new Map(m); next.delete(sectionId); return next
+      }
+      if (cur && cur.size === ids.length && ids.every((id) => cur.has(id))) return m
+      const next = new Map(m); next.set(sectionId, new Set(ids)); return next
+    })
+  }, [])
+  function clearAllBulkSelection() {
+    setSelectedBySection(new Map())
+    setSelectionResetKey((k) => k + 1)
+  }
+  const bulkBoq = useEstimateMut((req: { action: string; itemIds: number[]; targetSectionId?: number; targetAreaId?: number | null; clearArea?: boolean }) =>
+    fetchApi<EstimateBreakdown>(`/api/estimates/${estimateId}/items/bulk`, { method: "POST", headers: ifMatch(), body: JSON.stringify(req) }))
+  function runBulkBoq(a: BulkBoqAction) {
+    const itemIds = allSelectedIds
+    if (itemIds.length === 0) return
+    const done = (msg: string) => { clearAllBulkSelection(); toast.success(msg) }
+    const count = itemIds.length
+    if (a.kind === "delete") {
+      bulkBoq.mutate({ action: "delete", itemIds }, { onSuccess: () => done(t("ed.boq.bulk.doneDelete", { count })) })
+    } else if (a.kind === "duplicate") {
+      bulkBoq.mutate({ action: "duplicate", itemIds }, { onSuccess: () => done(t("ed.boq.bulk.doneDuplicate", { count })) })
+    } else if (a.kind === "move") {
+      bulkBoq.mutate({ action: "move", itemIds, targetSectionId: a.targetSectionId }, { onSuccess: () => done(t("ed.boq.bulk.doneMove", { count })) })
+    } else {
+      bulkBoq.mutate(
+        a.targetAreaId === null
+          ? { action: "tag", itemIds, clearArea: true }
+          : { action: "tag", itemIds, targetAreaId: a.targetAreaId },
+        { onSuccess: () => done(t("ed.boq.bulk.doneTag", { count })) },
+      )
+    }
+  }
 
   // Excel BOQ import (multipart upload → returns counts + recomputed breakdown).
   const fileRef = useRef<HTMLInputElement>(null)
@@ -373,10 +430,32 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
                       onAddItem={(v) => addItem.mutate({ ...(v as Record<string, unknown>), sectionId: s.id } as { sectionId: number } & Record<string, unknown>)}
                       onUpdItem={(v) => updItem.mutate(v as { id: number } & Record<string, unknown>)}
                       onDelItem={(iid) => delItem.mutate(iid)}
-                      onDelSection={() => { if (confirm(t("ed.boq.deleteSectionConfirm", { title: s.title }))) delSection.mutate(s.id) }} />
+                      onDelSection={() => { if (confirm(t("ed.boq.deleteSectionConfirm", { title: s.title }))) delSection.mutate(s.id) }}
+                      // 28.2 — Only enable per-row selection when the user can
+                      // do SOMETHING bulk on a line. Read-only viewers see no
+                      // checkboxes. Mirrors `editable` so a locked/published
+                      // revision drops the affordance too. setSectionSelection
+                      // is `useCallback`-stable; SectionBlock memoizes the
+                      // section-bound handler so the DataTable doesn't see a
+                      // new identity per paint.
+                      onSelectionChange={(editEdit || editDelete || editAdd) ? setSectionSelection : undefined}
+                      selectionResetKey={selectionResetKey} />
                   ))}
                   {!e.sections.length && <p className="px-4 py-3 text-sm text-muted">{t("ed.boq.empty")}</p>}
                 </div>
+                {/* 28.2 — Sticky bulk-action bar. Renders only when the union
+                    of all per-section selections is non-empty. */}
+                <BulkBoqBar
+                  selectedCount={allSelectedIds.length}
+                  sections={e.sections}
+                  areas={areas.data ?? []}
+                  canDelete={editDelete}
+                  canAdd={editAdd}
+                  canEdit={editEdit}
+                  isPending={bulkBoq.isPending}
+                  onAction={runBulkBoq}
+                  onClear={clearAllBulkSelection}
+                />
 
                 {/* Prelims + markups */}
                 <div className="grid gap-4 sm:grid-cols-2">
