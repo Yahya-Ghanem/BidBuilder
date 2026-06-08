@@ -326,6 +326,9 @@ const en: Dict = {
   "rev.saveAsTemplate":  "Save as template",
   "rev.fromTemplate":    "From template",
   "rev.delete":          "Delete",
+  // 27.2 — caption shown next to the live-presence avatar cluster (hidden on
+  // narrow viewports — the avatars themselves carry the meaning via title).
+  "rev.presence.viewing": "Also viewing",
   "ed.export":           "Export",
   "ed.export.aria":      "Export this revision",
   // ── Settings tabs (25.2) ───────────────────────────────────────────────
@@ -644,6 +647,8 @@ const ar: Dict = {
   "rev.saveAsTemplate":  "حفظ كقالب",
   "rev.fromTemplate":    "من قالب",
   "rev.delete":          "حذف",
+  // 27.2 — تسمية تظهر بجانب مجموعة الصور الرمزية للمستخدمين المتواجدين على المراجعة.
+  "rev.presence.viewing": "يطّلع أيضًا",
   "ed.export":           "تصدير",
   "ed.export.aria":      "تصدير هذه المراجعة",
   // ── تبويبات الإعدادات (25.2) ───────────────────────────────────────────

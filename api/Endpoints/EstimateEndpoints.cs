@@ -1126,6 +1126,44 @@ public static class EstimateEndpoints
             await audit.LogAsync(me, "estimate.comment.delete", "Estimate", id.ToString(), $"item {iid} comment {cid}");
             return Results.NoContent();
         }).AllowWhenFinalised();
+
+        // 27.2 — Live presence on a revision: heartbeat + read. The editor posts a heartbeat
+        // every 30 s; the in-process PresenceStore records the observation and silently prunes
+        // entries older than its 90 s TTL. The list intentionally INCLUDES the caller — the UI
+        // filters self out of the avatar cluster, so both panes of the same browser session
+        // agree on identity. Boq+View is enough — viewing the revision is presence's whole
+        // precondition. AllowWhenFinalised on POST because presence is a read-equivalent write
+        // (it records observation, not estimate state); it stays available on Published or
+        // Superseded revisions so a reviewer's "who else is reading this" still works.
+        grp.MapPost("/{id:int}/presence", async (int id, ClaimsPrincipal me,
+            ProjectAccessService access, PermissionService perm, PresenceStore store) =>
+        {
+            var g = await Guard(me, id, Boq, ModuleAction.View, access, perm); if (g is not null) return g;
+            var users = store.Touch(id, me.Id(), me.Name(), me.Email(), DateTime.UtcNow);
+            return Results.Ok(new
+            {
+                users = users.Select(u => new
+                {
+                    id = u.UserId, name = u.Name, email = u.Email, lastSeenAt = u.LastSeenUtc,
+                }),
+            });
+        }).AllowWhenFinalised();
+
+        // GET — read-only snapshot of the bucket (still prunes stale entries on the way out
+        // so a passive observer page that never heartbeats can't see a ghost from yesterday).
+        grp.MapGet("/{id:int}/presence", async (int id, ClaimsPrincipal me,
+            ProjectAccessService access, PermissionService perm, PresenceStore store) =>
+        {
+            var g = await Guard(me, id, Boq, ModuleAction.View, access, perm); if (g is not null) return g;
+            var users = store.List(id, DateTime.UtcNow);
+            return Results.Ok(new
+            {
+                users = users.Select(u => new
+                {
+                    id = u.UserId, name = u.Name, email = u.Email, lastSeenAt = u.LastSeenUtc,
+                }),
+            });
+        });
     }
 
     /// <summary>Project access (hides existence with 404) then module permission (403).</summary>

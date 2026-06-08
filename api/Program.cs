@@ -81,6 +81,10 @@ builder.Services.AddScoped<JwtService>();
 // 22.2 — in-process per-API-key rate limiter (singleton; the fixed-window state must be
 // shared across requests). Read by ApiKeyGuard on every API-key request.
 builder.Services.AddSingleton<BidBuilder.Api.Auth.ApiKeyRateLimiter>();
+// 27.2 — in-process presence store ("who's viewing this revision"). Singleton because
+// the bucket map and per-user lastSeen state must be shared across requests; soft
+// state that refills within a poll cycle on restart, so no persistence layer needed.
+builder.Services.AddSingleton<BidBuilder.Api.Services.PresenceStore>();
 builder.Services.AddScoped<PermissionService>();
 builder.Services.AddScoped<ProjectAccessService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.RateEngine>();
