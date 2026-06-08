@@ -247,6 +247,21 @@ export interface CompareSectionRow { key: string; code: string; title: string; t
 /** 20.5 — full side-by-side comparison. */
 export interface CompareView { mixedCurrency: boolean; columns: CompareColumn[]; sections: CompareSectionRow[] }
 
+/** 27.1 — one comment on a BOQ line. */
+export interface BoqLineComment {
+  id: number
+  body: string
+  authorUserId: number
+  authorName: string
+  authorEmail: string
+  parentCommentId: number | null
+  createdAt: string
+  /** Null = open; ISO timestamp = resolved (drops out of the row's open-count badge). */
+  resolvedAt: string | null
+}
+/** 27.1 — open-comments count per BOQ item for the row-level icon badge. */
+export interface BoqCommentCount { itemId: number; openCount: number }
+
 /** 20.3 — one in-app notification in the bell dropdown. */
 export interface NotificationItem {
   id: number; type: string; title: string; body: string | null; link: string | null

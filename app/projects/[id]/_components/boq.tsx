@@ -1,11 +1,12 @@
 "use client"
 import { useMemo, useState } from "react"
-import { Layers, Plus, Trash2 } from "lucide-react"
+import { Layers, MessageSquare, Plus, Trash2 } from "lucide-react"
 import type { Area, AssemblyRow, CostComponentType, ItemBreakdown, SectionBreakdown } from "@/lib/types"
 import { Button, Input } from "@/components/ui"
 import { Field, Select } from "@/components/form"
 import { money, cn } from "@/lib/utils"
 import { Money } from "@/components/money"
+import { useT } from "@/lib/i18n"
 import { DataTable, type ColumnDef } from "@/components/data-table"
 import { CollapseToggle, ITEM_KINDS, kindLabel, type CompInput } from "./shared"
 import { BuildUpModal } from "./build-up-modal"
@@ -32,23 +33,35 @@ type CellDeps = {
   canDelete: boolean
   onUpd: (v: unknown) => void
   onDel: (iid: number) => void
+  /** 27.1 — per-item open-comments count for the row-level icon badge. */
+  commentCounts: Map<number, number>
+  /** 27.1 — open the side-panel thread for one BOQ line. */
+  onOpenComments: (item: ItemBreakdown) => void
+  /** 27.1 — i18n'd aria-label for the comment-icon button. */
+  commentsLabel: string
 }
 
 /** One BOQ section: collapsible header + DataTable of items + add-item form.
  *  Long sections (> VIRTUALIZE_THRESHOLD rows) automatically virtualize via
  *  the DataTable wrapper. */
-export function SectionBlock({ section, currency, assemblies, costTypes, areas, open, onToggle, canAdd, canEdit, canDelete, onAddItem, onUpdItem, onDelItem, onDelSection }: {
+export function SectionBlock({ section, currency, assemblies, costTypes, areas, open, onToggle, canAdd, canEdit, canDelete, commentCounts, onOpenComments, onAddItem, onUpdItem, onDelItem, onDelSection }: {
   section: SectionBreakdown; currency: string; assemblies: AssemblyRow[]; costTypes: CostComponentType[]; areas: Area[]
   open: boolean; onToggle: () => void
   canAdd: boolean; canEdit: boolean; canDelete: boolean
+  /** 27.1 — open-comments map (itemId → count) for the per-row icon badge. */
+  commentCounts: Map<number, number>
+  /** 27.1 — open the comment thread for a BOQ line. */
+  onOpenComments: (item: ItemBreakdown) => void
   onAddItem: (v: unknown) => void; onUpdItem: (v: unknown) => void; onDelItem: (iid: number) => void; onDelSection: () => void
 }) {
+  const t = useT()
+  const commentsLabel = t("ed.comments.openAria")
   // Memoize the column defs so the table doesn't rebuild on every parent
   // render — TanStack Table internals compare column identity to decide
   // whether to recompute the model.
   const columns = useMemo<ColumnDef<ItemBreakdown, unknown>[]>(
-    () => boqColumns({ currency, costTypes, areas, canEdit, canDelete, onUpd: onUpdItem, onDel: onDelItem }),
-    [currency, costTypes, areas, canEdit, canDelete, onUpdItem, onDelItem],
+    () => boqColumns({ currency, costTypes, areas, canEdit, canDelete, onUpd: onUpdItem, onDel: onDelItem, commentCounts, onOpenComments, commentsLabel }),
+    [currency, costTypes, areas, canEdit, canDelete, onUpdItem, onDelItem, commentCounts, onOpenComments, commentsLabel],
   )
   const longList = section.items.length > VIRTUALIZE_THRESHOLD
   const virtBanner = longList && (
@@ -103,7 +116,7 @@ export function SectionBlock({ section, currency, assemblies, costTypes, areas, 
  *  Total, Actions. The description column is rich (kind badge + cost build-
  *  up legend + area/kind selects) and gets a larger `size` hint to push the
  *  numeric columns into a tighter right-aligned cluster. */
-function boqColumns({ currency, costTypes, areas, canEdit, canDelete, onUpd, onDel }: CellDeps): ColumnDef<ItemBreakdown, unknown>[] {
+function boqColumns({ currency, costTypes, areas, canEdit, canDelete, onUpd, onDel, commentCounts, onOpenComments, commentsLabel }: CellDeps): ColumnDef<ItemBreakdown, unknown>[] {
   return [
     {
       id: "description",
@@ -146,7 +159,47 @@ function boqColumns({ currency, costTypes, areas, canEdit, canDelete, onUpd, onD
       size: 80,
       cell: ({ row }) => <ActionsCell item={row.original} costTypes={costTypes} currency={currency} canEdit={canEdit} canDelete={canDelete} onUpd={onUpd} onDel={() => onDel(row.original.id)} />,
     },
+    {
+      // 27.1 — Trailing comment column: an icon-button with an unread-style
+      // badge when the row has open comments. The icon is ALWAYS visible
+      // (anyone with boq.view can read a thread), independent of the can*
+      // edit flags — read-only viewers can still see the discussion.
+      id: "comments",
+      header: "",
+      size: 44,
+      cell: ({ row }) => <CommentsCell item={row.original} commentCounts={commentCounts} onOpenComments={onOpenComments} commentsLabel={commentsLabel} />,
+    },
   ]
+}
+
+function CommentsCell({ item, commentCounts, onOpenComments, commentsLabel }: {
+  item: ItemBreakdown
+  commentCounts: Map<number, number>
+  onOpenComments: (item: ItemBreakdown) => void
+  commentsLabel: string
+}) {
+  const count = commentCounts.get(item.id) ?? 0
+  return (
+    <div className="flex items-center justify-end">
+      <button
+        type="button"
+        onClick={() => onOpenComments(item)}
+        title={commentsLabel}
+        aria-label={count > 0 ? `${commentsLabel} (${count})` : commentsLabel}
+        className={cn(
+          "relative rounded p-1 hover:bg-slate-100",
+          count > 0 ? "text-[var(--brand)]" : "text-muted",
+        )}
+      >
+        <MessageSquare className="h-3.5 w-3.5" />
+        {count > 0 && (
+          <span className="absolute -end-0.5 -top-0.5 grid min-w-[14px] place-items-center rounded-full bg-rose-600 px-0.5 text-[9px] font-bold leading-[14px] text-white">
+            {count > 9 ? "9+" : count}
+          </span>
+        )}
+      </button>
+    </div>
+  )
 }
 
 /** Description column — the rich one. Renders the line description, an
