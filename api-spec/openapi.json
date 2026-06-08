@@ -978,6 +978,41 @@
         },
         "type": "object"
       },
+      "PresenceListDto": {
+        "additionalProperties": false,
+        "properties": {
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/PresenceUserDto"
+            },
+            "nullable": true,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PresenceUserDto": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "lastSeenAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "ProblemDetails": {
         "additionalProperties": {},
         "properties": {
@@ -4138,6 +4173,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresenceListDto"
+                }
+              }
+            },
             "description": "OK"
           }
         },
@@ -4159,6 +4201,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresenceListDto"
+                }
+              }
+            },
             "description": "OK"
           }
         },

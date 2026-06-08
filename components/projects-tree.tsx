@@ -59,9 +59,27 @@ function Row({
   onToggle?: () => void; onDoubleClick?: () => void; title?: string
 }) {
   const interactive = !!(onToggle || onDoubleClick)
+  // 27.x — keyboard activation. Previously the row was an onClick-only <div>,
+  // so keyboard users couldn't expand a project, pin/recent group, or open
+  // "Full display" from the sidebar. Now it's role="treeitem" (matches the
+  // tree pattern the component implements) + tabIndex when interactive +
+  // Enter/Space maps to onToggle, falling through to onDoubleClick for the
+  // leaf "Full display" row that has no toggle.
+  const onKeyDown = interactive
+    ? (ev: React.KeyboardEvent<HTMLDivElement>) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault()
+          ;(onToggle ?? onDoubleClick)?.()
+        }
+      }
+    : undefined
   return (
     <div
-      className={`flex items-center gap-1.5 rounded px-1 py-1 text-sm select-none ${interactive ? "cursor-pointer" : ""} ${selected ? "bg-[var(--brand)]/10 text-[var(--brand)]" : "hover:bg-slate-100 text-slate-700"}`}
+      role={interactive ? "treeitem" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-expanded={hasChildren ? !!open : undefined}
+      onKeyDown={onKeyDown}
+      className={`flex items-center gap-1.5 rounded px-1 py-1 text-sm select-none outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] ${interactive ? "cursor-pointer" : ""} ${selected ? "bg-[var(--brand)]/10 text-[var(--brand)]" : "hover:bg-slate-100 text-slate-700"}`}
       style={{ paddingLeft: depth * 14 + 4 }}
       onClick={onToggle}
       onDoubleClick={onDoubleClick}

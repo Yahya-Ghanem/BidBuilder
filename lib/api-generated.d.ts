@@ -3051,7 +3051,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PresenceListDto"];
+                    };
                 };
             };
         };
@@ -3072,7 +3074,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PresenceListDto"];
+                    };
                 };
             };
         };
@@ -6501,6 +6505,17 @@ export interface components {
             kind?: string | null;
             /** Format: int32 */
             sortOrder?: number;
+        };
+        PresenceListDto: {
+            users?: components["schemas"]["PresenceUserDto"][] | null;
+        };
+        PresenceUserDto: {
+            email?: string | null;
+            /** Format: int32 */
+            id?: number;
+            /** Format: date-time */
+            lastSeenAt?: string;
+            name?: string | null;
         };
         ProblemDetails: {
             detail?: string | null;
