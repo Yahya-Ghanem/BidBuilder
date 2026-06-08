@@ -31,10 +31,13 @@ describe("parseQuery", () => {
   })
 
   it("other known prefixes route to the right entity type", () => {
-    expect(parseQuery("@e Bid").entityType).toBe("estimate")
-    expect(parseQuery("@r cement").entityType).toBe("resource")
-    expect(parseQuery("@a wall").entityType).toBe("assembly")
-    expect(parseQuery("@asm wall").entityType).toBe("assembly")
+    // `.entityType` only exists on the search branch of the union, so each
+    // assertion uses toEqual on the whole object — this also catches a future
+    // bug where the parser leaks the prefix into the term.
+    expect(parseQuery("@e Bid")).toEqual({ mode: "search", entityType: "estimate", term: "Bid" })
+    expect(parseQuery("@r cement")).toEqual({ mode: "search", entityType: "resource", term: "cement" })
+    expect(parseQuery("@a wall")).toEqual({ mode: "search", entityType: "assembly", term: "wall" })
+    expect(parseQuery("@asm wall")).toEqual({ mode: "search", entityType: "assembly", term: "wall" })
   })
 
   it("unknown @ prefix → search mode, no filter, term is the whole string", () => {
@@ -51,6 +54,6 @@ describe("parseQuery", () => {
 
   it("leading whitespace before a sigil is fine", () => {
     expect(parseQuery("  > sign")).toEqual({ mode: "actions", term: "sign" })
-    expect(parseQuery("  @p Sun").entityType).toBe("project")
+    expect(parseQuery("  @p Sun")).toEqual({ mode: "search", entityType: "project", term: "Sun" })
   })
 })
