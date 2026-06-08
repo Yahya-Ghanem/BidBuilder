@@ -140,4 +140,31 @@ public class NotificationTests(ApiFixture fx)
         var r = await intruder.PostAsync($"/api/notifications/{nid}/read", null);
         Assert.Equal(HttpStatusCode.NotFound, r.StatusCode);
     }
+
+    // 27.4 — the list DTO exposes ReadAt: null while unread, an ISO timestamp once read.
+    // The bell uses this to drive the Unread/Earlier split.
+    [Fact]
+    public async Task ReadAt_is_null_until_marked_then_set()
+    {
+        var admin = await fx.AdminClientAsync();
+        (await ClearApprovalRequirement(admin)).EnsureSuccessStatusCode();
+        var me = await NewAdminAsync(admin, "notif.readat.recipient@bidbuilder.local");
+
+        var pid = await Api.ProjectIdAsync(admin);
+        var eid = await Api.NewEstimateAsync(admin, pid, "notif-readat");
+        (await Api.PutMetaAsync(admin, eid, new { status = "Published" })).EnsureSuccessStatusCode();
+
+        var item = (await InboxAsync(me)).GetProperty("items").EnumerateArray()
+            .First(x => x.GetProperty("entityKey").GetString() == eid.ToString());
+        Assert.False(item.GetProperty("isRead").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, item.GetProperty("readAt").ValueKind);   // unread → null
+        var nid = item.GetProperty("id").GetInt64();
+
+        (await me.PostAsync($"/api/notifications/{nid}/read", null)).EnsureSuccessStatusCode();
+
+        var read = (await InboxAsync(me)).GetProperty("items").EnumerateArray()
+            .First(x => x.GetProperty("id").GetInt64() == nid);
+        Assert.True(read.GetProperty("isRead").GetBoolean());
+        Assert.Equal(JsonValueKind.String, read.GetProperty("readAt").ValueKind);  // read → ISO timestamp
+    }
 }

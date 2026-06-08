@@ -7,7 +7,7 @@ namespace BidBuilder.Api.Endpoints;
 
 /// <summary>One notification as shown in the bell dropdown.</summary>
 public record NotificationDto(long Id, string Type, string Title, string? Body, string? Link,
-    string? EntityType, string? EntityKey, bool IsRead, DateTime CreatedAt);
+    string? EntityType, string? EntityKey, bool IsRead, DateTime CreatedAt, DateTime? ReadAt);
 /// <summary>A page of the current user's notifications plus their unread total.</summary>
 public record NotificationListDto(int UnreadCount, IReadOnlyList<NotificationDto> Items);
 
@@ -36,7 +36,7 @@ public static class NotificationEndpoints
             var items = await q
                 .OrderByDescending(x => x.Id)
                 .Take(n)
-                .Select(x => new NotificationDto(x.Id, x.Type, x.Title, x.Body, x.Link, x.EntityType, x.EntityKey, x.IsRead, x.CreatedAt))
+                .Select(x => new NotificationDto(x.Id, x.Type, x.Title, x.Body, x.Link, x.EntityType, x.EntityKey, x.IsRead, x.CreatedAt, x.ReadAt))
                 .ToListAsync();
             return Results.Ok(new NotificationListDto(unread, items));
         });
