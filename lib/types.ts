@@ -262,6 +262,17 @@ export interface BoqLineComment {
 /** 27.1 — open-comments count per BOQ item for the row-level icon badge. */
 export interface BoqCommentCount { itemId: number; openCount: number }
 
+/** 27.2 — one viewer currently on a revision; the heartbeat endpoint refreshes
+ *  lastSeenAt every 30 s. The store TTL is 90 s server-side, so a viewer drops
+ *  off the list after one missed heartbeat plus jitter. */
+export interface PresenceUser {
+  id: number
+  name: string
+  email: string
+  lastSeenAt: string
+}
+export interface PresenceList { users: PresenceUser[] }
+
 /** 20.3 — one in-app notification in the bell dropdown. */
 export interface NotificationItem {
   id: number; type: string; title: string; body: string | null; link: string | null

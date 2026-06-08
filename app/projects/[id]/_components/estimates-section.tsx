@@ -6,7 +6,9 @@ import { toast } from "sonner"
 import { Copy, FileStack, FolderInput, Plus, Save, Trash2 } from "lucide-react"
 import { fetchApi } from "@/lib/api"
 import { usePermissions } from "@/lib/permissions"
-import type { EstimateSummary, EstimateTemplate, Project } from "@/lib/types"
+import { useAuth } from "@/lib/auth"
+import { usePresence } from "@/lib/usePresence"
+import type { EstimateSummary, EstimateTemplate, PresenceUser, Project } from "@/lib/types"
 import { Card, Button, DropdownButton, Input, type DropdownItem } from "@/components/ui"
 import { Field, Modal, Select, Textarea } from "@/components/form"
 import { money } from "@/lib/utils"
@@ -40,6 +42,14 @@ export function EstimatesSection({ projectId }: { projectId: number }) {
   const currentId = selectedId != null && list.some((e) => e.id === selectedId) ? selectedId : list[list.length - 1]?.id ?? null
   // 25.3 — Compare moved into the Insights tab (rendered by <EstimateEditor>),
   // so the revision-bar toggle is no longer needed here.
+  // 27.2 — Heartbeat presence on the currently-viewed revision. The hook is a
+  // no-op when no revision is selected (initial load / empty project).
+  const { user } = useAuth()
+  const { users: presenceUsers } = usePresence(currentId)
+  // The server-side list includes the caller; filter self so the cluster shows
+  // OTHER viewers only. Both halves of the same browser session agree on the
+  // server's identity (JWT sub), so this stays consistent across tabs.
+  const otherViewers = user ? presenceUsers.filter((u) => u.id !== user.id) : presenceUsers
 
   const createBlank = useMutation({
     mutationFn: (title: string) => fetchApi<EstimateSummary>(`/api/projects/${projectId}/estimates`, { method: "POST", body: JSON.stringify({ title }) }),
@@ -145,14 +155,19 @@ export function EstimatesSection({ projectId }: { projectId: number }) {
             ))}
           </Select>
         </div>
-        {actionItems.length > 0 && (
-          <DropdownButton
-            ariaLabel={t("rev.actions.aria")}
-            className="h-8 text-sm"
-            label={t("rev.actions")}
-            items={actionItems}
-          />
-        )}
+        <div className="flex items-center gap-2">
+          {/* 27.2 — "Who else is viewing this revision" cluster. Hidden when nobody
+              else is here so the bar doesn't gain noise on solo work. */}
+          {otherViewers.length > 0 && <PresenceCluster users={otherViewers} label={t("rev.presence.viewing")} />}
+          {actionItems.length > 0 && (
+            <DropdownButton
+              ariaLabel={t("rev.actions.aria")}
+              className="h-8 text-sm"
+              label={t("rev.actions")}
+              items={actionItems}
+            />
+          )}
+        </div>
       </Card>
 
       {currentId != null && <EstimateEditor key={currentId} estimateId={currentId} projectId={projectId} canEditMeta={canEditMeta} estimatesList={list} />}
@@ -172,6 +187,62 @@ export function EstimatesSection({ projectId }: { projectId: number }) {
       )}
     </div>
   )
+}
+
+/** 27.2 — Compact "who else is here" avatar cluster shown next to the
+ *  Actions ▾ dropdown on the revision bar. Up to 3 initial-circles + a "+N"
+ *  pill for the overflow; each avatar carries a `title` so the cursor reveals
+ *  the full identity (name preferred, email as fallback). Reused token
+ *  surfaces (border-primary/20, bg-primary/10) so the cluster picks up the
+ *  current brand without a custom palette. Empty list → caller hides the
+ *  cluster entirely; this component assumes `users.length > 0`. */
+function PresenceCluster({ users, label }: { users: PresenceUser[]; label: string }) {
+  const VISIBLE = 3
+  const shown = users.slice(0, VISIBLE)
+  const overflow = users.length - shown.length
+  // Combined a11y label so a screen reader announces the whole cluster as
+  // "Also viewing: Alice, Bob and 2 more" in a single utterance.
+  const names = users.map((u) => u.name?.trim() || u.email).join(", ")
+  return (
+    <div className="flex items-center gap-1" aria-label={`${label}: ${names}`}>
+      <span className="hidden text-xs text-muted sm:inline">{label}</span>
+      <div className="flex -space-x-2">
+        {shown.map((u) => (
+          <span
+            key={u.id}
+            title={u.name?.trim() || u.email}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-card bg-primary/10 text-[11px] font-semibold uppercase text-primary"
+          >
+            {presenceInitials(u)}
+          </span>
+        ))}
+        {overflow > 0 && (
+          <span
+            title={users.slice(VISIBLE).map((u) => u.name?.trim() || u.email).join(", ")}
+            className="inline-flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-card bg-slate-100 px-1.5 text-[11px] font-semibold text-slate-600"
+          >
+            +{overflow}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Two-letter initials for the avatar circles. Falls back to email's first
+ *  letter when the user has no name set (the API tolerates an empty Name
+ *  claim, e.g. SSO-provisioned accounts before the user picked a display name).
+ *  Returns "?" only as a last resort — never an empty string, which would
+ *  collapse the avatar to a hairline circle. */
+function presenceInitials(u: PresenceUser): string {
+  const name = (u.name ?? "").trim()
+  if (name) {
+    const parts = name.split(/\s+/).filter(Boolean)
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    return parts[0].slice(0, 2).toUpperCase()
+  }
+  const email = (u.email ?? "").trim()
+  return email ? email.slice(0, 2).toUpperCase() : "?"
 }
 
 /** 21.3 — Save the current estimate's structure as a reusable tenant template. */
