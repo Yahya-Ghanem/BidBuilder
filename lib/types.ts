@@ -45,6 +45,12 @@ export interface Project {
   projectTypeName: string | null
 }
 
+/** 27.5 — the signed-in user's sidebar personalisation (pinned + recent projects). */
+export interface UserPreferences {
+  pinnedProjectIds: number[]
+  recentProjectIds: number[]
+}
+
 export interface ModulePermission {
   code: string
   name: string

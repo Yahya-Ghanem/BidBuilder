@@ -5,13 +5,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
-  Plus, ChevronRight, ChevronDown, Building2, Folder, FolderOpen, FileText, ExternalLink, Maximize2, LayoutGrid, Tag,
+  Plus, ChevronRight, ChevronDown, Building2, Folder, FolderOpen, FileText, ExternalLink, Maximize2, LayoutGrid, Tag, Star, Clock,
 } from "lucide-react"
 import { toast } from "sonner"
 import { fetchApi } from "@/lib/api"
 import { usePermissions } from "@/lib/permissions"
 import { useT } from "@/lib/i18n"
-import type { Project, EstimateSummary, EstimateBreakdown, Area, AreaRollup, ProjectType } from "@/lib/types"
+import type { Project, EstimateSummary, EstimateBreakdown, Area, AreaRollup, ProjectType, UserPreferences } from "@/lib/types"
 import { Button, Input, Card } from "@/components/ui"
 import { Modal, Field, Select } from "@/components/form"
 import { Money } from "@/components/money"
@@ -85,10 +85,54 @@ export function ProjectsSidebarTree() {
   const [open, setOpen] = useState(true)
   return (
     <div className="mt-1">
+      <FavoriteSections />
       <Row depth={1} open={open} hasChildren icon={<Building2 className="h-3.5 w-3.5" />} label="Projects" hint="(root)"
         onToggle={() => setOpen((o) => !o)} />
       {open && <ProjectsBranch depth={2} />}
     </div>
+  )
+}
+
+// 27.5 — the signed-in user's pinned + recent projects. Shared cache key so a
+// pin/visit anywhere refreshes both the header and this sidebar.
+export function usePreferences() {
+  return useQuery({ queryKey: ["preferences"], queryFn: () => fetchApi<UserPreferences>("/api/preferences") })
+}
+
+/* 27.5 — "Pinned" and "Recent" personal shortcuts above the type-grouped tree.
+   Both derive from the SAME ['projects'] list the tree already loads (so they stay
+   in sync and access-scoped) intersected with the user's saved preference ids. Each
+   section renders only when non-empty, so a brand-new user just sees the normal tree. */
+function FavoriteSections() {
+  const t = useT()
+  const projects = useQuery({ queryKey: ["projects"], queryFn: () => fetchApi<Project[]>("/api/projects") })
+  const prefs = usePreferences()
+  const [pinnedOpen, setPinnedOpen] = useState(true)
+  const [recentOpen, setRecentOpen] = useState(true)
+
+  const byId = new Map((projects.data ?? []).map((p) => [p.id, p]))
+  const resolve = (ids: number[]) => ids.map((id) => byId.get(id)).filter((p): p is Project => !!p)
+  const pinned = resolve(prefs.data?.pinnedProjectIds ?? [])
+  const recent = resolve(prefs.data?.recentProjectIds ?? []).slice(0, 5)
+
+  if (!pinned.length && !recent.length) return null
+  return (
+    <>
+      {pinned.length > 0 && (
+        <div>
+          <Row depth={1} open={pinnedOpen} hasChildren icon={<Star className="h-3.5 w-3.5" />}
+            label={t("nav.pinned")} hint={`${pinned.length}`} onToggle={() => setPinnedOpen((o) => !o)} />
+          {pinnedOpen && pinned.map((p) => <ProjectBranch key={`pin-${p.id}`} project={p} depth={2} />)}
+        </div>
+      )}
+      {recent.length > 0 && (
+        <div>
+          <Row depth={1} open={recentOpen} hasChildren icon={<Clock className="h-3.5 w-3.5" />}
+            label={t("nav.recent")} hint={`${recent.length}`} onToggle={() => setRecentOpen((o) => !o)} />
+          {recentOpen && recent.map((p) => <ProjectBranch key={`recent-${p.id}`} project={p} depth={2} />)}
+        </div>
+      )}
+    </>
   )
 }
 

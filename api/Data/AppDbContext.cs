@@ -30,6 +30,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<Notification>   Notifications  => Set<Notification>();
     // Per-user email-digest opt-in (22.1) — one row per user per tenant.
     public DbSet<NotificationDigestPreference> NotificationDigestPreferences => Set<NotificationDigestPreference>();
+    // Per-user sidebar personalisation (27.5) — pinned + recent projects, one row per user per tenant.
+    public DbSet<UserPreferences> UserPreferences => Set<UserPreferences>();
     // Outbound webhooks (20.9) — tenant-configured event subscriptions.
     public DbSet<WebhookSubscription> WebhookSubscriptions => Set<WebhookSubscription>();
 
@@ -374,6 +376,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             // At most one preference per user per tenant; also the lookup key.
             b.HasIndex(p => new { p.TenantId, p.UserId }).IsUnique();
             b.Property(p => p.Frequency).HasConversion<string>().HasMaxLength(16);
+            b.HasQueryFilter(p => p.TenantId == _tenant.TenantId);
+        });
+
+        // ── UserPreferences (27.5 pinned + recent projects) ──────────────────
+        mb.Entity<UserPreferences>(b =>
+        {
+            // At most one preferences row per user per tenant; also the lookup key.
+            b.HasIndex(p => new { p.TenantId, p.UserId }).IsUnique();
+            b.Property(p => p.PinnedProjectIds).HasMaxLength(4000).IsRequired();
+            b.Property(p => p.RecentProjectIds).HasMaxLength(2000).IsRequired();
             b.HasQueryFilter(p => p.TenantId == _tenant.TenantId);
         });
 

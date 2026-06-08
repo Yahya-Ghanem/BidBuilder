@@ -902,6 +902,19 @@
         },
         "type": "object"
       },
+      "PinProjectInput": {
+        "additionalProperties": false,
+        "properties": {
+          "pinned": {
+            "type": "boolean"
+          },
+          "projectId": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "PortalSubmitInput": {
         "additionalProperties": false,
         "properties": {
@@ -1073,6 +1086,16 @@
           "suggestedRate": {
             "format": "double",
             "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "RecordRecentInput": {
+        "additionalProperties": false,
+        "properties": {
+          "projectId": {
+            "format": "int32",
+            "type": "integer"
           }
         },
         "type": "object"
@@ -4518,6 +4541,62 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PortalSubmitInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/preferences": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/preferences/pinned": {
+      "put": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinProjectInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/preferences/recent": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordRecentInput"
               }
             }
           },
