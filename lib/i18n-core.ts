@@ -41,6 +41,8 @@ const en: Dict = {
   "ed.comments.resolve": "Resolve",
   "ed.comments.reopen": "Reopen",
   "ed.comments.deleteConfirm": "Delete this comment?",
+  // 27.3 — mobile honest-mode banner
+  "ed.mobileReadOnlyBanner": "Editing the BOQ needs a larger screen — you're in read-only view.",
   "shell.account": "Account & security",
   "shell.signOut": "Sign out",
   "shell.loading": "Loading…",
@@ -370,6 +372,8 @@ const ar: Dict = {
   "ed.comments.resolve": "حل",
   "ed.comments.reopen": "إعادة فتح",
   "ed.comments.deleteConfirm": "حذف هذا التعليق؟",
+  // 27.3 — mobile honest-mode banner
+  "ed.mobileReadOnlyBanner": "تعديل جدول الكميات يتطلب شاشة أكبر — أنت في وضع القراءة فقط.",
   "shell.account": "الحساب والأمان",
   "shell.signOut": "تسجيل الخروج",
   "shell.loading": "جارٍ التحميل…",

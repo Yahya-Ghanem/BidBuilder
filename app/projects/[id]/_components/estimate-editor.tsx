@@ -6,6 +6,7 @@ import { FileDown, FileSpreadsheet, FileText, Table, Upload } from "lucide-react
 import { ApiError, downloadFile, fetchApi, uploadFile } from "@/lib/api"
 import type { Area, AssemblyRow, BoqCommentCount, CostComponentType, CurrencyRates, EstimateBreakdown, EstimateSummary, ImportResult, ItemBreakdown } from "@/lib/types"
 import { usePermissions } from "@/lib/permissions"
+import { useViewport } from "@/lib/useViewport"
 import { Badge, Button, DropdownButton, statusColor, type DropdownItem } from "@/components/ui"
 import { Select } from "@/components/form"
 import { Money } from "@/components/money"
@@ -60,6 +61,12 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
   const t = useT()
   const qc = useQueryClient()
   const { can } = usePermissions()
+  // 27.3 — Mobile honest-mode: at <=768px (Tailwind md) the BOQ table, build-up
+  // modal, and what-if/target/risk panels don't work usefully on a phone, so
+  // every edit affordance collapses to read-only. AND'd into the editX flags
+  // below so all downstream surfaces gate on a single source of truth (mirrors
+  // the existing `locked` precedent).
+  const { isMobile } = useViewport()
   const boqAdd = can("boq", "add"), boqEdit = can("boq", "edit"), boqDelete = can("boq", "delete")
   const plmView = can("prelims-markups", "view"), plmAdd = can("prelims-markups", "add")
   const plmEdit = can("prelims-markups", "edit"), plmDelete = can("prelims-markups", "delete")
@@ -147,8 +154,12 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
   // A Published/Superseded revision is locked: content edits are blocked server-side,
   // so suppress the affordances here too (the status dropdown stays usable to revert).
   const locked = e.status === "Published" || e.status === "Superseded"
-  const editAdd = boqAdd && !locked, editEdit = boqEdit && !locked, editDelete = boqDelete && !locked
-  const editPlmAdd = plmAdd && !locked, editPlmDelete = plmDelete && !locked
+  // 27.3 — `editable` ANDs locked + isMobile so every BOQ/prelim/markup write
+  // gate flips together. plmEdit (used inline below) gets the same treatment
+  // via `editPlmEdit`.
+  const editable = !locked && !isMobile
+  const editAdd = boqAdd && editable, editEdit = boqEdit && editable, editDelete = boqDelete && editable
+  const editPlmAdd = plmAdd && editable, editPlmEdit = plmEdit && editable, editPlmDelete = plmDelete && editable
 
   async function dl(kind: "xlsx" | "pdf" | "csv") {
     try {
@@ -259,6 +270,17 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
       {locked && (
         <div className="rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-warning">
           {t("ed.lockedBanner", { status: e.status })}
+        </div>
+      )}
+      {/* 27.3 — Mobile honest-mode banner: a phone CAN'T usefully drive the
+          BOQ table, the cost-build-up modal, or the what-if/target/risk
+          panels, so they collapse to read-only below md (=768px). Pretending
+          they work would be worse than telling the truth. Reuses the locked-
+          banner styling so contrast/colour is already AA-cleared. Renders
+          only on mobile (and even when locked, so the user sees both signals). */}
+      {isMobile && (
+        <div className="rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-warning md:hidden">
+          {t("ed.mobileReadOnlyBanner")}
         </div>
       )}
       {/* 25.3 + 25.5 — Stat cards: ALWAYS visible above the tab strip (sticky
@@ -376,12 +398,12 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
 
                 {plmView && e.markups.length > 0 && (
                   <WhatIfPanel key={e.markups.map((m) => m.id).join(",")}
-                    estimateId={estimateId} markups={e.markups} currency={c} canEdit={plmEdit && !locked} />
+                    estimateId={estimateId} markups={e.markups} currency={c} canEdit={editPlmEdit} />
                 )}
 
                 {plmView && (
                   <TargetPanel estimateId={estimateId} currency={c} currentBid={e.bidPrice}
-                    currentAdjustment={e.commercialAdjustment} canApply={plmEdit && !locked} />
+                    currentAdjustment={e.commercialAdjustment} canApply={editPlmEdit} />
                 )}
               </div>
             ),
@@ -416,7 +438,7 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
                     suggestedAmount={e.suggestedContingencyAmount ?? 0}
                     suggestedPct={e.suggestedContingencyPct ?? 0}
                     cashFlow={e.cashFlow}
-                    canEdit={plmEdit && !locked} />
+                    canEdit={editPlmEdit} />
                 ) : (
                   <p className="text-sm text-slate-500">{t("common.loading")}</p>
                 )}
