@@ -85,6 +85,34 @@ public class UserPreferenceTests(ApiFixture fx)
         Assert.Equal(HttpStatusCode.NotFound, r.StatusCode);
     }
 
+    // 27.x — closeout fix: cap the pin list at PinCap (50) and return 400 with a
+    // clean message rather than EF's truncation 500 when the CSV column overflows.
+    [Fact]
+    public async Task Pin_overflow_past_cap_returns_400_not_500()
+    {
+        var admin = await fx.AdminClientAsync();
+        var c = await fx.AuthedClientAsync(await NewUserEmail(), "Pw@123456");
+        // Provision PinCap+1 accessible projects (the test user is a TenantAdmin so
+        // CanAccessProjectAsync passes for any project in this tenant).
+        var ids = new List<int>();
+        for (int i = 0; i < BidBuilder.Api.Models.UserPreferences.PinCap; i++)
+        {
+            var p = (await (await admin.PostAsJsonAsync("/api/projects",
+                new { name = $"PinCap-{i}-" + Guid.NewGuid().ToString("N")[..6] })).Json())
+                .GetProperty("id").GetInt32();
+            ids.Add(p);
+        }
+        // Pin all PinCap allowed.
+        foreach (var pid in ids)
+            (await c.PutAsJsonAsync("/api/preferences/pinned", new { projectId = pid, pinned = true })).EnsureSuccessStatusCode();
+
+        // One more should bounce with 400 — NOT a server-side 500.
+        var overflow = (await (await admin.PostAsJsonAsync("/api/projects",
+            new { name = "PinCap-overflow" })).Json()).GetProperty("id").GetInt32();
+        var r = await c.PutAsJsonAsync("/api/preferences/pinned", new { projectId = overflow, pinned = true });
+        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+    }
+
     [Fact]
     public async Task Recording_an_inaccessible_project_is_404()
     {

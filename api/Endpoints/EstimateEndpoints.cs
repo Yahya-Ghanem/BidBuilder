@@ -1069,7 +1069,13 @@ public static class EstimateEndpoints
 
             // @mention fan-out: bound to the project audience so a comment can't
             // notify a user outside the team (and silently exclude the author).
-            var mentioned = input.MentionedUserIds?.Where(uid => uid > 0).Distinct().ToList() ?? [];
+            // 27.x — entityType + entityKey scoped to the BOQ ITEM (not just the
+            // estimate) so 27.4's notifications-bell grouping bucket is per-line.
+            // Estimate-level entityKey would collapse two unrelated @mentions on
+            // different lines into a single "N mentioned you" group, hiding the
+            // per-line context. Cap mentioned ids at 50 so a runaway client can't
+            // fan out an unbounded notification storm.
+            var mentioned = input.MentionedUserIds?.Where(uid => uid > 0).Distinct().Take(50).ToList() ?? [];
             if (mentioned.Count > 0)
             {
                 var projectId = await db.Estimates.Where(e => e.Id == id).Select(e => e.ProjectId).FirstAsync();
@@ -1083,7 +1089,7 @@ public static class EstimateEndpoints
                         title: $"{me.Name()} mentioned you in a BOQ comment",
                         body: snippet,
                         link: $"/projects/{projectId}",
-                        entityType: "Estimate", entityKey: id.ToString());
+                        entityType: "BoqItem", entityKey: iid.ToString());
                 }
             }
 

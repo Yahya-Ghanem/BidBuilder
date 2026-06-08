@@ -279,7 +279,7 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
           banner styling so contrast/colour is already AA-cleared. Renders
           only on mobile (and even when locked, so the user sees both signals). */}
       {isMobile && (
-        <div className="rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-warning md:hidden">
+        <div role="status" aria-live="polite" className="rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-warning md:hidden">
           {t("ed.mobileReadOnlyBanner")}
         </div>
       )}
