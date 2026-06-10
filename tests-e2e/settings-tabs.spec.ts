@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test"
+import { createTestUser, deleteTestUser, signIn, type TestUser } from "./_helpers/auth"
 
 /**
  * 25.2 — Settings sub-navigation smoke.
@@ -17,13 +18,14 @@ import { test, expect } from "@playwright/test"
  * resilient to seed drift the way 25.3's project-tabs spec does.
  */
 
-test("settings page renders four tabs and deep-links via ?tab=", async ({ page }) => {
-  // Sign in — /settings is gated.
-  await page.goto("/login")
-  await page.locator('input[type="email"]').fill("admin@bidbuilder.local")
-  await page.locator('input[type="password"]').fill("Admin@12345")
-  await page.getByRole("button", { name: /sign in/i }).click()
-  await expect(page).toHaveURL(/\/projects/, { timeout: 15_000 })
+// 29.A.1 — per-spec throwaway user, torn down after the test.
+let user: TestUser | undefined
+test.afterEach(async ({ request }) => { await deleteTestUser(request, user); user = undefined })
+
+test("settings page renders four tabs and deep-links via ?tab=", async ({ page, request }) => {
+  // Sign in — /settings is gated. Per-spec user, no login-UI round-trip.
+  user = await createTestUser(request)
+  await signIn(page, user)
 
   await page.goto("/settings")
 

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test"
+import { createTestUser, deleteTestUser, signIn, type TestUser } from "./_helpers/auth"
 
 /**
  * 25.4 — Revision-bar consolidation smoke.
@@ -21,15 +22,15 @@ import { test, expect } from "@playwright/test"
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8081"
 const TENANT = "default"
 
-test("revision bar collapses lifecycle into Actions ▾ and exports into Export ▾", async ({ page, request }) => {
-  await page.goto("/login")
-  await page.locator('input[type="email"]').fill("admin@bidbuilder.local")
-  await page.locator('input[type="password"]').fill("Admin@12345")
-  await page.getByRole("button", { name: /sign in/i }).click()
-  await expect(page).toHaveURL(/\/projects/, { timeout: 15_000 })
+// 29.A.1 — per-spec throwaway user, torn down after the test.
+let user: TestUser | undefined
+test.afterEach(async ({ request }) => { await deleteTestUser(request, user); user = undefined })
 
-  const token = await page.evaluate(() => localStorage.getItem("bb_token"))
-  expect(token).toBeTruthy()
+test("revision bar collapses lifecycle into Actions ▾ and exports into Export ▾", async ({ page, request }) => {
+  // Sign in as a per-spec user — token injected, no login-UI round-trip.
+  user = await createTestUser(request)
+  await signIn(page, user)
+  const token = user.token
   const projectsRes = await request.get(`${API_URL}/api/projects`, {
     headers: { Authorization: `Bearer ${token}`, "X-Tenant-Id": TENANT },
   })

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test"
+import { createTestUser, deleteTestUser, type TestUser } from "./_helpers/auth"
 
 /**
  * 19.6 + 20.1 — End-to-end happy path against the live stack.
@@ -31,13 +32,21 @@ import { test, expect } from "@playwright/test"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8081"
 
+// 29.A.1 — this is the ONE spec that drives the real login UI (that's part of
+// its purpose), but it signs in as its own throwaway user, not the shared
+// admin. A single real login per run sits comfortably inside the default
+// 10/60s rate limit.
+let user: TestUser | undefined
+test.afterEach(async ({ request }) => { await deleteTestUser(request, user); user = undefined })
+
 test.describe("Happy path", () => {
   test("login → projects → open project", async ({ page, request }) => {
+    user = await createTestUser(request)
     await page.goto("/login")
 
     await expect(page.getByRole("heading", { name: /sign in|bidbuilder/i }).or(page.locator("text=BidBuilder"))).toBeVisible()
-    await page.locator('input[type="email"]').fill("admin@bidbuilder.local")
-    await page.locator('input[type="password"]').fill("Admin@12345")
+    await page.locator('input[type="email"]').fill(user.email)
+    await page.locator('input[type="password"]').fill(user.password)
     await page.getByRole("button", { name: /sign in/i }).click()
 
     await expect(page).toHaveURL(/\/projects/, { timeout: 15_000 })

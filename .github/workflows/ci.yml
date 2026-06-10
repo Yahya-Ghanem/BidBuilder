@@ -117,13 +117,12 @@ jobs:
       # The cascade runs INLINE so a publish flow doesn't race a Hangfire worker —
       # mirrors the api.Tests fixture.
       Hangfire__Enabled: "false"
-      # The login policy defaults to 10/60s/IP to slow brute-force. The E2E job
-      # fires every spec from one runner IP, so each new spec costs one login
-      # against that shared budget — once the spec count crossed 10 the last
-      # specs in the parallel pool started hitting 429 and never redirecting
-      # off /login. Lift the ceiling for the CI runner only; production keeps
-      # the strict default. Window stays at the default 60s.
-      RateLimiting__Login__PermitLimit: "200"
+      # 29.A.1 — the login rate limit runs at its strict default (10/60s/IP)
+      # in CI too. Specs no longer sign in through /api/auth/login: each mints
+      # a per-spec user via the dev-only /api/test/users endpoint and injects
+      # the token (tests-e2e/_helpers/auth.ts). Only happy-path performs one
+      # real UI login — well inside the default budget — so the f835459
+      # PermitLimit=200 override is removed, not merely lowered.
       WEB_PORT: "3100"
       WEB_URL: "http://localhost:3100"
     steps:
