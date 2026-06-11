@@ -88,6 +88,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<CostComponentType> CostComponentTypes => Set<CostComponentType>();
     public DbSet<ItemCostComponent> ItemCostComponents => Set<ItemCostComponent>();
 
+    // ── Feature flags (29.B.1) — platform-tier; NOT IHasTenant ────────────────
+    public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
+
     protected override void OnModelCreating(ModelBuilder mb)
     {
         // ── Tenant ─────────────────────────────────────────────────────────────
@@ -609,6 +612,27 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.HasOne(c => c.Assembly).WithMany(a => a.Components)
              .HasForeignKey(c => c.AssemblyId).OnDelete(DeleteBehavior.Cascade);
             b.HasQueryFilter(c => c.TenantId == _tenant.TenantId);
+        });
+
+        // ── FeatureFlag (29.B.1) — platform-tier, no tenant filter ──────────────
+        // Overrides is the per-tenant override map (slug → bool); persisted as JSONB
+        // via a value converter + ValueComparer so EF sees mutations to the dict.
+        mb.Entity<FeatureFlag>(b =>
+        {
+            b.HasIndex(f => f.Key).IsUnique();
+            b.Property(f => f.Key).HasMaxLength(64).IsRequired();
+            b.Property(f => f.Description).HasMaxLength(400);
+            var overridesConverter = new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<Dictionary<string, bool>, string>(
+                v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
+                v => System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, bool>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new());
+            var overridesComparer = new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<Dictionary<string, bool>>(
+                (a, b) => a == null ? b == null : b != null && a.Count == b.Count && !a.Except(b).Any(),
+                v => v.Aggregate(0, (h, kv) => HashCode.Combine(h, kv.Key.GetHashCode(), kv.Value.GetHashCode())),
+                v => v.ToDictionary(kv => kv.Key, kv => kv.Value));
+            b.Property(f => f.Overrides)
+                .HasColumnType("jsonb")
+                .HasConversion(overridesConverter)
+                .Metadata.SetValueComparer(overridesComparer);
         });
 
         // ── DB-level tenant foreign keys (defense in depth) ──────────────────────

@@ -31,6 +31,10 @@ import { TeamsPanel } from "./teams-panel"
 import { AreasPanel } from "./areas-panel"
 import { CompareRevisions } from "./compare"
 import { CommentPanel } from "./comment-panel"
+// 29.B.1 — Feature flags drive whether the three recently-shipped Export/Anomaly
+// surfaces render; an admin kill-switch hides them via /api/me/features.
+import { useFlags } from "@/lib/useFlag"
+import { FeatureGate } from "@/components/feature-gate"
 
 // Re-import suppression — boq.tsx re-exports AddItemForm via SectionBlock; ESLint
 // would flag an unused import otherwise. The "_Unused" alias is a no-op.
@@ -73,6 +77,9 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
   const plmView = can("prelims-markups", "view"), plmAdd = can("prelims-markups", "add")
   const plmEdit = can("prelims-markups", "edit"), plmDelete = can("prelims-markups", "delete")
   const canReports = can("reports", "view")
+  // 29.B.1 — Flag map for this tenant. Read once at the top so the items array
+  // can include/exclude entries cleanly without spamming useFlag calls.
+  const flags = useFlags()
   const key = ["estimate", estimateId]
   const { data, isLoading, error } = useQuery({ queryKey: key, queryFn: () => fetchApi<EstimateBreakdown>(`/api/estimates/${estimateId}`) })
   const assemblies = useQuery({ queryKey: ["assemblies"], queryFn: () => fetchApi<AssemblyRow[]>("/api/assemblies") })
@@ -324,10 +331,17 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
               // away with nothing on disk). The Bid Letter entry still routes
               // to its dedicated modal — that flow already has a preview step
               // (the letter editor) so a second one would be redundant.
-              { key: "xlsx", label: <><FileSpreadsheet className="h-4 w-4" /> {t("ed.export.excel")}</>, onSelect: () => setPreview({ kind: "xlsx", label: t("ed.export.excel") }) },
-              { key: "csv", label: <><Table className="h-4 w-4" /> {t("ed.export.csv")}</>, onSelect: () => setPreview({ kind: "csv", label: t("ed.export.csv") }) },
-              { key: "pdf", label: <><FileText className="h-4 w-4" /> {t("ed.export.pdf")}</>, onSelect: () => setPreview({ kind: "pdf", label: t("ed.export.pdf") }) },
-              { key: "bidLetter", label: <><FileText className="h-4 w-4" /> {t("ed.export.bidLetter")}</>, onSelect: () => setBidLetter(true) },
+              // 29.B.1 — `flags["export-preview"]` and `flags["bid-letter-templates"]`
+              // gate the modal-driven lanes; a kill switch removes them from the
+              // menu entirely so there is nothing for the user to click.
+              ...(flags["export-preview"] ? [
+                { key: "xlsx", label: <><FileSpreadsheet className="h-4 w-4" /> {t("ed.export.excel")}</>, onSelect: () => setPreview({ kind: "xlsx", label: t("ed.export.excel") }) },
+                { key: "csv", label: <><Table className="h-4 w-4" /> {t("ed.export.csv")}</>, onSelect: () => setPreview({ kind: "csv", label: t("ed.export.csv") }) },
+                { key: "pdf", label: <><FileText className="h-4 w-4" /> {t("ed.export.pdf")}</>, onSelect: () => setPreview({ kind: "pdf", label: t("ed.export.pdf") }) },
+              ] : []),
+              ...(flags["bid-letter-templates"] ? [
+                { key: "bidLetter", label: <><FileText className="h-4 w-4" /> {t("ed.export.bidLetter")}</>, onSelect: () => setBidLetter(true) },
+              ] : []),
             ] satisfies DropdownItem[]}
           />
         )}
@@ -522,8 +536,11 @@ export function EstimateEditor({ estimateId, projectId, canEditMeta, estimatesLi
                     onCloneRoom={(areaId, name) => cloneRoom.mutate({ areaId, name })} />
                 )}
                 <AreaRollupPanel estimateId={estimateId} currency={c} canExport={canReports} onExport={dlCostByArea} />
-                {/* 23.5 — Cost-anomaly scan. Lazy: only fetches after the user clicks Scan. */}
-                <AnomalyPanel estimateId={estimateId} currency={c} />
+                {/* 23.5 — Cost-anomaly scan. Lazy: only fetches after the user clicks Scan.
+                    29.B.1 — Hidden by the "anomaly-panel" kill switch. */}
+                <FeatureGate flag="anomaly-panel">
+                  <AnomalyPanel estimateId={estimateId} currency={c} />
+                </FeatureGate>
                 {/* 25.3 — Compare-revisions moved here from the revision strip. */}
                 {estimatesList.length >= 2 && <CompareRevisions estimates={estimatesList} />}
               </div>

@@ -74,6 +74,12 @@ public static class DbInitializer
 
         await db.Database.MigrateAsync();
 
+        // ── Feature-flag catalogue (29.B.1) — platform tier, NOT IHasTenant ────
+        // Default rollout 100 / Enabled true so the new toggle infrastructure is
+        // a no-op on existing tenants; ops can dial back per-tenant or globally
+        // through the admin API. Each flag describes one gateable surface.
+        await SeedFeatureFlagsAsync(db);
+
         // ── Tenant (not IHasTenant — safe to write before tenant resolution) ──
         const string slug = "default";
         var t = await db.Tenants.FirstOrDefaultAsync(x => x.Slug == slug);
@@ -271,5 +277,33 @@ public static class DbInitializer
         }
 
         return adminGroup;
+    }
+
+    // 29.B.1 — Initial flag catalogue. Each entry is idempotent on Key (we only
+    // add missing rows; never overwrite an existing flag's Enabled / Rollout /
+    // Overrides — those are operator decisions made through the admin UI).
+    private static readonly (string Key, string Description)[] DefaultFlags =
+    [
+        ("bid-letter-templates",  "28.4 — Multi-style bid-letter picker on the export modal."),
+        ("anomaly-panel",         "23.5 — Cost-anomaly side panel on the estimate editor."),
+        ("export-preview",        "28.3 — Inline preview before downloading a BOQ export."),
+    ];
+
+    private static async Task SeedFeatureFlagsAsync(AppDbContext db)
+    {
+        var existing = await db.FeatureFlags.Select(f => f.Key).ToListAsync();
+        foreach (var (key, description) in DefaultFlags)
+        {
+            if (existing.Contains(key)) continue;
+            db.FeatureFlags.Add(new Models.FeatureFlag
+            {
+                Key = key,
+                Description = description,
+                Enabled = true,
+                RolloutPercentage = 100,
+                Overrides = new(),
+            });
+        }
+        await db.SaveChangesAsync();
     }
 }
