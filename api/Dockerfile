@@ -12,7 +12,7 @@ COPY . ./
 RUN dotnet publish BidBuilder.Api.csproj -c Release -o /app --no-restore
 
 # ─── Stage 2: runtime ───────────────────────────────────────────────────────
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 # QuestPDF (SkiaSharp) needs fontconfig + a base font to render PDF text on Linux.
 # curl is included so the container healthcheck can probe /healthz.
