@@ -16,7 +16,11 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 # QuestPDF (SkiaSharp) needs fontconfig + a base font to render PDF text on Linux.
 # curl is included so the container healthcheck can probe /healthz.
+# 29.A.2 — `upgrade -y` pulls Debian security patches published after the
+# aspnet base image was cut (the Trivy gate fails on fixable HIGH/CRITICAL
+# CVEs in OS packages, e.g. libgnutls30/openssl).
 RUN apt-get update \
+ && apt-get upgrade -y \
  && apt-get install -y --no-install-recommends libfontconfig1 fontconfig fonts-dejavu-core curl \
  && rm -rf /var/lib/apt/lists/*
 ENV ASPNETCORE_URLS=http://+:8080

@@ -27,6 +27,12 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+# 29.A.2 — pull Alpine security patches, then strip npm + corepack: the
+# runtime is `node server.js` only, and npm's BUNDLED deps (tar, glob,
+# minimatch, cross-spawn) are what the Trivy gate flags. Removing the tool
+# removes the attack surface (and ~50 MB).
+RUN apk upgrade --no-cache \
+ && rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static    ./.next/static

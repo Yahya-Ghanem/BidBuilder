@@ -1,0 +1,77 @@
+# 29.A.2 — Container vulnerability gate + SBOM. Builds BOTH production images
+# (the ones docker-compose.prod.yml ships) and scans them with Trivy on every
+# PR and every push to main.
+#
+# The gate: any HIGH or CRITICAL finding with an available fix FAILS the build
+# unless it has an explicit allow-list entry in .trivyignore (each entry needs
+# a reason + expiry — policy in SECURITY.md). `ignore-unfixed: true` keeps the
+# gate actionable: a CVE with no released fix can't block a merge, it shows up
+# in the weekly report instead.
+#
+# Each build also emits a CycloneDX SBOM and attaches it as a workflow
+# artifact — the auditable "what exactly is inside this image" record.
+name: Trivy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Image scan + SBOM (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            context: api
+            image: bidbuilder-api:scan
+            build_args: ""
+          - name: web
+            context: .
+            image: bidbuilder-web:scan
+            # Baked into the bundle at build time; any syntactically-valid URL
+            # works for a scan build — we never run this image.
+            build_args: "--build-arg NEXT_PUBLIC_API_URL=http://localhost:8081"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t "${{ matrix.image }}" ${{ matrix.build_args }} "${{ matrix.context }}"
+
+      - name: Trivy scan — fail on fixable HIGH/CRITICAL
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          format: table
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+
+      - name: Generate SBOM (CycloneDX)
+        # Runs even when the scan above failed — the SBOM of a failing image
+        # is exactly what the triage needs.
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          format: cyclonedx
+          output: sbom-${{ matrix.name }}.cdx.json
+        env:
+          # The vulnerability DB was already fetched by the scan step.
+          TRIVY_SKIP_DB_UPDATE: "true"
+
+      - name: Upload SBOM artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.name }}
+          path: sbom-${{ matrix.name }}.cdx.json
+          retention-days: 90

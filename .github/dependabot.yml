@@ -1,0 +1,61 @@
+# 29.A.2 — Dependency scanning. Dependabot watches every ecosystem this repo
+# ships from: npm (web), NuGet (API + tests), Docker base images, and the
+# GitHub Actions used by CI itself. Weekly cadence, minor+patch grouped into a
+# single PR per ecosystem so the noise stays reviewable; majors arrive as
+# individual PRs because they need a human decision.
+#
+# Triage SLA lives in SECURITY.md: critical < 7 days, high < 30 days. A
+# Dependabot PR is never closed without a logged reason — merged or triaged.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    open-pull-requests-limit: 10
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+    labels:
+      - dependencies
+      - npm
+
+  - package-ecosystem: nuget
+    directories:
+      - "/api"
+      - "/api.Tests"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    open-pull-requests-limit: 10
+    groups:
+      nuget-minor-patch:
+        update-types: ["minor", "patch"]
+    labels:
+      - dependencies
+      - nuget
+
+  - package-ecosystem: docker
+    directories:
+      - "/"
+      - "/api"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    labels:
+      - dependencies
+      - docker
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    labels:
+      - dependencies
+      - github-actions
