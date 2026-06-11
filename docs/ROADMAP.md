@@ -951,3 +951,309 @@ work that turns a feature-complete platform into a polished, enterprise-grade pr
 work, immediate trust impact, and zero coupling to the larger IA refactors. Every subsequent
 phase compounds on the same proven flow: branch → CI green (backend + frontend + a11y +
 happy-path) → squash-merge → rebuild → smoke.
+
+---
+
+## 12. Forward roadmap — Senior-auditor review → production-grade engineering uplift
+
+After Phase 28 closed, an independent senior-software-auditor pass graded the system at
+**7.5 / 10** — a strong product-grade score, but not yet "I'd bet a regulated customer on it."
+The audit found that BidBuilder has very strong foundations (multi-tenant isolation, MFA + SSO,
+optimistic concurrency, OTel, a11y + i18n CI gates, PITR claimed, dark mode, presence + comments)
+but rough edges in **test isolation, supply-chain hygiene, mobile completeness, server-synced
+preferences, change-management discipline, and external validation.**
+
+The 10/10 ceiling is a category error — living software always has unknown unknowns. The
+realistic ceiling is **9.5**, and even that requires external validation (pen test + SOC 2 / ISO
+27001). Phase 29 is the path from **7.5 → 9.5**, broken into four tiers. Each item must produce
+**auditable evidence in the repo or runbooks**, not just intent.
+
+### Phase 29 — P0: production-grade engineering uplift (audit-driven)
+
+Each tier is independently shippable. Tier A is mandatory hygiene; tiers B–D escalate into
+discipline and external validation.
+
+---
+
+#### Tier A — `P0` close the obvious gaps (target: 7.5 → 8.0) — **2–3 weeks**
+
+> **Status (2026-06-11):** Tier A **closed at 8.0 / 10**. See
+> [docs/PHASE-29A-CLOSEOUT.md](./PHASE-29A-CLOSEOUT.md) for evidence.
+> Shipped: 29.A.1 (PR #131, `515b160`), 29.A.2 (PR #132, `656932e`),
+> 29.A.4 (PR #146, `ffe2291`). Deferred: 29.A.3 → Tier B.
+
+##### 29.A.1 — ✅ **DONE** — `P0` Per-spec E2E test users — kill the shared-admin coupling — **M**
+- **Why.** Every E2E spec currently logs in as `admin@bidbuilder.local`. With 13 specs from
+  one runner IP, the 10/60s login rate-limit was tripped, and the symptom-fix in commit
+  `f835459` was to bump the CI limit to 200/IP — a security control was loosened to paper
+  over fragile tests. Per-spec users remove the coupling at the root.
+- **Steps.** Add a `Development`-only `POST /api/test/users` endpoint that mints a scoped
+  test user inside the default tenant. Each spec calls it in a `beforeAll`, uses the token,
+  and tears down in `afterAll`. Revert the `RateLimiting__Login__PermitLimit: 200` override
+  once green.
+- **Files.** `api/Endpoints/TestSupportEndpoints.cs` (new, dev-only), `tests-e2e/_helpers/auth.ts`
+  (new), every `tests-e2e/*.spec.ts`, `.github/workflows/ci.yml`.
+- **Acceptance.** CI E2E runs `workers: 4` cleanly. No spec references `admin@bidbuilder.local`.
+  Default login rate limit returns to 10/60s on CI.
+- **Evidence-to-audit.** Grep `tests-e2e/` returns zero matches for `admin@bidbuilder.local`.
+  `f835459` reverted in a follow-up commit.
+
+##### 29.A.2 — ✅ **DONE** — `P0` Dependency scanning & SBOM — **M**
+- **Why.** Public repo, paying-customer codebase, no automated dependency-vulnerability scan
+  in CI. CVE in npm or NuGet today would land in prod silently.
+- **Steps.** Add `.github/dependabot.yml` (npm + nuget + docker + github-actions); add CodeQL
+  workflow on PR + weekly; add Trivy container scan in the docker-build job; document a
+  CVE-triage SLA in `SECURITY.md` (e.g., critical < 7d, high < 30d). Generate SBOM (CycloneDX
+  or SPDX) per build, attach as an artifact.
+- **Files.** `.github/dependabot.yml`, `.github/workflows/codeql.yml`,
+  `.github/workflows/trivy.yml`, `SECURITY.md`.
+- **Acceptance.** First Dependabot PR opens within 24h. CodeQL run posts on every PR. Trivy
+  fails the build on a `HIGH` finding without an explicit allow-list entry.
+- **Evidence-to-audit.** Last 5 Dependabot PRs are merged or triaged with a reason logged —
+  not stale.
+
+##### 29.A.3 — ⏸️ **DEFERRED to Tier B** — `P0` Server-synced user preferences — recent entities + theme — **M**
+- **Why.** `useRecentEntities` is localStorage-only. Two tabs / two devices show different
+  recents; the design promise of "see what you were just working on" breaks on every reopen.
+  The `UserPreferences` model from 27.5 already exists — extend it.
+- **Steps.** Add `UserPreferences.RecentEntities` JSONB column + EF migration. New endpoints:
+  `GET /api/me/preferences/recent`, `PUT` with the LRU list. localStorage becomes a
+  write-through cache, server is source of truth. Same pattern for `theme` if not already
+  server-backed.
+- **Files.** `api/Models/UserPreferences.cs`, `api/Migrations/<date>_AddRecentEntitiesPref.cs`,
+  `api/Endpoints/UserPreferencesEndpoints.cs`, `lib/useRecentEntities.ts`,
+  `lib/useRecentEntities.test.ts`.
+- **Acceptance.** Log in on machine A, visit a project. Log in on machine B — palette shows
+  that project at top. E2E covers cross-session sync.
+- **Evidence-to-audit.** `useRecentEntities` no longer reads localStorage on first mount when
+  online; it fetches.
+
+##### 29.A.4 — ✅ **DONE** — `P0` Security headers + CSP — **S**
+- **Why.** Public-facing SaaS without a Content-Security-Policy, HSTS, and frame-options is
+  one XSS away from a credential-stealer landing on a customer browser.
+- **Steps.** Add header middleware on the API (and verify the Next.js side via
+  `next.config.ts` `headers()`): `Content-Security-Policy` (strict, with explicit script-src
+  for the bundled web), `Strict-Transport-Security` (max-age 1y, includeSubDomains, preload),
+  `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`,
+  `Permissions-Policy` (deny camera/mic/geolocation by default), `X-Content-Type-Options: nosniff`.
+- **Files.** `api/Program.cs` (header middleware), `next.config.ts`.
+- **Acceptance.** `securityheaders.com` returns A+ for the production hostname. CSP nonce
+  on inline scripts; no `unsafe-inline` except where strictly required and documented.
+- **Evidence-to-audit.** Screenshot of A+ result attached to the PR.
+
+##### 29.A.5 — ✅ **DONE** — `P0` Tier-A close-out — verify, regress, PR, merge — **S**
+- **Why.** Tier A removes the symptom-fix, adds CI scanning, syncs prefs, hardens headers.
+  Validate as a coherent bundle.
+- **Steps.** Full regression (vitest + axe + Playwright). Confirm `RateLimiting__Login`
+  reverted. Confirm Dependabot, CodeQL, Trivy all green on the merge PR.
+- **Acceptance.** Senior auditor re-grade with evidence ⇒ **8.0–8.2 / 10**.
+
+---
+
+#### Tier B — `P1` production discipline (target: 8.0 → 8.5) — **3–4 weeks**
+
+##### 29.B.1 — `P1` Feature flags + staged rollout — **L**
+- **Why.** Every Phase 25–28 PR merged straight to main and hit every tenant on the next
+  `docker compose up`. A bad release blast-radius is currently *all tenants*. Need a
+  per-tenant kill switch + gradual rollout.
+- **Steps.** Pick a provider (GrowthBook self-hosted, Unleash self-hosted, or a homegrown
+  `FeatureFlag` table — recommend GrowthBook for the eval UI). Wire the SDK on both API
+  (`IFeatureService`) and web (`useFlag()`). Gate at least three real recent features
+  (e.g., bid-letter templates, anomaly panel, export preview) behind flags with a documented
+  rollout plan: 10% tenants → 50% → 100%. Add a kill-switch test in CI that asserts a
+  disabled flag actually hides the surface.
+- **Files.** `api/Services/FeatureService.cs`, `lib/useFlag.ts`, `docker-compose.yml`
+  (growthbook service), `tests-e2e/feature-flag.spec.ts`.
+- **Acceptance.** Toggling a flag in the GrowthBook UI flips the feature in < 60s without
+  a redeploy. CI asserts kill-switch behavior.
+
+##### 29.B.2 — `P1` Load testing — k6 scenarios + P95 budgets — **M**
+- **Why.** We don't know the system's real ceiling. "It works for one user" is not a
+  capacity statement. Need named scenarios with SLO budgets and CI tracking.
+- **Steps.** Add `k6/` folder with three scenarios: (1) 100 concurrent users editing the
+  same BOQ for 10 minutes; (2) 1000 concurrent estimate reads against the seeded project;
+  (3) sustained 50 RPS mixed workload for 1 hour. Run nightly against a CI-spun stack.
+  Publish results to a dashboard or commit to a `k6/results/` log. Define P95 latency
+  budgets per endpoint class (read < 200ms, write < 500ms, export < 5s).
+- **Files.** `k6/edit-boq.js`, `k6/read-estimates.js`, `k6/mixed-workload.js`,
+  `.github/workflows/loadtest-nightly.yml`, `docs/PERFORMANCE-SLOS.md`.
+- **Acceptance.** Nightly run posts P95s to a tracked file; budget regression fails the build.
+
+##### 29.B.3 — `P1` Mobile beyond read-only — edit on small screens — **L**
+- **Why.** 27.3 added an "honest-mode" banner that explicitly disables editing on ≤ 768px.
+  That's defensible scoping, not a ceiling we should stay under forever. Mobile estimators
+  on-site want at least: inline BOQ row edit, post a comment, approve.
+- **Steps.** Audit edit surfaces, redesign three for mobile: BOQ inline rate edit, comment
+  posting, approval action. Add Playwright specs at `viewport: { width: 375, height: 812 }`.
+  Remove the honest-mode banner from those three surfaces; keep it on the genuinely
+  desktop-only ones (e.g., full estimate-compare panel).
+- **Files.** `app/projects/[id]/_components/boq.tsx`, comment panel, approval card,
+  `tests-e2e/mobile-edit.spec.ts`.
+- **Acceptance.** Mobile Playwright spec drives a full edit-and-save round-trip. Honest-mode
+  banner only shows on truly desktop-only surfaces.
+
+##### 29.B.4 — `P1` Synthetic monitoring — real user journey every 60s — **M**
+- **Why.** `/healthz` says "API booted." A synthetic check that logs in, opens a project,
+  saves a BOQ row, and logs out says "the product works." This is the difference between
+  ping and SLO.
+- **Steps.** Pick a provider (Better Stack / Checkly / Datadog Synthetic). Author one
+  scripted browser journey covering the critical path. Run every 60s from 3 geographies.
+  Wire to PagerDuty with a documented escalation policy.
+- **Files.** `synthetics/critical-path.spec.ts` (provider-specific), `docs/ONCALL.md`.
+- **Acceptance.** A simulated outage (block traffic for 90s) triggers a PagerDuty page
+  within 2 minutes.
+
+##### 29.B.5 — `P1` Automated backup-restore drill — **M**
+- **Why.** 19.4 added PITR + WAL archiving. An untested backup is a story, not a control.
+  Need an automated monthly restore that verifies row counts and posts a diff.
+- **Steps.** Cron job (GitHub Action or k8s CronJob): spin a scratch Postgres, restore last
+  backup, compare `\dt` row counts to a snapshot, post the diff to a Slack/Teams channel.
+  Fail on > 0.1% row drift unexplained.
+- **Files.** `.github/workflows/restore-drill-monthly.yml`, `ops/restore-drill.sh`,
+  `docs/RUNBOOKS/restore.md`.
+- **Acceptance.** First drill runs green; subsequent drift triggers an alert within 1 hour.
+
+##### 29.B.6 — `P1` Tier-B close-out — verify, regress, PR, merge — **S**
+- **Acceptance.** Senior auditor re-grade ⇒ **8.5 / 10**.
+
+---
+
+#### Tier C — `P2` incident & change discipline (target: 8.5 → 9.0) — **4–6 weeks**
+
+##### 29.C.1 — `P2` Incident-response framework — runbooks + game-day — **L**
+- **Why.** Today there is no documented severity matrix, no per-failure runbook, no logged
+  drill. The first real incident will be improvised. That is the wrong time to invent the
+  playbook.
+- **Steps.** Author `docs/INCIDENT-RESPONSE.md` with SEV1/2/3 matrix (impact × scope ×
+  duration). Author runbooks for the top 8 failure modes (API down, DB unreachable, migration
+  stuck, auth provider outage, Hangfire dead, disk full, certificate expired, Redis down).
+  Establish on-call rotation in PagerDuty. Run a **logged quarterly game-day** with a
+  written postmortem.
+- **Files.** `docs/INCIDENT-RESPONSE.md`, `docs/RUNBOOKS/*.md`, `docs/POSTMORTEMS/`.
+- **Acceptance.** A new engineer can resolve a SEV2 from the runbook alone. Two completed
+  quarterly drills logged with postmortems.
+
+##### 29.C.2 — `P2` Change management — rollback documented per deploy — **M**
+- **Why.** Phase 28 shipped 5 features to main without a documented rollback for any.
+  Every prod-bound PR must include the rollback command, the post-deploy verification step,
+  and the owner who approves the deploy.
+- **Steps.** Add a PR template that mandates: rollback command, post-deploy verify command,
+  feature-flag gate (links 29.B.1), data-migration reversibility note. Wire a deploy script
+  that requires the verify step to pass before marking the deploy successful. Add a deploy
+  log table (`audit_deploys`) tracking who, when, what, rollback result.
+- **Files.** `.github/PULL_REQUEST_TEMPLATE.md`, `ops/deploy.sh`,
+  `api/Migrations/<date>_AddAuditDeploys.cs`.
+- **Acceptance.** No PR can merge to main without the template fields filled. Rollback
+  drill (revert last green) takes < 5 minutes.
+
+##### 29.C.3 — `P2` Blast-radius bulkheads — per-tenant rate limit + circuit breakers — **L**
+- **Why.** One tenant's heavy export job can starve everyone else. One slow query can take
+  the API down. Need per-tenant rate limiting on heavy endpoints, and circuit breakers
+  around external calls (SMTP, webhook send, FX refresh).
+- **Steps.** Extend the existing `AddRateLimiter` setup to partition by tenant id on
+  `/exports/*` and `/recompute/*`. Wrap SMTP/webhook/FX in Polly circuit breakers with
+  observability (OTel spans showing open/closed transitions). Add a test that proves
+  tenant A's hammering doesn't impact tenant B's P95.
+- **Files.** `api/Program.cs`, `api/Services/EmailService.cs`, `api/Services/WebhookSender.cs`,
+  `api.Tests/IsolationTests.cs`.
+- **Acceptance.** Load test (links 29.B.2) confirms cross-tenant isolation within budget.
+
+##### 29.C.4 — `P2` Data classification + GDPR/PDPL deletion CLI — **M**
+- **Why.** No column is tagged PII / Confidential / Internal / Public. A "right-to-be-
+  forgotten" request from a UAE / EU user today requires manual SQL archaeology.
+- **Steps.** Tag every column via an EF model attribute `[DataClass(DataClass.PII)]` (or a
+  schema doc if attributes are too invasive). Export endpoints honor classification (redact
+  PII unless caller has `pii:read`). CLI: `dotnet run --project api -- forget --user-id N`
+  hard-deletes PII while preserving the audit trail (anonymized).
+- **Files.** `api/Models/Attributes/DataClass.cs`, every model file, `api/Tools/ForgetUser.cs`.
+- **Acceptance.** Running the forget command on a test user removes PII, preserves audit
+  rows with anonymized identifiers, exports redact correctly.
+
+##### 29.C.5 — `P2` Observability SLOs + error-budget burn-rate alerts — **M**
+- **Why.** OTel ships telemetry; nothing converts that into SLOs. Alerts today are
+  threshold-based, which is the wrong signal for "are we eating the budget too fast."
+- **Steps.** Define SLOs per critical path: login success ≥ 99.9% / 30d, save success
+  ≥ 99.95% / 30d, export P99 < 10s / 30d. Configure burn-rate alerts (fast 1h + slow 6h
+  pages) in Grafana / Datadog. Publish SLO dashboard.
+- **Files.** `docs/SLO.md`, `ops/grafana/dashboards/slo.json`.
+- **Acceptance.** A simulated burn (kill the auth pod) pages within 5 minutes via the fast
+  burn-rate window.
+
+##### 29.C.6 — `P2` Tier-C close-out — verify, regress, PR, merge — **S**
+- **Acceptance.** Senior auditor re-grade ⇒ **9.0 / 10**.
+
+---
+
+#### Tier D — `P3` external validation (target: 9.0 → 9.5) — **6–12 months calendar**
+
+This is the wall. These items require external parties and calendar time, not just code.
+
+##### 29.D.1 — `P3` Third-party penetration test — **L**
+- **Why.** Internal review doesn't substitute for adversarial expertise. Hire Cure53, NCC
+  Group, Bishop Fox, or equivalent. Triage findings to closure. Re-test passes.
+- **Acceptance.** Public summary report (sanitized) showing all critical/high findings
+  closed; pen-test re-test green.
+
+##### 29.D.2 — `P3` SOC 2 Type II *or* ISO 27001 — **L**
+- **Why.** "We have controls" needs an external attestation. Type II requires 6+ months of
+  observation period — start early.
+- **Steps.** Engage an auditor (Drata / Vanta / SecureFrame to accelerate evidence
+  collection). Implement the controls gap. Pass the observation period. Publish the
+  certificate.
+- **Acceptance.** Type II report or ISO 27001 certificate on file; access-review cadence is
+  logged and signed, not just talked about.
+
+##### 29.D.3 — `P3` Chaos testing — **M**
+- **Why.** Resilience claimed is not resilience verified. Kill pods mid-save. Kill the DB
+  primary. Watch failover. Document what broke.
+- **Steps.** Adopt a chaos tool (Chaos Mesh / LitmusChaos / homegrown scripts). Schedule
+  monthly drills against staging. Log every drill outcome.
+- **Acceptance.** 12 monthly drills logged in `docs/CHAOS-LOG.md` with what broke and what
+  was fixed.
+
+##### 29.D.4 — `P3` Reproducible builds + signed artifacts + SLSA — **M**
+- **Why.** Supply-chain attacks land via build infrastructure. Reproducible builds + signed
+  containers + provenance makes substitution detectable.
+- **Steps.** Generate SBOM (CycloneDX) per build (extends 29.A.2). Sign container images
+  with cosign. Adopt SLSA Level 2+ provenance attestation in the workflow.
+- **Acceptance.** `cosign verify` passes on every prod image; provenance is
+  inspectable via `slsa-verifier`.
+
+##### 29.D.5 — `P3` Public status page — **S**
+- **Why.** When customers ask "is it me or you?" they should self-serve. A green-forever
+  status page is a worse signal than no status page at all.
+- **Steps.** Stand up `status.bidbuilder.com` (StatusPage.io, Better Stack, or self-hosted
+  Atlassian Statuspage). Wire synthetic checks from 29.B.4 as the signal source. Publish
+  every SEV1/SEV2 incident with an RCA within 5 business days.
+- **Acceptance.** Page lists at least one historical incident with a real RCA, not just
+  green ticks.
+
+##### 29.D.6 — `P3` Tier-D close-out — verify, regress, external attestations, announce — **S**
+- **Acceptance.** Senior auditor re-grade with full evidence pack ⇒ **9.3–9.5 / 10**.
+
+---
+
+### Conclusion & sequencing (Phase 29)
+
+The audit set the bar honestly: **7.5 today, 9.5 ceiling, 10 doesn't exist for living
+software.** Phase 29 is the path between those two numbers, broken into four tiers that
+correspond to four distinct disciplines:
+
+1. **Tier A — engineering hygiene** (2–3 weeks). Per-spec test users, Dependabot + CodeQL +
+   Trivy, server-synced prefs, security headers. Closes the "symptom-fix" smell that the
+   audit flagged in commit `f835459`. Re-grade target: **8.0**.
+2. **Tier B — production discipline** (3–4 weeks). Feature flags, k6 load tests, mobile
+   beyond read-only, synthetic monitoring, automated restore drill. Re-grade target: **8.5**.
+3. **Tier C — incident & change discipline** (4–6 weeks). Runbooks + game-days, change
+   management with rollback, blast-radius bulkheads, data classification + deletion CLI,
+   SLO burn-rate alerts. Re-grade target: **9.0**.
+4. **Tier D — external validation** (6–12 months calendar). Pen test, SOC 2 / ISO 27001,
+   chaos testing, signed artifacts + SLSA, public status page. Re-grade target: **9.3–9.5**.
+
+**Recommended first PR: 29.A.1** — the per-spec test-user helper. It removes the security
+control we loosened in `f835459`, unblocks parallel CI, and is the cleanest demonstration
+that the audit findings are being addressed at the **root cause**, not the symptom.
+
+Every subsequent item compounds on the same flow used in Phases 17–28: branch → CI green
+(backend + frontend + a11y + happy-path) → squash-merge → rebuild → smoke → close-out task.
+The discipline doesn't change. The bar rises.
