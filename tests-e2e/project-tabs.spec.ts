@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test"
+import { createTestUser, deleteTestUser, signIn, type TestUser } from "./_helpers/auth"
 
 /**
  * 25.3 — Project detail page tab restructure smoke.
@@ -20,18 +21,19 @@ import { test, expect } from "@playwright/test"
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8081"
 const TENANT = "default"
 
+// 29.A.1 — per-spec throwaway user, torn down after the test.
+let user: TestUser | undefined
+test.afterEach(async ({ request }) => { await deleteTestUser(request, user); user = undefined })
+
 test("project detail page renders five tabs and deep-links via ?tab=", async ({ page, request }) => {
-  // Auth via the UI so the JWT lands in localStorage where the SPA expects it.
-  await page.goto("/login")
-  await page.locator('input[type="email"]').fill("admin@bidbuilder.local")
-  await page.locator('input[type="password"]').fill("Admin@12345")
-  await page.getByRole("button", { name: /sign in/i }).click()
-  await expect(page).toHaveURL(/\/projects/, { timeout: 15_000 })
+  // Sign in as a per-spec user — the JWT lands in localStorage where the SPA
+  // expects it, without a login-UI round-trip.
+  user = await createTestUser(request)
+  await signIn(page, user)
 
   // Pick any accessible project — the tab restructure is orthogonal to the
   // project's content, so the first one in the list will do.
-  const token = await page.evaluate(() => localStorage.getItem("bb_token"))
-  expect(token).toBeTruthy()
+  const token = user.token
   const projectsRes = await request.get(`${API_URL}/api/projects`, {
     headers: { Authorization: `Bearer ${token}`, "X-Tenant-Id": TENANT },
   })

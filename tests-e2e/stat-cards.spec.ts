@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test"
+import { createTestUser, deleteTestUser, signIn, type TestUser } from "./_helpers/auth"
 
 /**
  * 25.5 — Stat-card trend deltas + per-unit toggle smoke.
@@ -24,20 +25,21 @@ import { test, expect } from "@playwright/test"
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8081"
 const TENANT = "default"
 
+// 29.A.1 — per-spec throwaway user, torn down after the test.
+let user: TestUser | undefined
+test.afterEach(async ({ request }) => { await deleteTestUser(request, user); user = undefined })
+
 test("stat cards render trend deltas vs prior revision and per-unit toggle persists", async ({ page, request }) => {
-  await page.goto("/login")
-  await page.locator('input[type="email"]').fill("admin@bidbuilder.local")
-  await page.locator('input[type="password"]').fill("Admin@12345")
-  await page.getByRole("button", { name: /sign in/i }).click()
-  await expect(page).toHaveURL(/\/projects/, { timeout: 15_000 })
+  // Sign in as a per-spec user — token injected, no login-UI round-trip.
+  user = await createTestUser(request)
+  await signIn(page, user)
 
   // Create a fresh project for this spec. The other parallel-running specs
   // hit /projects/{seededId} concurrently, and our mutations (clone, add
   // section, add area, recompute) on the seeded project were racing with
   // their reads. Owning the project end-to-end keeps the spec deterministic
   // even when Playwright spreads tests across many workers.
-  const token = await page.evaluate(() => localStorage.getItem("bb_token"))
-  expect(token).toBeTruthy()
+  const token = user.token
   const authHdr = { Authorization: `Bearer ${token}`, "X-Tenant-Id": TENANT }
   const code = `STAT-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
   const proj = await (await request.post(`${API_URL}/api/projects`, {

@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test"
+import { createTestUser, deleteTestUser, signIn, type TestUser } from "./_helpers/auth"
 
 /**
  * 28.3 — Acceptance bar: "Clicking PDF opens an inline preview; clicking
@@ -52,17 +53,16 @@ async function seedProjectWithEstimate(request: APIRequestContext, token: string
   return proj.id
 }
 
+// 29.A.1 — per-spec throwaway user, torn down after the test.
+let user: TestUser | undefined
+test.afterEach(async ({ request }) => { await deleteTestUser(request, user); user = undefined })
+
 test.describe("BOQ export preview (28.3)", () => {
   test("preview opens, close without download, then download from preview", async ({ page, request }) => {
-    await page.goto("/login")
-    await page.locator('input[type="email"]').fill("admin@bidbuilder.local")
-    await page.locator('input[type="password"]').fill("Admin@12345")
-    await page.getByRole("button", { name: /sign in/i }).click()
-    await expect(page).toHaveURL(/\/projects/, { timeout: 15_000 })
-
-    const token = await page.evaluate(() => localStorage.getItem("bb_token"))
-    expect(token).toBeTruthy()
-    const projectId = await seedProjectWithEstimate(request, token!)
+    // Sign in as a per-spec user — token injected, no login-UI round-trip.
+    user = await createTestUser(request)
+    await signIn(page, user)
+    const projectId = await seedProjectWithEstimate(request, user.token)
 
     await page.goto(`/projects/${projectId}`)
 

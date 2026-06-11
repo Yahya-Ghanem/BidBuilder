@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test"
 import AxeBuilder from "@axe-core/playwright"
+import { createTestUser, deleteTestUser, signIn, type TestUser } from "./_helpers/auth"
 
 /**
  * 24.4 — Axe-core accessibility gate.
@@ -88,6 +89,11 @@ async function seedTheme(page: import("@playwright/test").Page, theme: "light" |
 // backgrounds); each could regress contrast independently of the light path.
 const THEMES = ["light", "dark"] as const
 
+// 29.A.1 — the gated /settings scans sign in as a per-spec throwaway user via
+// the dev-only test-support endpoint (token injected, no /api/auth/login call).
+let user: TestUser | undefined
+test.afterEach(async ({ request }) => { await deleteTestUser(request, user); user = undefined })
+
 for (const theme of THEMES) {
   test.describe(`a11y [${theme}] — WCAG 2.1 A/AA, no critical violations`, () => {
     test(`login page (${theme})`, async ({ page }) => {
@@ -102,14 +108,11 @@ for (const theme of THEMES) {
       expect(blocking(results), format(results)).toEqual([])
     })
 
-    test(`settings (admin form surface) (${theme})`, async ({ page }) => {
+    test(`settings (admin form surface) (${theme})`, async ({ page, request }) => {
       await seedTheme(page, theme)
       // Sign in first — /settings is gated.
-      await page.goto("/login")
-      await page.locator('input[type="email"]').fill("admin@bidbuilder.local")
-      await page.locator('input[type="password"]').fill("Admin@12345")
-      await page.getByRole("button", { name: /sign in/i }).click()
-      await expect(page).toHaveURL(/\/projects/, { timeout: 15_000 })
+      user = await createTestUser(request)
+      await signIn(page, user)
 
       await page.goto("/settings")
       await page.waitForLoadState("networkidle")

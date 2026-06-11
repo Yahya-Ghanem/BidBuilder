@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test"
+import { createTestUser, deleteTestUser, signIn, type TestUser } from "./_helpers/auth"
 
 /**
  * 28.2 — Acceptance bar: "Selecting 10 lines and deleting them is one click
@@ -46,6 +47,10 @@ async function seedEstimateWithTenLines(request: APIRequestContext, token: strin
   return { eid, projectId }
 }
 
+// 29.A.1 — per-spec throwaway user, torn down after the test.
+let user: TestUser | undefined
+test.afterEach(async ({ request }) => { await deleteTestUser(request, user); user = undefined })
+
 test.describe("BOQ bulk actions (28.2)", () => {
   test("select 10 lines and delete is one click", async ({ page, request }) => {
     // Confirms are blocking — auto-accept so the test runs unattended. The
@@ -54,15 +59,10 @@ test.describe("BOQ bulk actions (28.2)", () => {
     // gate that any destructive bulk action carries).
     page.on("dialog", (d) => d.accept())
 
-    // Sign in.
-    await page.goto("/login")
-    await page.locator('input[type="email"]').fill("admin@bidbuilder.local")
-    await page.locator('input[type="password"]').fill("Admin@12345")
-    await page.getByRole("button", { name: /sign in/i }).click()
-    await expect(page).toHaveURL(/\/projects/, { timeout: 15_000 })
-
-    const token = await page.evaluate(() => localStorage.getItem("bb_token"))
-    expect(token).toBeTruthy()
+    // Sign in as a per-spec user — token injected, no login-UI round-trip.
+    user = await createTestUser(request)
+    await signIn(page, user)
+    const token = user.token
 
     // Find a project to attach the estimate to. The seeded sample is fine.
     const projectsRes = await request.get(`${API_URL}/api/projects`, {

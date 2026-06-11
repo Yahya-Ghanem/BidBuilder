@@ -487,6 +487,14 @@ app.MapBenchmarkEndpoints();
 app.MapAnalyticsEndpoints();
 app.MapPlatformEndpoints();
 
+// 29.A.1 — E2E test-support (per-spec users). Development-only by construction:
+// outside dev the group is never mapped, so /api/test/* is a plain 404. The
+// api.Tests host boots as Production and pins exactly that.
+if (app.Environment.IsDevelopment())
+{
+    app.MapTestSupportEndpoints();
+}
+
 app.Run();
 
 // Exposed so the integration test host (WebApplicationFactory<Program>) can boot the API in-process.
