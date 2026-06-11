@@ -2,7 +2,7 @@
 # Multi-stage build for the BidBuilder Next.js frontend (standalone output).
 
 # ─── deps ───────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 COPY package.json package-lock.json* ./
@@ -10,7 +10,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci --legacy-peer-deps
 
 # ─── builder ────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -21,7 +21,7 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN npm run build
 
 # ─── runner ─────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:26-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
