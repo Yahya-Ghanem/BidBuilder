@@ -7,6 +7,8 @@ import { toast } from "sonner"
 import { platformApi, platformSession, type PlatformTenant, type PlatformLoginResponse } from "@/lib/platform"
 import { Button, Input, Card, Badge, TableScroll } from "@/components/ui"
 import { Modal, Field, Select } from "@/components/form"
+// 29.B.1 — Feature-flag admin card, only visible inside the platform console.
+import { FeatureFlagsCard } from "./feature-flags-card"
 
 export default function PlatformPage() {
   // Resolve auth state after mount so server and first client render agree.
@@ -166,6 +168,9 @@ function Console({ onSignOut }: { onSignOut: () => void }) {
           </TableScroll>
         )}
       </Card>
+
+      {/* 29.B.1 — Platform-tier feature flag admin (SuperAdmin only). */}
+      <FeatureFlagsCard />
 
       {creating && <CreateTenantModal onClose={() => setCreating(false)} />}
     </div>

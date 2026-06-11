@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using BidBuilder.Api.Auth;
 using BidBuilder.Api.Data;
 using BidBuilder.Api.Models;
+using BidBuilder.Api.Services;
 using BidBuilder.Api.Tenancy;
 
 namespace BidBuilder.Api.Endpoints;
@@ -78,5 +79,33 @@ public static class TestSupportEndpoints
             return Results.NoContent();
         })
         .AllowAnonymous();
+
+        // 29.B.1 — Force a feature flag to a specific value for the calling
+        // tenant. The real admin endpoint (PUT /api/feature-flags/{key}) needs
+        // SuperAdmin; the kill-switch E2E mints a TenantAdmin, so it routes
+        // through here instead. Only ever mapped in Development.
+        grp.MapPut("/feature-flags/{key}/override", async (string key, ForceFlagInput input, AppDbContext db, ITenantContext tenant, IFeatureService feat) =>
+        {
+            var flag = await db.FeatureFlags.FirstOrDefaultAsync(f => f.Key == key);
+            if (flag is null) return Results.NotFound();
+            var slug = await db.Tenants.IgnoreQueryFilters()
+                .Where(t => t.Id == tenant.TenantId).Select(t => t.Slug).FirstOrDefaultAsync()
+                ?? string.Empty;
+            if (string.IsNullOrEmpty(slug)) return Results.BadRequest();
+            if (input.Enabled is null) flag.Overrides.Remove(slug);
+            else flag.Overrides[slug] = input.Enabled.Value;
+            flag.UpdatedAt = DateTime.UtcNow;
+            // Dictionary value-converter needs a fresh reference for EF to detect
+            // the mutation reliably across providers — copy via the comparer.
+            flag.Overrides = new Dictionary<string, bool>(flag.Overrides);
+            await db.SaveChangesAsync();
+            feat.Invalidate();
+            return Results.Ok(new { key, slug, enabled = input.Enabled });
+        })
+        .AllowAnonymous();
     }
 }
+
+/// <summary>Dev-only payload for overriding a flag for the current tenant.
+/// <c>Enabled=null</c> clears any existing override.</summary>
+public record ForceFlagInput(bool? Enabled);

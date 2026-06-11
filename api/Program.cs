@@ -110,6 +110,10 @@ builder.Services.AddScoped<BidBuilder.Api.Services.BenchmarkService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.RateSuggestionService>();
 builder.Services.AddScoped<BidBuilder.Api.Services.CostAnomalyService>();   // 23.5
 builder.Services.AddScoped<BidBuilder.Api.Services.EstimateTemplateService>();
+// 29.B.1 — Feature-flag resolver. Scoped because it reads through the request
+// DbContext (per-tenant slug lookup); the heavy lifting is the catalogue cache,
+// which lives in the singleton IMemoryCache so all requests share it.
+builder.Services.AddScoped<BidBuilder.Api.Services.IFeatureService, BidBuilder.Api.Services.FeatureService>();
 // 22.1 — Notification email digests. The assembly/send service is scoped (uses the
 // request or background-scope DbContext); a background host periodically sends due
 // digests. The host is registered only when enabled (default on); tests disable it and
@@ -493,6 +497,8 @@ app.MapUserManagementEndpoints();
 app.MapBenchmarkEndpoints();
 app.MapAnalyticsEndpoints();
 app.MapPlatformEndpoints();
+// 29.B.1 — Feature-flag admin (SuperAdmin) + tenant-resolved /api/me/features.
+app.MapFeatureFlagEndpoints();
 
 // 29.A.1 — E2E test-support (per-spec users). Development-only by construction:
 // outside dev the group is never mapped, so /api/test/* is a plain 404. The
