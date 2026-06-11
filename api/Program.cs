@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using System.Threading.RateLimiting;
+using BidBuilder.Api.Middleware;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -392,6 +393,12 @@ await DbInitializer.RunAsync(app.Services);
 // response (with a traceId) instead of a bare, body-less 500. Active in every
 // environment so production failures are diagnosable, not silent.
 app.UseExceptionHandler();
+
+// 29.A.4 — Security headers on every response. Registered immediately AFTER the
+// exception handler so an unhandled 500 still carries HSTS / X-Frame-Options /
+// CSP — the moment when a stray HTML body is most likely is also the moment
+// when stripping these would be most dangerous.
+app.UseSecurityHeaders();
 
 // One structured log line per request (method, path, status, elapsed ms) — so a
 // failing request is findable in the logs by its trace id.

@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { headers } from "next/headers"
 import "./globals.css"
 import { Providers } from "./providers"
 
@@ -37,7 +38,11 @@ const THEME_BOOT = `(function(){try{
   document.documentElement.setAttribute('data-theme', r);
 }catch(e){}})();`
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // 29.A.4 — Read the CSP nonce middleware.ts wrote into the request. Stamping
+  // it on the boot script keeps `'nonce-…'` in script-src as our only way to
+  // allow inline JS, so we never need 'unsafe-inline' in script-src.
+  const nonce = (await headers()).get("x-nonce") ?? undefined
   // suppressHydrationWarning on <html> — the boot script sets data-theme
   // before hydration, so server (no attribute) and client (attribute set)
   // legitimately differ on that one prop. React warns by default; we silence
@@ -45,7 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
       </head>
       <body>
         <Providers>{children}</Providers>
