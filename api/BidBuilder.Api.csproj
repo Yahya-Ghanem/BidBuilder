@@ -56,8 +56,8 @@
     <!-- Centralised write-boundary validation (19.7). FluentValidation runs via
          a generic endpoint filter; a failed validation short-circuits the handler
          and returns RFC-7807 ProblemDetails with field-level errors. -->
-    <PackageReference Include="FluentValidation" Version="11.10.0" />
-    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.10.0" />
+    <PackageReference Include="FluentValidation" Version="12.1.1" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
 
     <!-- OpenTelemetry (19.3). Traces + metrics from ASP.NET Core, HttpClient and
          EF Core / Npgsql. OTLP exports to any compatible collector (Grafana/Tempo,
