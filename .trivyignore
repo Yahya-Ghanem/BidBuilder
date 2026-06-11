@@ -1,0 +1,12 @@
+# 29.A.2 — Trivy allow-list. EMPTY by design: the HIGH/CRITICAL gate in
+# .github/workflows/trivy.yml fails the build unless a finding is listed here.
+#
+# Every entry MUST follow this format (policy: SECURITY.md → "Allow-list
+# policy"):
+#
+#   # CVE-YYYY-NNNNN — <why it is not exploitable here / what blocks the fix>
+#   # owner: <github handle> — expires: <YYYY-MM-DD, max 90 days out>
+#   CVE-YYYY-NNNNN
+#
+# An entry with no reason or no expiry gets removed in review. Expired entries
+# are treated as new findings.
