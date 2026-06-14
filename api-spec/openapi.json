@@ -805,6 +805,16 @@
         },
         "type": "object"
       },
+      "IdentityDto": {
+        "additionalProperties": false,
+        "properties": {
+          "tenantSlug": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "ItemCostComponentInput": {
         "additionalProperties": false,
         "properties": {
@@ -2650,6 +2660,25 @@
         },
         "responses": {
           "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "BidBuilder.Api"
+        ]
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityDto"
+                }
+              }
+            },
             "description": "OK"
           }
         },

@@ -25,6 +25,10 @@ public record RecoveryCodesResponse(string[] RecoveryCodes);
 public record ModulePermissionDto(string Code, string Name, bool CanView, bool CanAdd, bool CanEdit, bool CanDelete);
 public record MePermissionsResponse(string Role, bool IsAdmin, List<ModulePermissionDto> Modules);
 
+// Tenant-identity for cross-app connection checks (Plannix W6b): lets a sibling app
+// confirm a bbk_ API key (or JWT) belongs to the expected tenant. Claims/context only.
+public record IdentityDto(string TenantSlug);
+
 public static class AuthEndpoints
 {
     public static void MapAuthEndpoints(this IEndpointRouteBuilder app)
@@ -145,6 +149,14 @@ public static class AuthEndpoints
             return Results.Ok(new MePermissionsResponse(me.Role().ToString(), false, list));
         })
         .RequireAuthorization();
+
+        // GET /api/auth/me — the authenticated caller's tenant slug, from the resolved
+        // tenant context (claims-derived; no DB hit). Reachable by a read-scoped bbk_ API
+        // key (GET ⇒ "read" scope) as well as a JWT. Used by sibling apps (Plannix) to
+        // verify an API key belongs to the expected tenant when testing a connection.
+        grp.MapGet("/me", (ITenantContext tenant) => Results.Ok(new IdentityDto(tenant.TenantSlug)))
+            .RequireAuthorization()
+            .Produces<IdentityDto>(StatusCodes.Status200OK);
 
         MapTwoFactor(app);
     }
