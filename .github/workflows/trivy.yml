@@ -40,7 +40,7 @@ jobs:
             # works for a scan build — we never run this image.
             build_args: "--build-arg NEXT_PUBLIC_API_URL=http://localhost:8081"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build image
         run: docker build -t "${{ matrix.image }}" ${{ matrix.build_args }} "${{ matrix.context }}"
