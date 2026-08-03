@@ -2,7 +2,7 @@
 # Multi-stage build for the BidBuilder ASP.NET Core 8 API.
 
 # ─── Stage 1: build ─────────────────────────────────────────────────────────
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 # Restore first (layer-cached until the csproj changes).
 COPY BidBuilder.Api.csproj ./
