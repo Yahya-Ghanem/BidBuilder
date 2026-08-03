@@ -45,7 +45,7 @@
 
     <!-- Exports: priced-BOQ / bid-summary as Excel + PDF -->
     <PackageReference Include="ClosedXML" Version="0.104.2" />
-    <PackageReference Include="QuestPDF" Version="2024.12.3" />
+    <PackageReference Include="QuestPDF" Version="2026.7.2" />
 
     <!-- Background-job queue on Postgres (18.4). Hangfire owns its own schema
          ("hangfire") so EF migrations and Hangfire's install/upgrade SQL never
