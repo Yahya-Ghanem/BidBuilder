@@ -29,7 +29,7 @@
          (SignedXml) used to verify the IdP's assertion signature against the
          tenant's configured X.509 cert. No third-party SAML stack — the hardened
          validation lives in BidBuilder.Api.Auth.SamlService. -->
-    <PackageReference Include="System.Security.Cryptography.Xml" Version="8.0.3" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.11" />
 
     <!-- Security pin: Hangfire.Core 1.8.14 pulls in Newtonsoft.Json 11.0.1 transitively,
          which is HIGH severity (GHSA-5crp-9r3c-p9vr, JSON DoS via deeply-nested input).
